@@ -39,6 +39,8 @@ async function main() {
       options.category = args[++i];
     } else if (arg === '--output' && i + 1 < args.length) {
       options.output = args[++i];
+    } else if (arg === '--single-thread') {
+      options.singleThread = true;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -68,6 +70,9 @@ async function main() {
 
   console.log('🚀 NumPy vs numpy-ts Benchmark Suite\n');
   console.log(`Mode: ${options.mode}`);
+  if (options.singleThread) {
+    console.log('NumPy threading: single-threaded (OMP/MKL/OpenBLAS threads = 1)');
+  }
 
   // Get benchmark specifications
   let specs = getBenchmarkSpecs(options.mode || 'standard');
@@ -119,7 +124,8 @@ async function main() {
     const { results: numpyResults, pythonVersion, numpyVersion } = await runPythonBenchmarks(
       specs,
       minSampleTimeMs,
-      targetSamples
+      targetSamples,
+      options.singleThread ?? false
     );
 
     // Compare results
@@ -154,8 +160,9 @@ async function main() {
       fs.mkdirSync(plotsDir, { recursive: true });
     }
 
-    // Determine file suffix based on mode
-    const modeSuffix = options.mode === 'large' ? '-large' : '';
+    // Determine file suffix based on mode and threading
+    const modeSuffix =
+      (options.mode === 'large' ? '-large' : '') + (options.singleThread ? '_single' : '');
 
     // Save JSON results
     const jsonPath = options.output
@@ -204,6 +211,7 @@ Options:
                        Arrays: 1K, 100x100, 500x500
   --large              Large array benchmarks (3 samples, 200ms/sample, ~10-20min)
                        Arrays: 10K, 316x316 (~100K), 1000x1000 (1M)
+  --single-thread      Force NumPy to run single-threaded (OMP/MKL/OpenBLAS)
   --category <name>    Run only benchmarks in specified category
   --output <path>      Save JSON results to specified path
   --help, -h           Show this help message
@@ -221,6 +229,8 @@ Examples:
   npm run bench                           # Run standard benchmarks
   npm run bench:quick                     # Run quick benchmarks
   npm run bench:large                     # Run large array benchmarks
+  npm run bench:quick:single              # Quick benchmarks, NumPy single-threaded
+  npm run bench:single                    # Standard benchmarks, NumPy single-threaded
   npm run bench -- --category linalg      # Run only linalg benchmarks
   npm run bench -- --output out.json      # Standard benchmarks, save to out.json
 `);

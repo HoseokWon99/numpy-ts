@@ -68,4 +68,5 @@ export interface BenchmarkOptions {
   mode?: BenchmarkMode;
   category?: string;
   output?: string;
+  singleThread?: boolean;
 }
