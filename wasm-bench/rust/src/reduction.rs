@@ -182,6 +182,70 @@ pub unsafe extern "C" fn mean_f32(ptr: *const f32, n: u32) -> f32 {
     sum_f32(ptr, n) / n as f32
 }
 
+// ─── nanmax: max ignoring NaN ───────────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn nanmax_f64(ptr: *const f64, n: u32) -> f64 {
+    let len = n as usize;
+    if len == 0 { return f64::NEG_INFINITY; }
+    let mut start = 0;
+    while start < len && (*ptr.add(start)).is_nan() { start += 1; }
+    if start == len { return *ptr; } // all NaN
+    let mut result = *ptr.add(start);
+    for i in (start + 1)..len {
+        let v = *ptr.add(i);
+        if !v.is_nan() && v > result { result = v; }
+    }
+    result
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nanmax_f32(ptr: *const f32, n: u32) -> f32 {
+    let len = n as usize;
+    if len == 0 { return f32::NEG_INFINITY; }
+    let mut start = 0;
+    while start < len && (*ptr.add(start)).is_nan() { start += 1; }
+    if start == len { return *ptr; }
+    let mut result = *ptr.add(start);
+    for i in (start + 1)..len {
+        let v = *ptr.add(i);
+        if !v.is_nan() && v > result { result = v; }
+    }
+    result
+}
+
+// ─── nanmin: min ignoring NaN ───────────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn nanmin_f64(ptr: *const f64, n: u32) -> f64 {
+    let len = n as usize;
+    if len == 0 { return f64::INFINITY; }
+    let mut start = 0;
+    while start < len && (*ptr.add(start)).is_nan() { start += 1; }
+    if start == len { return *ptr; }
+    let mut result = *ptr.add(start);
+    for i in (start + 1)..len {
+        let v = *ptr.add(i);
+        if !v.is_nan() && v < result { result = v; }
+    }
+    result
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nanmin_f32(ptr: *const f32, n: u32) -> f32 {
+    let len = n as usize;
+    if len == 0 { return f32::INFINITY; }
+    let mut start = 0;
+    while start < len && (*ptr.add(start)).is_nan() { start += 1; }
+    if start == len { return *ptr; }
+    let mut result = *ptr.add(start);
+    for i in (start + 1)..len {
+        let v = *ptr.add(i);
+        if !v.is_nan() && v < result { result = v; }
+    }
+    result
+}
+
 // ─── diff: first-order differences ──────────────────────────────────────────
 
 #[no_mangle]

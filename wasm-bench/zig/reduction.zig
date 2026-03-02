@@ -182,6 +182,71 @@ export fn mean_f32(ptr: [*]const f32, n: u32) f32 {
     return sum_f32(ptr, n) / @as(f32, @floatFromInt(n));
 }
 
+// ─── nanmax: max ignoring NaN ───────────────────────────────────────────────
+
+export fn nanmax_f64(ptr: [*]const f64, n: u32) f64 {
+    const len = @as(usize, n);
+    if (len == 0) return -@as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
+    // Find first non-NaN
+    var start: usize = 0;
+    while (start < len and ptr[start] != ptr[start]) : (start += 1) {}
+    if (start == len) return ptr[0]; // all NaN, return NaN
+    var result: f64 = ptr[start];
+    var i = start + 1;
+    while (i < len) : (i += 1) {
+        const v = ptr[i];
+        if (v == v and v > result) result = v;
+    }
+    return result;
+}
+
+export fn nanmax_f32(ptr: [*]const f32, n: u32) f32 {
+    const len = @as(usize, n);
+    if (len == 0) return -@as(f32, @bitCast(@as(u32, 0x7F800000)));
+    var start: usize = 0;
+    while (start < len and ptr[start] != ptr[start]) : (start += 1) {}
+    if (start == len) return ptr[0];
+    var result: f32 = ptr[start];
+    var i = start + 1;
+    while (i < len) : (i += 1) {
+        const v = ptr[i];
+        if (v == v and v > result) result = v;
+    }
+    return result;
+}
+
+// ─── nanmin: min ignoring NaN ───────────────────────────────────────────────
+
+export fn nanmin_f64(ptr: [*]const f64, n: u32) f64 {
+    const len = @as(usize, n);
+    if (len == 0) return @as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
+    var start: usize = 0;
+    while (start < len and ptr[start] != ptr[start]) : (start += 1) {}
+    if (start == len) return ptr[0];
+    var result: f64 = ptr[start];
+    var i = start + 1;
+    while (i < len) : (i += 1) {
+        const v = ptr[i];
+        if (v == v and v < result) result = v;
+    }
+    return result;
+}
+
+export fn nanmin_f32(ptr: [*]const f32, n: u32) f32 {
+    const len = @as(usize, n);
+    if (len == 0) return @as(f32, @bitCast(@as(u32, 0x7F800000)));
+    var start: usize = 0;
+    while (start < len and ptr[start] != ptr[start]) : (start += 1) {}
+    if (start == len) return ptr[0];
+    var result: f32 = ptr[start];
+    var i = start + 1;
+    while (i < len) : (i += 1) {
+        const v = ptr[i];
+        if (v == v and v < result) result = v;
+    }
+    return result;
+}
+
 // ─── diff: first-order differences ──────────────────────────────────────────
 // out[i] = in[i+1] - in[i], output has n-1 elements
 

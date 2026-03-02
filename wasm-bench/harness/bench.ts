@@ -87,6 +87,24 @@ const CATEGORIES: CategoryConfig[] = [
     ],
     metric: 'M elem/s',
   },
+  {
+    name: 'linalg',
+    sizes: [
+      { size: 50, iterations: 50, warmup: 10 },
+      { size: 100, iterations: 20, warmup: 5 },
+      { size: 500, iterations: 5, warmup: 2 },
+    ],
+    metric: 'GFLOP/s',
+  },
+  {
+    name: 'arrayops',
+    sizes: [
+      { size: 1_000, iterations: 100, warmup: 10 },
+      { size: 100_000, iterations: 30, warmup: 5 },
+      { size: 10_000_000, iterations: 5, warmup: 2 },
+    ],
+    metric: 'GB/s',
+  },
 ];
 
 // ─── WASM Loading ────────────────────────────────────────────────────────────
@@ -172,6 +190,44 @@ interface WasmKernels {
   correlate_f32?: (a: number, b: number, out: number, na: number, nb: number) => void;
   convolve_f64?: (a: number, b: number, out: number, na: number, nb: number) => void;
   convolve_f32?: (a: number, b: number, out: number, na: number, nb: number) => void;
+  // Linalg
+  matvec_f64?: (a: number, x: number, out: number, m: number, n: number) => void;
+  matvec_f32?: (a: number, x: number, out: number, m: number, n: number) => void;
+  vecmat_f64?: (x: number, a: number, out: number, m: number, n: number) => void;
+  vecmat_f32?: (x: number, a: number, out: number, m: number, n: number) => void;
+  vecdot_f64?: (a: number, b: number, out: number, nbatch: number, veclen: number) => void;
+  vecdot_f32?: (a: number, b: number, out: number, nbatch: number, veclen: number) => void;
+  outer_f64?: (a: number, b: number, out: number, m: number, n: number) => void;
+  outer_f32?: (a: number, b: number, out: number, m: number, n: number) => void;
+  kron_f64?: (a: number, b: number, out: number, am: number, an: number, bm: number, bn: number) => void;
+  kron_f32?: (a: number, b: number, out: number, am: number, an: number, bm: number, bn: number) => void;
+  cross_f64?: (a: number, b: number, out: number, n: number) => void;
+  cross_f32?: (a: number, b: number, out: number, n: number) => void;
+  norm_f64?: (ptr: number, n: number) => number;
+  norm_f32?: (ptr: number, n: number) => number;
+  // Unary extensions
+  tan_f64?: (inp: number, out: number, n: number) => void;
+  tan_f32?: (inp: number, out: number, n: number) => void;
+  signbit_f64?: (inp: number, out: number, n: number) => void;
+  signbit_f32?: (inp: number, out: number, n: number) => void;
+  // Reduction extensions
+  nanmax_f64?: (ptr: number, n: number) => number;
+  nanmax_f32?: (ptr: number, n: number) => number;
+  nanmin_f64?: (ptr: number, n: number) => number;
+  nanmin_f32?: (ptr: number, n: number) => number;
+  // Array ops
+  roll_f64?: (inp: number, out: number, n: number, shift: number) => void;
+  roll_f32?: (inp: number, out: number, n: number, shift: number) => void;
+  flip_f64?: (inp: number, out: number, n: number) => void;
+  flip_f32?: (inp: number, out: number, n: number) => void;
+  tile_f64?: (inp: number, out: number, n: number, reps: number) => void;
+  tile_f32?: (inp: number, out: number, n: number, reps: number) => void;
+  pad_f64?: (inp: number, out: number, rows: number, cols: number, pw: number) => void;
+  pad_f32?: (inp: number, out: number, rows: number, cols: number, pw: number) => void;
+  take_f64?: (data: number, indices: number, out: number, n: number) => void;
+  take_f32?: (data: number, indices: number, out: number, n: number) => void;
+  gradient_f64?: (inp: number, out: number, n: number) => void;
+  gradient_f32?: (inp: number, out: number, n: number) => void;
 }
 
 async function loadWasm(filename: string, name: string): Promise<WasmKernels | null> {
@@ -237,6 +293,15 @@ async function loadWasm(filename: string, name: string): Promise<WasmKernels | n
     'partition_f64', 'partition_f32',
     'argpartition_f64', 'argpartition_f32',
     'correlate_f64', 'correlate_f32', 'convolve_f64', 'convolve_f32',
+    'matvec_f64', 'matvec_f32', 'vecmat_f64', 'vecmat_f32',
+    'vecdot_f64', 'vecdot_f32', 'outer_f64', 'outer_f32',
+    'kron_f64', 'kron_f32', 'cross_f64', 'cross_f32',
+    'norm_f64', 'norm_f32',
+    'tan_f64', 'tan_f32', 'signbit_f64', 'signbit_f32',
+    'nanmax_f64', 'nanmax_f32', 'nanmin_f64', 'nanmin_f32',
+    'roll_f64', 'roll_f32', 'flip_f64', 'flip_f32',
+    'tile_f64', 'tile_f32', 'pad_f64', 'pad_f32',
+    'take_f64', 'take_f32', 'gradient_f64', 'gradient_f32',
   ] as const;
   for (const fn of fnNames) {
     if (typeof exp[fn] === 'function') {
@@ -1112,6 +1177,447 @@ function benchJsConvolve(
   };
 }
 
+// ─── Linalg Benchmarks ──────────────────────────────────────────────────────
+
+function computeGflopsCustom(flops: number, timeMs: number): number {
+  return flops / (timeMs / 1000) / 1e9;
+}
+
+function benchWasmLinalg(
+  wasm: WasmKernels, opName: string, size: number, dtype: 'f64' | 'f32', iterations: number, warmup: number
+): TimingResult | null {
+  const N = size;
+  const bytesPerElem = dtype === 'f64' ? 8 : 4;
+  const ArrayType = dtype === 'f64' ? Float64Array : Float32Array;
+  const base = wasm.baseOffset;
+
+  let flops: number;
+  let runFn: () => void;
+
+  switch (opName) {
+    case 'matvec': {
+      const fn = (wasm as Record<string, unknown>)[`matvec_${dtype}`] as ((a: number, x: number, out: number, m: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const matBytes = N * N * bytesPerElem;
+      const vecBytes = N * bytesPerElem;
+      ensureMemory(wasm, matBytes + vecBytes + vecBytes);
+      const aData = new ArrayType(N * N); for (let i = 0; i < N * N; i++) aData[i] = Math.random() * 2 - 1;
+      const xData = new ArrayType(N); for (let i = 0; i < N; i++) xData[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N * N).set(aData);
+      new ArrayType(wasm.memory.buffer, base + matBytes, N).set(xData);
+      const aOff = base, xOff = base + matBytes, outOff = base + matBytes + vecBytes;
+      flops = 2 * N * N;
+      runFn = () => fn(aOff, xOff, outOff, N, N);
+      break;
+    }
+    case 'vecmat': {
+      const fn = (wasm as Record<string, unknown>)[`vecmat_${dtype}`] as ((x: number, a: number, out: number, m: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const matBytes = N * N * bytesPerElem;
+      const vecBytes = N * bytesPerElem;
+      ensureMemory(wasm, vecBytes + matBytes + vecBytes);
+      const xData = new ArrayType(N); for (let i = 0; i < N; i++) xData[i] = Math.random() * 2 - 1;
+      const aData = new ArrayType(N * N); for (let i = 0; i < N * N; i++) aData[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N).set(xData);
+      new ArrayType(wasm.memory.buffer, base + vecBytes, N * N).set(aData);
+      const xOff = base, aOff = base + vecBytes, outOff = base + vecBytes + matBytes;
+      flops = 2 * N * N;
+      runFn = () => fn(xOff, aOff, outOff, N, N);
+      break;
+    }
+    case 'vecdot': {
+      const fn = (wasm as Record<string, unknown>)[`vecdot_${dtype}`] as ((a: number, b: number, out: number, nbatch: number, veclen: number) => void) | undefined;
+      if (!fn) return null;
+      const totalElems = N * N;
+      const dataBytes = totalElems * bytesPerElem;
+      const outBytes = N * bytesPerElem;
+      ensureMemory(wasm, 2 * dataBytes + outBytes);
+      const aData = new ArrayType(totalElems); for (let i = 0; i < totalElems; i++) aData[i] = Math.random() * 2 - 1;
+      const bData = new ArrayType(totalElems); for (let i = 0; i < totalElems; i++) bData[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, totalElems).set(aData);
+      new ArrayType(wasm.memory.buffer, base + dataBytes, totalElems).set(bData);
+      const aOff = base, bOff = base + dataBytes, outOff = base + 2 * dataBytes;
+      flops = 2 * N * N;
+      runFn = () => fn(aOff, bOff, outOff, N, N);
+      break;
+    }
+    case 'outer': {
+      const fn = (wasm as Record<string, unknown>)[`outer_${dtype}`] as ((a: number, b: number, out: number, m: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const vecBytes = N * bytesPerElem;
+      const outBytes = N * N * bytesPerElem;
+      ensureMemory(wasm, 2 * vecBytes + outBytes);
+      const aData = new ArrayType(N); for (let i = 0; i < N; i++) aData[i] = Math.random() * 2 - 1;
+      const bData = new ArrayType(N); for (let i = 0; i < N; i++) bData[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N).set(aData);
+      new ArrayType(wasm.memory.buffer, base + vecBytes, N).set(bData);
+      const aOff = base, bOff = base + vecBytes, outOff = base + 2 * vecBytes;
+      flops = N * N;
+      runFn = () => fn(aOff, bOff, outOff, N, N);
+      break;
+    }
+    case 'kron': {
+      if (N > 100) return null; // kron output is N²×N², too large for N>100
+      const fn = (wasm as Record<string, unknown>)[`kron_${dtype}`] as ((a: number, b: number, out: number, am: number, an: number, bm: number, bn: number) => void) | undefined;
+      if (!fn) return null;
+      const matBytes = N * N * bytesPerElem;
+      const outBytes = N * N * N * N * bytesPerElem;
+      ensureMemory(wasm, 2 * matBytes + outBytes);
+      const aData = new ArrayType(N * N); for (let i = 0; i < N * N; i++) aData[i] = Math.random() * 2 - 1;
+      const bData = new ArrayType(N * N); for (let i = 0; i < N * N; i++) bData[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N * N).set(aData);
+      new ArrayType(wasm.memory.buffer, base + matBytes, N * N).set(bData);
+      const aOff = base, bOff = base + matBytes, outOff = base + 2 * matBytes;
+      flops = N * N * N * N;
+      runFn = () => fn(aOff, bOff, outOff, N, N, N, N);
+      break;
+    }
+    case 'cross': {
+      const fn = (wasm as Record<string, unknown>)[`cross_${dtype}`] as ((a: number, b: number, out: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const vecBytes = N * 3 * bytesPerElem;
+      ensureMemory(wasm, 3 * vecBytes);
+      const aData = new ArrayType(N * 3); for (let i = 0; i < N * 3; i++) aData[i] = Math.random() * 2 - 1;
+      const bData = new ArrayType(N * 3); for (let i = 0; i < N * 3; i++) bData[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N * 3).set(aData);
+      new ArrayType(wasm.memory.buffer, base + vecBytes, N * 3).set(bData);
+      const aOff = base, bOff = base + vecBytes, outOff = base + 2 * vecBytes;
+      flops = 6 * N;
+      runFn = () => fn(aOff, bOff, outOff, N);
+      break;
+    }
+    case 'norm': {
+      const fn = (wasm as Record<string, unknown>)[`norm_${dtype}`] as ((ptr: number, n: number) => number) | undefined;
+      if (!fn) return null;
+      const totalElems = N * N;
+      const dataBytes = totalElems * bytesPerElem;
+      ensureMemory(wasm, dataBytes);
+      const data = new ArrayType(totalElems); for (let i = 0; i < totalElems; i++) data[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, totalElems).set(data);
+      flops = 2 * N * N;
+      runFn = () => fn(base, totalElems);
+      break;
+    }
+    default:
+      return null;
+  }
+
+  const times: number[] = [];
+  for (let iter = 0; iter < warmup + iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    const t1 = performance.now();
+    if (iter >= warmup) times.push(t1 - t0);
+  }
+
+  const ms = median(times);
+  return {
+    impl: `${wasm.name} (${dtype})`,
+    op: opName,
+    size,
+    timeMs: ms,
+    metric: computeGflopsCustom(flops, ms),
+    metricUnit: 'GFLOP/s',
+  };
+}
+
+function benchJsLinalg(
+  opName: string, size: number, iterations: number, warmup: number
+): TimingResult {
+  const N = size;
+  let flops: number;
+  let runFn: () => void;
+
+  switch (opName) {
+    case 'matvec': {
+      const A = new Float64Array(N * N); for (let i = 0; i < N * N; i++) A[i] = Math.random() * 2 - 1;
+      const x = new Float64Array(N); for (let i = 0; i < N; i++) x[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N);
+      flops = 2 * N * N;
+      runFn = () => { for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < N; j++) s += A[i * N + j] * x[j]; out[i] = s; } };
+      break;
+    }
+    case 'vecmat': {
+      const x = new Float64Array(N); for (let i = 0; i < N; i++) x[i] = Math.random() * 2 - 1;
+      const A = new Float64Array(N * N); for (let i = 0; i < N * N; i++) A[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N);
+      flops = 2 * N * N;
+      runFn = () => { for (let j = 0; j < N; j++) { let s = 0; for (let i = 0; i < N; i++) s += x[i] * A[i * N + j]; out[j] = s; } };
+      break;
+    }
+    case 'vecdot': {
+      const a = new Float64Array(N * N); for (let i = 0; i < N * N; i++) a[i] = Math.random() * 2 - 1;
+      const b = new Float64Array(N * N); for (let i = 0; i < N * N; i++) b[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N);
+      flops = 2 * N * N;
+      runFn = () => { for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < N; j++) s += a[i * N + j] * b[i * N + j]; out[i] = s; } };
+      break;
+    }
+    case 'outer': {
+      const a = new Float64Array(N); for (let i = 0; i < N; i++) a[i] = Math.random() * 2 - 1;
+      const b = new Float64Array(N); for (let i = 0; i < N; i++) b[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N * N);
+      flops = N * N;
+      runFn = () => { for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) out[i * N + j] = a[i] * b[j]; };
+      break;
+    }
+    case 'kron': {
+      if (N > 100) return null; // kron output is N²×N², too large for N>100
+      const a = new Float64Array(N * N); for (let i = 0; i < N * N; i++) a[i] = Math.random() * 2 - 1;
+      const b = new Float64Array(N * N); for (let i = 0; i < N * N; i++) b[i] = Math.random() * 2 - 1;
+      const outN = N * N;
+      const out = new Float64Array(outN * outN);
+      flops = N * N * N * N;
+      runFn = () => {
+        for (let ai = 0; ai < N; ai++)
+          for (let aj = 0; aj < N; aj++)
+            for (let bi = 0; bi < N; bi++)
+              for (let bj = 0; bj < N; bj++)
+                out[(ai * N + bi) * outN + aj * N + bj] = a[ai * N + aj] * b[bi * N + bj];
+      };
+      break;
+    }
+    case 'cross': {
+      const a = new Float64Array(N * 3); for (let i = 0; i < N * 3; i++) a[i] = Math.random() * 2 - 1;
+      const b = new Float64Array(N * 3); for (let i = 0; i < N * 3; i++) b[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N * 3);
+      flops = 6 * N;
+      runFn = () => {
+        for (let i = 0; i < N; i++) {
+          const o = i * 3;
+          out[o] = a[o + 1] * b[o + 2] - a[o + 2] * b[o + 1];
+          out[o + 1] = a[o + 2] * b[o] - a[o] * b[o + 2];
+          out[o + 2] = a[o] * b[o + 1] - a[o + 1] * b[o];
+        }
+      };
+      break;
+    }
+    case 'norm': {
+      const totalElems = N * N;
+      const data = new Float64Array(totalElems); for (let i = 0; i < totalElems; i++) data[i] = Math.random() * 2 - 1;
+      flops = 2 * N * N;
+      runFn = () => { let s = 0; for (let i = 0; i < totalElems; i++) s += data[i] * data[i]; Math.sqrt(s); };
+      break;
+    }
+    default:
+      flops = 0;
+      runFn = () => {};
+  }
+
+  const times: number[] = [];
+  for (let iter = 0; iter < warmup + iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    const t1 = performance.now();
+    if (iter >= warmup) times.push(t1 - t0);
+  }
+
+  const ms = median(times);
+  return {
+    impl: 'JS (f64)',
+    op: opName,
+    size,
+    timeMs: ms,
+    metric: computeGflopsCustom(flops, ms),
+    metricUnit: 'GFLOP/s',
+  };
+}
+
+// ─── Array Ops Benchmarks ───────────────────────────────────────────────────
+
+function benchWasmArrayOp(
+  wasm: WasmKernels, opName: string, size: number, dtype: 'f64' | 'f32', iterations: number, warmup: number
+): TimingResult | null {
+  const N = size;
+  const bytesPerElem = dtype === 'f64' ? 8 : 4;
+  const ArrayType = dtype === 'f64' ? Float64Array : Float32Array;
+  const base = wasm.baseOffset;
+
+  let throughputBytes: number;
+  let runFn: () => void;
+
+  switch (opName) {
+    case 'roll': {
+      const fn = (wasm as Record<string, unknown>)[`roll_${dtype}`] as ((inp: number, out: number, n: number, shift: number) => void) | undefined;
+      if (!fn) return null;
+      const bufBytes = N * bytesPerElem;
+      ensureMemory(wasm, 2 * bufBytes);
+      const data = new ArrayType(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N).set(data);
+      const shift = Math.floor(N / 3);
+      throughputBytes = N * bytesPerElem;
+      runFn = () => fn(base, base + bufBytes, N, shift);
+      break;
+    }
+    case 'flip': {
+      const fn = (wasm as Record<string, unknown>)[`flip_${dtype}`] as ((inp: number, out: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const bufBytes = N * bytesPerElem;
+      ensureMemory(wasm, 2 * bufBytes);
+      const data = new ArrayType(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N).set(data);
+      throughputBytes = N * bytesPerElem;
+      runFn = () => fn(base, base + bufBytes, N);
+      break;
+    }
+    case 'tile': {
+      const fn = (wasm as Record<string, unknown>)[`tile_${dtype}`] as ((inp: number, out: number, n: number, reps: number) => void) | undefined;
+      if (!fn) return null;
+      const inBytes = N * bytesPerElem;
+      const reps = 4;
+      const outBytes = N * reps * bytesPerElem;
+      ensureMemory(wasm, inBytes + outBytes);
+      const data = new ArrayType(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, N).set(data);
+      throughputBytes = N * bytesPerElem; // input throughput
+      runFn = () => fn(base, base + inBytes, N, reps);
+      break;
+    }
+    case 'pad': {
+      const fn = (wasm as Record<string, unknown>)[`pad_${dtype}`] as ((inp: number, out: number, rows: number, cols: number, pw: number) => void) | undefined;
+      if (!fn) return null;
+      const side = Math.floor(Math.sqrt(N));
+      const pw = 2;
+      const outSide = side + 2 * pw;
+      const inBytes = side * side * bytesPerElem;
+      const outBytes = outSide * outSide * bytesPerElem;
+      ensureMemory(wasm, inBytes + outBytes);
+      const data = new ArrayType(side * side); for (let i = 0; i < side * side; i++) data[i] = Math.random() * 2 - 1;
+      new ArrayType(wasm.memory.buffer, base, side * side).set(data);
+      throughputBytes = side * side * bytesPerElem;
+      runFn = () => fn(base, base + inBytes, side, side, pw);
+      break;
+    }
+    case 'take': {
+      const fn = (wasm as Record<string, unknown>)[`take_${dtype}`] as ((data: number, indices: number, out: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const dataBytes = N * bytesPerElem;
+      const idxBytes = N * 4; // i32 indices
+      const outBytes = N * bytesPerElem;
+      ensureMemory(wasm, dataBytes + idxBytes + outBytes);
+      const data = new ArrayType(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      const indices = new Int32Array(N); for (let i = 0; i < N; i++) indices[i] = Math.floor(Math.random() * N);
+      new ArrayType(wasm.memory.buffer, base, N).set(data);
+      new Int32Array(wasm.memory.buffer, base + dataBytes, N).set(indices);
+      throughputBytes = N * bytesPerElem;
+      runFn = () => fn(base, base + dataBytes, base + dataBytes + idxBytes, N);
+      break;
+    }
+    case 'gradient': {
+      const fn = (wasm as Record<string, unknown>)[`gradient_${dtype}`] as ((inp: number, out: number, n: number) => void) | undefined;
+      if (!fn) return null;
+      const bufBytes = N * bytesPerElem;
+      ensureMemory(wasm, 2 * bufBytes);
+      const data = new ArrayType(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 10;
+      new ArrayType(wasm.memory.buffer, base, N).set(data);
+      throughputBytes = N * bytesPerElem;
+      runFn = () => fn(base, base + bufBytes, N);
+      break;
+    }
+    default:
+      return null;
+  }
+
+  const times: number[] = [];
+  for (let iter = 0; iter < warmup + iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    const t1 = performance.now();
+    if (iter >= warmup) times.push(t1 - t0);
+  }
+
+  const ms = median(times);
+  return {
+    impl: `${wasm.name} (${dtype})`,
+    op: opName,
+    size,
+    timeMs: ms,
+    metric: computeGBs(N, bytesPerElem, ms),
+    metricUnit: 'GB/s',
+  };
+}
+
+function benchJsArrayOp(
+  opName: string, size: number, iterations: number, warmup: number
+): TimingResult {
+  const N = size;
+  let runFn: () => void;
+
+  switch (opName) {
+    case 'roll': {
+      const data = new Float64Array(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N);
+      const shift = Math.floor(N / 3);
+      runFn = () => { for (let i = 0; i < N; i++) out[(i + shift) % N] = data[i]; };
+      break;
+    }
+    case 'flip': {
+      const data = new Float64Array(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(N);
+      runFn = () => { for (let i = 0; i < N; i++) out[N - 1 - i] = data[i]; };
+      break;
+    }
+    case 'tile': {
+      const data = new Float64Array(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      const reps = 4;
+      const out = new Float64Array(N * reps);
+      runFn = () => { for (let r = 0; r < reps; r++) for (let i = 0; i < N; i++) out[r * N + i] = data[i]; };
+      break;
+    }
+    case 'pad': {
+      const side = Math.floor(Math.sqrt(N));
+      const pw = 2;
+      const outSide = side + 2 * pw;
+      const data = new Float64Array(side * side); for (let i = 0; i < side * side; i++) data[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(outSide * outSide);
+      runFn = () => {
+        out.fill(0);
+        for (let i = 0; i < side; i++)
+          for (let j = 0; j < side; j++)
+            out[(i + pw) * outSide + (j + pw)] = data[i * side + j];
+      };
+      break;
+    }
+    case 'take': {
+      const data = new Float64Array(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+      const indices = new Int32Array(N); for (let i = 0; i < N; i++) indices[i] = Math.floor(Math.random() * N);
+      const out = new Float64Array(N);
+      runFn = () => { for (let i = 0; i < N; i++) out[i] = data[indices[i]]; };
+      break;
+    }
+    case 'gradient': {
+      const data = new Float64Array(N); for (let i = 0; i < N; i++) data[i] = Math.random() * 10;
+      const out = new Float64Array(N);
+      runFn = () => {
+        out[0] = data[1] - data[0];
+        for (let i = 1; i < N - 1; i++) out[i] = (data[i + 1] - data[i - 1]) / 2;
+        out[N - 1] = data[N - 1] - data[N - 2];
+      };
+      break;
+    }
+    default:
+      runFn = () => {};
+  }
+
+  const times: number[] = [];
+  for (let iter = 0; iter < warmup + iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    const t1 = performance.now();
+    if (iter >= warmup) times.push(t1 - t0);
+  }
+
+  const ms = median(times);
+  return {
+    impl: 'JS (f64)',
+    op: opName,
+    size,
+    timeMs: ms,
+    metric: computeGBs(N, 8, ms),
+    metricUnit: 'GB/s',
+  };
+}
+
 // ─── Correctness Checks ─────────────────────────────────────────────────────
 
 function verifyAll(wasms: WasmKernels[]): boolean {
@@ -1396,6 +1902,149 @@ function verifyAll(wasms: WasmKernels[]): boolean {
       checks.push(['convolve', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
     }
 
+    // Linalg — matvec: [[1,2],[3,4]] · [1,1] = [3,7]
+    if (wasm.matvec_f64) {
+      ensureMemory(wasm, 6 * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, 2, 3, 4]);
+      new Float64Array(wasm.memory.buffer, B + 32, 2).set([1, 1]);
+      wasm.matvec_f64(B, B + 32, B + 48, 2, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 48, 2);
+      checks.push(['matvec', Math.abs(r[0] - 3) < 1e-10 && Math.abs(r[1] - 7) < 1e-10]);
+    }
+
+    // Linalg — vecmat: [1,1] · [[1,2],[3,4]] = [4,6]
+    if (wasm.vecmat_f64) {
+      ensureMemory(wasm, 6 * 8);
+      new Float64Array(wasm.memory.buffer, B, 2).set([1, 1]);
+      new Float64Array(wasm.memory.buffer, B + 16, 4).set([1, 2, 3, 4]);
+      wasm.vecmat_f64(B, B + 16, B + 48, 2, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 48, 2);
+      checks.push(['vecmat', Math.abs(r[0] - 4) < 1e-10 && Math.abs(r[1] - 6) < 1e-10]);
+    }
+
+    // Linalg — vecdot: [1,2,3] · [4,5,6] = 32 (1 batch, len 3)
+    if (wasm.vecdot_f64) {
+      ensureMemory(wasm, 7 * 8);
+      new Float64Array(wasm.memory.buffer, B, 3).set([1, 2, 3]);
+      new Float64Array(wasm.memory.buffer, B + 24, 3).set([4, 5, 6]);
+      wasm.vecdot_f64(B, B + 24, B + 48, 1, 3);
+      const r = new Float64Array(wasm.memory.buffer, B + 48, 1);
+      checks.push(['vecdot', Math.abs(r[0] - 32) < 1e-10]);
+    }
+
+    // Linalg — outer: [1,2] ⊗ [3,4] = [3,4,6,8]
+    if (wasm.outer_f64) {
+      ensureMemory(wasm, 8 * 8);
+      new Float64Array(wasm.memory.buffer, B, 2).set([1, 2]);
+      new Float64Array(wasm.memory.buffer, B + 16, 2).set([3, 4]);
+      wasm.outer_f64(B, B + 16, B + 32, 2, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 32, 4);
+      checks.push(['outer', Math.abs(r[0] - 3) < 1e-10 && Math.abs(r[1] - 4) < 1e-10 && Math.abs(r[2] - 6) < 1e-10 && Math.abs(r[3] - 8) < 1e-10]);
+    }
+
+    // Linalg — kron: I2 ⊗ [[1,2],[3,4]] = [[1,2,0,0],[3,4,0,0],[0,0,1,2],[0,0,3,4]]
+    if (wasm.kron_f64) {
+      ensureMemory(wasm, (4 + 4 + 16) * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, 0, 0, 1]);
+      new Float64Array(wasm.memory.buffer, B + 32, 4).set([1, 2, 3, 4]);
+      wasm.kron_f64(B, B + 32, B + 64, 2, 2, 2, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 64, 16);
+      const expected = [1, 2, 0, 0, 3, 4, 0, 0, 0, 0, 1, 2, 0, 0, 3, 4];
+      checks.push(['kron', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
+    }
+
+    // Linalg — cross: [1,0,0] × [0,1,0] = [0,0,1]
+    if (wasm.cross_f64) {
+      ensureMemory(wasm, 9 * 8);
+      new Float64Array(wasm.memory.buffer, B, 3).set([1, 0, 0]);
+      new Float64Array(wasm.memory.buffer, B + 24, 3).set([0, 1, 0]);
+      wasm.cross_f64(B, B + 24, B + 48, 1);
+      const r = new Float64Array(wasm.memory.buffer, B + 48, 3);
+      checks.push(['cross', Math.abs(r[0]) < 1e-10 && Math.abs(r[1]) < 1e-10 && Math.abs(r[2] - 1) < 1e-10]);
+    }
+
+    // Linalg — norm: norm([3,4]) = 5
+    if (wasm.norm_f64) {
+      ensureMemory(wasm, 2 * 8);
+      new Float64Array(wasm.memory.buffer, B, 2).set([3, 4]);
+      const result = wasm.norm_f64(B, 2);
+      checks.push(['norm', Math.abs(result - 5) < 1e-10]);
+    }
+
+    // Unary extensions — tan(0) = 0, tan(π/4) ≈ 1.0
+    if (wasm.tan_f64) {
+      ensureMemory(wasm, 4 * 8);
+      new Float64Array(wasm.memory.buffer, B, 2).set([0, Math.PI / 4]);
+      wasm.tan_f64(B, B + 16, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 16, 2);
+      checks.push(['tan', Math.abs(r[0]) < 1e-10 && Math.abs(r[1] - 1) < 1e-6]);
+    }
+
+    // Unary extensions — signbit(-1) = 1, signbit(1) = 0, signbit(-0) = 1
+    if (wasm.signbit_f64) {
+      ensureMemory(wasm, 6 * 8);
+      new Float64Array(wasm.memory.buffer, B, 3).set([-1, 1, -0]);
+      wasm.signbit_f64(B, B + 24, 3);
+      const r = new Float64Array(wasm.memory.buffer, B + 24, 3);
+      checks.push(['signbit', Math.abs(r[0] - 1) < 1e-10 && Math.abs(r[1]) < 1e-10 && Math.abs(r[2] - 1) < 1e-10]);
+    }
+
+    // Reduction extensions — nanmax([1, NaN, 3, 2]) = 3
+    if (wasm.nanmax_f64) {
+      ensureMemory(wasm, 4 * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, NaN, 3, 2]);
+      const result = wasm.nanmax_f64(B, 4);
+      checks.push(['nanmax', Math.abs(result - 3) < 1e-10]);
+    }
+
+    // Reduction extensions — nanmin([1, NaN, 3, 2]) = 1
+    if (wasm.nanmin_f64) {
+      ensureMemory(wasm, 4 * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, NaN, 3, 2]);
+      const result = wasm.nanmin_f64(B, 4);
+      checks.push(['nanmin', Math.abs(result - 1) < 1e-10]);
+    }
+
+    // Array ops — roll([1,2,3,4,5], shift=2) = [4,5,1,2,3]
+    if (wasm.roll_f64) {
+      ensureMemory(wasm, 10 * 8);
+      new Float64Array(wasm.memory.buffer, B, 5).set([1, 2, 3, 4, 5]);
+      wasm.roll_f64(B, B + 40, 5, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 40, 5);
+      const expected = [4, 5, 1, 2, 3];
+      checks.push(['roll', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
+    }
+
+    // Array ops — flip([1,2,3,4]) = [4,3,2,1]
+    if (wasm.flip_f64) {
+      ensureMemory(wasm, 8 * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, 2, 3, 4]);
+      wasm.flip_f64(B, B + 32, 4);
+      const r = new Float64Array(wasm.memory.buffer, B + 32, 4);
+      const expected = [4, 3, 2, 1];
+      checks.push(['flip', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
+    }
+
+    // Array ops — tile([1,2,3], reps=2) = [1,2,3,1,2,3]
+    if (wasm.tile_f64) {
+      ensureMemory(wasm, 9 * 8);
+      new Float64Array(wasm.memory.buffer, B, 3).set([1, 2, 3]);
+      wasm.tile_f64(B, B + 24, 3, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 24, 6);
+      const expected = [1, 2, 3, 1, 2, 3];
+      checks.push(['tile', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
+    }
+
+    // Array ops — gradient([1,3,6,10]) = [2, 2.5, 3.5, 4]
+    if (wasm.gradient_f64) {
+      ensureMemory(wasm, 8 * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, 3, 6, 10]);
+      wasm.gradient_f64(B, B + 32, 4);
+      const r = new Float64Array(wasm.memory.buffer, B + 32, 4);
+      const expected = [2, 2.5, 3.5, 4];
+      checks.push(['gradient', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
+    }
+
     const allPass = checks.every(([, ok]) => ok);
     const details = checks.map(([name, ok]) => `${name}:${ok ? 'PASS' : 'FAIL'}`).join(' ');
     console.log(`  ${wasm.name.padEnd(12)} ${allPass ? 'PASS' : 'FAIL'}  (${details})`);
@@ -1428,7 +2077,7 @@ function printCategoryResults(category: string, metric: string, results: TimingR
 
   for (const size of sizes) {
     const sizeResults = results.filter((r) => r.size === size);
-    const sizeLabel = category === 'matmul' ? `${size}x${size}` : formatSize(size);
+    const sizeLabel = (category === 'matmul' || category === 'linalg') ? `${size}x${size}` : formatSize(size);
     console.log(`\n${'═'.repeat(90)}`);
     console.log(`  ${category.toUpperCase()} — Size: ${sizeLabel}`);
     console.log(`${'═'.repeat(90)}`);
@@ -1563,7 +2212,7 @@ function generateHTML(report: BenchmarkReport) {
       const entries: ChartEntry['entries'] = [];
 
       for (const size of sizes) {
-        const sizeLabel = catName === 'matmul' ? `${size}×${size}` : formatSize(size);
+        const sizeLabel = (catName === 'matmul' || catName === 'linalg') ? `${size}×${size}` : formatSize(size);
         const sizeResults = results.filter((r) => r.size === size && r.op === op);
 
         // Find JS baseline time
@@ -1897,7 +2546,7 @@ function capitalize(s: string): string {
 
 // ─── Per-Category WASM Loading ───────────────────────────────────────────────
 
-const KERNEL_NAMES = ['matmul', 'reduction', 'unary', 'binary', 'sort', 'convolve'] as const;
+const KERNEL_NAMES = ['matmul', 'reduction', 'unary', 'binary', 'sort', 'convolve', 'linalg', 'arrayops'] as const;
 type KernelName = (typeof KERNEL_NAMES)[number];
 
 async function loadCategoryWasms(): Promise<Record<KernelName, WasmKernels[]>> {
@@ -1960,7 +2609,7 @@ async function main() {
     const results: TimingResult[] = [];
 
     for (const { size, iterations, warmup } of cat.sizes) {
-      const sizeLabel = cat.name === 'matmul' ? `${size}x${size}` : formatSize(size);
+      const sizeLabel = (cat.name === 'matmul' || cat.name === 'linalg') ? `${size}x${size}` : formatSize(size);
       console.log(`  ${sizeLabel} (${iterations} iters, ${warmup} warmup)...`);
 
       switch (cat.name) {
@@ -1993,10 +2642,38 @@ async function main() {
             if (r64) results.push(r64);
             if (r32) results.push(r32);
           }
+          // nanmax, nanmin (scalar reductions that skip NaN)
+          for (const op of ['nanmax', 'nanmin'] as const) {
+            // JS loop baseline
+            {
+              const data = new Float64Array(size);
+              for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+              // Sprinkle ~1% NaN
+              for (let i = 0; i < size; i += 100) data[i] = NaN;
+              const jsFn = op === 'nanmax'
+                ? () => { let m = -Infinity; for (let i = 0; i < size; i++) if (!isNaN(data[i]) && data[i] > m) m = data[i]; return m; }
+                : () => { let m = Infinity; for (let i = 0; i < size; i++) if (!isNaN(data[i]) && data[i] < m) m = data[i]; return m; };
+              const times: number[] = [];
+              for (let iter = 0; iter < warmup + iterations; iter++) {
+                const t0 = performance.now();
+                jsFn();
+                const t1 = performance.now();
+                if (iter >= warmup) times.push(t1 - t0);
+              }
+              const ms = median(times);
+              results.push({ impl: 'JS (f64)', op, size, timeMs: ms, metric: computeGBs(size, 8, ms), metricUnit: 'GB/s' });
+            }
+            for (const wasm of wasmModules) {
+              const r64 = benchWasmReduction(wasm, op, size, 'f64', iterations, warmup);
+              const r32 = benchWasmReduction(wasm, op, size, 'f32', iterations, warmup);
+              if (r64) results.push(r64);
+              if (r32) results.push(r32);
+            }
+          }
           break;
         }
         case 'unary': {
-          const unaryOps: { wasm: string; js: keyof Baselines }[] = [
+          const unaryOps: { wasm: string; js: keyof Baselines | null }[] = [
             { wasm: 'sqrt', js: 'sqrt' },
             { wasm: 'exp', js: 'exp' },
             { wasm: 'log', js: 'log' },
@@ -2006,9 +2683,30 @@ async function main() {
             { wasm: 'neg', js: 'negative' },
             { wasm: 'ceil', js: 'ceil' },
             { wasm: 'floor', js: 'floor' },
+            { wasm: 'tan', js: null },
+            { wasm: 'signbit', js: null },
           ];
           for (const { wasm: wasmOp, js: jsOp } of unaryOps) {
-            results.push(benchJsUnary(baselines, jsOp as 'sqrt', size, iterations, warmup, wasmOp));
+            if (jsOp) {
+              results.push(benchJsUnary(baselines, jsOp as 'sqrt', size, iterations, warmup, wasmOp));
+            } else {
+              // JS loop baseline for ops without numpy-ts import
+              const data = new Float64Array(size);
+              for (let i = 0; i < size; i++) data[i] = Math.random() * 4 - 2;
+              const out = new Float64Array(size);
+              const jsFn = wasmOp === 'tan'
+                ? () => { for (let i = 0; i < size; i++) out[i] = Math.tan(data[i]); }
+                : () => { for (let i = 0; i < size; i++) out[i] = (1 / data[i] < 0) ? 1 : 0; }; // signbit
+              const times: number[] = [];
+              for (let iter = 0; iter < warmup + iterations; iter++) {
+                const t0 = performance.now();
+                jsFn();
+                const t1 = performance.now();
+                if (iter >= warmup) times.push(t1 - t0);
+              }
+              const ms = median(times);
+              results.push({ impl: 'JS (f64)', op: wasmOp, size, timeMs: ms, metric: computeGBs(size, 8, ms), metricUnit: 'GB/s' });
+            }
             for (const wasm of wasmModules) {
               const r64 = benchWasmUnary(wasm, wasmOp, size, 'f64', iterations, warmup);
               const r32 = benchWasmUnary(wasm, wasmOp, size, 'f32', iterations, warmup);
@@ -2086,6 +2784,34 @@ async function main() {
             for (const wasm of wasmModules) {
               const r64 = benchWasmConvolve(wasm, op, size, 'f64', iterations, warmup);
               const r32 = benchWasmConvolve(wasm, op, size, 'f32', iterations, warmup);
+              if (r64) results.push(r64);
+              if (r32) results.push(r32);
+            }
+          }
+          break;
+        }
+        case 'linalg': {
+          const linalgOps = ['matvec', 'vecmat', 'vecdot', 'outer', 'kron', 'cross', 'norm'];
+          for (const op of linalgOps) {
+            const jsR = benchJsLinalg(op, size, iterations, warmup);
+            if (jsR) results.push(jsR);
+            for (const wasm of wasmModules) {
+              const r64 = benchWasmLinalg(wasm, op, size, 'f64', iterations, warmup);
+              const r32 = benchWasmLinalg(wasm, op, size, 'f32', iterations, warmup);
+              if (r64) results.push(r64);
+              if (r32) results.push(r32);
+            }
+          }
+          break;
+        }
+        case 'arrayops': {
+          const arrayOps = ['roll', 'flip', 'tile', 'pad', 'take', 'gradient'];
+          for (const op of arrayOps) {
+            const jsR = benchJsArrayOp(op, size, iterations, warmup);
+            if (jsR) results.push(jsR);
+            for (const wasm of wasmModules) {
+              const r64 = benchWasmArrayOp(wasm, op, size, 'f64', iterations, warmup);
+              const r32 = benchWasmArrayOp(wasm, op, size, 'f32', iterations, warmup);
               if (r64) results.push(r64);
               if (r32) results.push(r32);
             }

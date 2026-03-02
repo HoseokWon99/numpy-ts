@@ -6,7 +6,7 @@ DIST_DIR="$SCRIPT_DIR/../dist"
 
 mkdir -p "$DIST_DIR"
 
-KERNELS=(matmul reduction unary binary sort convolve)
+KERNELS=(matmul reduction unary binary sort convolve linalg arrayops)
 
 cd "$SCRIPT_DIR"
 

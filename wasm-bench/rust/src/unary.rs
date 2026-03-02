@@ -111,3 +111,50 @@ unary_libm_f32!(exp_f32, libm::expf);
 unary_libm_f32!(log_f32, libm::logf);
 unary_libm_f32!(sin_f32, libm::sinf);
 unary_libm_f32!(cos_f32, libm::cosf);
+
+// ─── tan (sin/cos) ─────────────────────────────────────────────────────────
+
+unary_libm_f64!(tan_f64, libm::tan);
+unary_libm_f32!(tan_f32, libm::tanf);
+
+// ─── signbit: 1.0 if sign bit set, 0.0 otherwise ───────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn signbit_f64(inp: *const f64, out: *mut f64, n: u32) {
+    let len = n as usize;
+    let sign_mask = i64x2_splat(0x8000000000000000u64 as i64);
+    let one = f64x2_splat(1.0);
+    let zero = f64x2_splat(0.0);
+    let mut i = 0;
+    while i + 2 <= len {
+        let v = v128_load(inp.add(i) as *const v128);
+        let has_sign = v128_and(v, sign_mask); // non-zero lanes = negative
+        let mask = i64x2_ne(has_sign, i64x2_splat(0));
+        v128_store(out.add(i) as *mut v128, v128_bitselect(one, zero, mask));
+        i += 2;
+    }
+    while i < len {
+        *out.add(i) = if (*inp.add(i)).to_bits() >> 63 != 0 { 1.0 } else { 0.0 };
+        i += 1;
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn signbit_f32(inp: *const f32, out: *mut f32, n: u32) {
+    let len = n as usize;
+    let sign_mask = i32x4_splat(0x80000000u32 as i32);
+    let one = f32x4_splat(1.0);
+    let zero = f32x4_splat(0.0);
+    let mut i = 0;
+    while i + 4 <= len {
+        let v = v128_load(inp.add(i) as *const v128);
+        let has_sign = v128_and(v, sign_mask);
+        let mask = i32x4_ne(has_sign, i32x4_splat(0));
+        v128_store(out.add(i) as *mut v128, v128_bitselect(one, zero, mask));
+        i += 4;
+    }
+    while i < len {
+        *out.add(i) = if (*inp.add(i)).to_bits() >> 31 != 0 { 1.0 } else { 0.0 };
+        i += 1;
+    }
+}

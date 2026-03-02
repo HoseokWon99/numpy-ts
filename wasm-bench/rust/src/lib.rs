@@ -10,6 +10,10 @@ mod binary;
 mod sort;
 #[cfg(feature = "kern-convolve")]
 mod convolve;
+#[cfg(feature = "kern-linalg")]
+mod linalg;
+#[cfg(feature = "kern-arrayops")]
+mod arrayops;
 
 use core::panic::PanicInfo;
 
