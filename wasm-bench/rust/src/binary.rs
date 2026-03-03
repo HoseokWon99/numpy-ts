@@ -223,3 +223,174 @@ pub unsafe extern "C" fn logaddexp_f32(a: *const f32, b: *const f32, out: *mut f
         *out.add(i) = libm::logf(libm::expf(*a.add(i)) + libm::expf(*b.add(i)));
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGER TYPES (i32, i16, i8)
+// ═══════════════════════════════════════════════════════════════════════════
+
+macro_rules! binary_simd_i32 {
+    ($name:ident, $op:expr) => {
+        #[no_mangle]
+        pub unsafe extern "C" fn $name(a: *const i32, b: *const i32, out: *mut i32, n: u32) {
+            let len = n as usize;
+            let mut i = 0;
+            while i + 8 <= len {
+                let a0 = v128_load(a.add(i) as *const v128);
+                let a1 = v128_load(a.add(i + 4) as *const v128);
+                let b0 = v128_load(b.add(i) as *const v128);
+                let b1 = v128_load(b.add(i + 4) as *const v128);
+                v128_store(out.add(i) as *mut v128, $op(a0, b0));
+                v128_store(out.add(i + 4) as *mut v128, $op(a1, b1));
+                i += 8;
+            }
+            while i + 4 <= len {
+                v128_store(out.add(i) as *mut v128, $op(
+                    v128_load(a.add(i) as *const v128),
+                    v128_load(b.add(i) as *const v128),
+                ));
+                i += 4;
+            }
+            while i < len {
+                let av = i32x4_splat(*a.add(i));
+                let bv = i32x4_splat(*b.add(i));
+                *out.add(i) = i32x4_extract_lane::<0>($op(av, bv));
+                i += 1;
+            }
+        }
+    };
+}
+
+macro_rules! binary_simd_i16 {
+    ($name:ident, $op:expr) => {
+        #[no_mangle]
+        pub unsafe extern "C" fn $name(a: *const i16, b: *const i16, out: *mut i16, n: u32) {
+            let len = n as usize;
+            let mut i = 0;
+            while i + 16 <= len {
+                let a0 = v128_load(a.add(i) as *const v128);
+                let a1 = v128_load(a.add(i + 8) as *const v128);
+                let b0 = v128_load(b.add(i) as *const v128);
+                let b1 = v128_load(b.add(i + 8) as *const v128);
+                v128_store(out.add(i) as *mut v128, $op(a0, b0));
+                v128_store(out.add(i + 8) as *mut v128, $op(a1, b1));
+                i += 16;
+            }
+            while i + 8 <= len {
+                v128_store(out.add(i) as *mut v128, $op(
+                    v128_load(a.add(i) as *const v128),
+                    v128_load(b.add(i) as *const v128),
+                ));
+                i += 8;
+            }
+            while i < len {
+                let av = i16x8_splat(*a.add(i));
+                let bv = i16x8_splat(*b.add(i));
+                *out.add(i) = i16x8_extract_lane::<0>($op(av, bv));
+                i += 1;
+            }
+        }
+    };
+}
+
+macro_rules! binary_simd_i8 {
+    ($name:ident, $op:expr) => {
+        #[no_mangle]
+        pub unsafe extern "C" fn $name(a: *const i8, b: *const i8, out: *mut i8, n: u32) {
+            let len = n as usize;
+            let mut i = 0;
+            while i + 32 <= len {
+                let a0 = v128_load(a.add(i) as *const v128);
+                let a1 = v128_load(a.add(i + 16) as *const v128);
+                let b0 = v128_load(b.add(i) as *const v128);
+                let b1 = v128_load(b.add(i + 16) as *const v128);
+                v128_store(out.add(i) as *mut v128, $op(a0, b0));
+                v128_store(out.add(i + 16) as *mut v128, $op(a1, b1));
+                i += 32;
+            }
+            while i + 16 <= len {
+                v128_store(out.add(i) as *mut v128, $op(
+                    v128_load(a.add(i) as *const v128),
+                    v128_load(b.add(i) as *const v128),
+                ));
+                i += 16;
+            }
+            while i < len {
+                let av = i8x16_splat(*a.add(i));
+                let bv = i8x16_splat(*b.add(i));
+                *out.add(i) = i8x16_extract_lane::<0>($op(av, bv));
+                i += 1;
+            }
+        }
+    };
+}
+
+// i32 ops
+binary_simd_i32!(add_i32, i32x4_add);
+binary_simd_i32!(sub_i32, i32x4_sub);
+binary_simd_i32!(mul_i32, i32x4_mul);
+binary_simd_i32!(maximum_i32, i32x4_max);
+binary_simd_i32!(minimum_i32, i32x4_min);
+
+// i16 ops
+binary_simd_i16!(add_i16, i16x8_add);
+binary_simd_i16!(sub_i16, i16x8_sub);
+binary_simd_i16!(mul_i16, i16x8_mul);
+binary_simd_i16!(maximum_i16, i16x8_max);
+binary_simd_i16!(minimum_i16, i16x8_min);
+
+// i8 ops (no i8x16_mul in WASM SIMD)
+binary_simd_i8!(add_i8, i8x16_add);
+binary_simd_i8!(sub_i8, i8x16_sub);
+binary_simd_i8!(maximum_i8, i8x16_max);
+binary_simd_i8!(minimum_i8, i8x16_min);
+
+// mul_i8: scalar fallback
+#[no_mangle]
+pub unsafe extern "C" fn mul_i8(a: *const i8, b: *const i8, out: *mut i8, n: u32) {
+    for i in 0..n as usize {
+        *out.add(i) = (*a.add(i)).wrapping_mul(*b.add(i));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX TYPES (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// add_c128: component-wise f64 add on 2N elements
+#[no_mangle]
+pub unsafe extern "C" fn add_c128(a: *const f64, b: *const f64, out: *mut f64, n: u32) {
+    add_f64(a, b, out, n * 2);
+}
+
+// add_c64: component-wise f32 add on 2N elements
+#[no_mangle]
+pub unsafe extern "C" fn add_c64(a: *const f32, b: *const f32, out: *mut f32, n: u32) {
+    add_f32(a, b, out, n * 2);
+}
+
+// mul_c128: scalar complex multiply
+#[no_mangle]
+pub unsafe extern "C" fn mul_c128(a: *const f64, b: *const f64, out: *mut f64, n: u32) {
+    for i in 0..n as usize {
+        let ar = *a.add(2 * i);
+        let ai = *a.add(2 * i + 1);
+        let br = *b.add(2 * i);
+        let bi = *b.add(2 * i + 1);
+        *out.add(2 * i) = ar * br - ai * bi;
+        *out.add(2 * i + 1) = ar * bi + ai * br;
+    }
+}
+
+// mul_c64: complex multiply with SIMD
+#[no_mangle]
+pub unsafe extern "C" fn mul_c64(a: *const f32, b: *const f32, out: *mut f32, n: u32) {
+    let len = n as usize;
+    for i in 0..len {
+        let ar = *a.add(2 * i);
+        let ai = *a.add(2 * i + 1);
+        let br = *b.add(2 * i);
+        let bi = *b.add(2 * i + 1);
+        *out.add(2 * i) = ar * br - ai * bi;
+        *out.add(2 * i + 1) = ar * bi + ai * br;
+    }
+}

@@ -142,3 +142,55 @@ export fn sinh_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, 
 export fn cosh_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, coshOp_f32); }
 export fn tanh_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, tanhOp_f32); }
 export fn exp2_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, exp2Op_f32); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX UNARY OPS (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// abs_c128: |z| = sqrt(re²+im²). Input: 2n f64s, output: n f64s
+export fn abs_c128(inp: [*]const f64, out: [*]f64, n: u32) void {
+    const len = @as(usize, n);
+    var idx: usize = 0;
+    while (idx < len) : (idx += 1) {
+        const re = inp[2 * idx];
+        const im = inp[2 * idx + 1];
+        out[idx] = @sqrt(re * re + im * im);
+    }
+}
+
+// abs_c64: |z| = sqrt(re²+im²). Input: 2n f32s, output: n f32s
+export fn abs_c64(inp: [*]const f32, out: [*]f32, n: u32) void {
+    const len = @as(usize, n);
+    var idx: usize = 0;
+    while (idx < len) : (idx += 1) {
+        const re = inp[2 * idx];
+        const im = inp[2 * idx + 1];
+        out[idx] = @sqrt(re * re + im * im);
+    }
+}
+
+// exp_c128: exp(a+bi) = exp(a)*(cos(b)+i*sin(b)). Input/output: 2n f64s
+export fn exp_c128(inp: [*]const f64, out: [*]f64, n: u32) void {
+    const len = @as(usize, n);
+    var idx: usize = 0;
+    while (idx < len) : (idx += 1) {
+        const re = inp[2 * idx];
+        const im = inp[2 * idx + 1];
+        const ea = @exp(re);
+        out[2 * idx] = ea * @cos(im);
+        out[2 * idx + 1] = ea * @sin(im);
+    }
+}
+
+// exp_c64: exp(a+bi) = exp(a)*(cos(b)+i*sin(b)). Input/output: 2n f32s
+export fn exp_c64(inp: [*]const f32, out: [*]f32, n: u32) void {
+    const len = @as(usize, n);
+    var idx: usize = 0;
+    while (idx < len) : (idx += 1) {
+        const re = inp[2 * idx];
+        const im = inp[2 * idx + 1];
+        const ea = @exp(re);
+        out[2 * idx] = ea * @cos(im);
+        out[2 * idx + 1] = ea * @sin(im);
+    }
+}

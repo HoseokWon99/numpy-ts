@@ -582,3 +582,95 @@ pub unsafe extern "C" fn lstsq_f64(a: *mut f64, b: *const f64, x: *mut f64, scra
         *x.add(ii) = if diag != 0.0 { sum / diag } else { 0.0 };
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX MATMUL (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[no_mangle]
+pub unsafe extern "C" fn matmul_c128(a: *const f64, b: *const f64, c: *mut f64, m: u32, k: u32, n: u32) {
+    let m = m as usize;
+    let k = k as usize;
+    let n = n as usize;
+    for i in 0..m * n * 2 { *c.add(i) = 0.0; }
+
+    const T: usize = 32;
+    let mut ii = 0;
+    while ii < m {
+        let ie = if ii + T < m { ii + T } else { m };
+        let mut kk = 0;
+        while kk < k {
+            let ke = if kk + T < k { kk + T } else { k };
+            let mut jj = 0;
+            while jj < n {
+                let je = if jj + T < n { jj + T } else { n };
+                let mut ri = ii;
+                while ri < ie {
+                    let mut rk = kk;
+                    while rk < ke {
+                        let a_re = *a.add((ri * k + rk) * 2);
+                        let a_im = *a.add((ri * k + rk) * 2 + 1);
+                        let mut j = jj;
+                        while j < je {
+                            let b_re = *b.add((rk * n + j) * 2);
+                            let b_im = *b.add((rk * n + j) * 2 + 1);
+                            let ci = (ri * n + j) * 2;
+                            *c.add(ci) += a_re * b_re - a_im * b_im;
+                            *c.add(ci + 1) += a_re * b_im + a_im * b_re;
+                            j += 1;
+                        }
+                        rk += 1;
+                    }
+                    ri += 1;
+                }
+                jj += T;
+            }
+            kk += T;
+        }
+        ii += T;
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn matmul_c64(a: *const f32, b: *const f32, c: *mut f32, m: u32, k: u32, n: u32) {
+    let m = m as usize;
+    let k = k as usize;
+    let n = n as usize;
+    for i in 0..m * n * 2 { *c.add(i) = 0.0; }
+
+    const T: usize = 32;
+    let mut ii = 0;
+    while ii < m {
+        let ie = if ii + T < m { ii + T } else { m };
+        let mut kk = 0;
+        while kk < k {
+            let ke = if kk + T < k { kk + T } else { k };
+            let mut jj = 0;
+            while jj < n {
+                let je = if jj + T < n { jj + T } else { n };
+                let mut ri = ii;
+                while ri < ie {
+                    let mut rk = kk;
+                    while rk < ke {
+                        let a_re = *a.add((ri * k + rk) * 2);
+                        let a_im = *a.add((ri * k + rk) * 2 + 1);
+                        let mut j = jj;
+                        while j < je {
+                            let b_re = *b.add((rk * n + j) * 2);
+                            let b_im = *b.add((rk * n + j) * 2 + 1);
+                            let ci = (ri * n + j) * 2;
+                            *c.add(ci) += a_re * b_re - a_im * b_im;
+                            *c.add(ci + 1) += a_re * b_im + a_im * b_re;
+                            j += 1;
+                        }
+                        rk += 1;
+                    }
+                    ri += 1;
+                }
+                jj += T;
+            }
+            kk += T;
+        }
+        ii += T;
+    }
+}

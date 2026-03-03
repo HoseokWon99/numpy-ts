@@ -212,6 +212,43 @@ pub unsafe extern "C" fn rfft2_f64(inp: *const f64, out: *mut f64, scratch: *mut
 
 // ─── irfft2: M×(N/2+1) complex → M×N real ─────────────────────────────────
 
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX-TO-COMPLEX FFT (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[no_mangle]
+pub unsafe extern "C" fn fft_c128(inp: *const f64, out: *mut f64, scratch: *mut f64, n: u32) {
+    bluestein_fft(inp, out, n as usize, false, scratch);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ifft_c128(inp: *const f64, out: *mut f64, scratch: *mut f64, n: u32) {
+    bluestein_fft(inp, out, n as usize, true, scratch);
+}
+
+// fft_c64: upcast f32→f64, run FFT, downcast
+#[no_mangle]
+pub unsafe extern "C" fn fft_c64(inp: *const f32, out: *mut f32, scratch: *mut f64, n: u32) {
+    let nn = n as usize;
+    let in_f64 = scratch;
+    let out_f64 = scratch.add(2 * nn);
+    let fft_scratch = out_f64.add(2 * nn);
+    for i in 0..2 * nn { *in_f64.add(i) = *inp.add(i) as f64; }
+    bluestein_fft(in_f64 as *const f64, out_f64, nn, false, fft_scratch);
+    for i in 0..2 * nn { *out.add(i) = *out_f64.add(i) as f32; }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ifft_c64(inp: *const f32, out: *mut f32, scratch: *mut f64, n: u32) {
+    let nn = n as usize;
+    let in_f64 = scratch;
+    let out_f64 = scratch.add(2 * nn);
+    let fft_scratch = out_f64.add(2 * nn);
+    for i in 0..2 * nn { *in_f64.add(i) = *inp.add(i) as f64; }
+    bluestein_fft(in_f64 as *const f64, out_f64, nn, true, fft_scratch);
+    for i in 0..2 * nn { *out.add(i) = *out_f64.add(i) as f32; }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn irfft2_f64(inp: *const f64, out: *mut f64, scratch: *mut f64, m: u32, n: u32) {
     let rows = m as usize;

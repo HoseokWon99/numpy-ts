@@ -578,3 +578,88 @@ export fn lstsq_f64(a: [*]f64, b: [*]const f64, x: [*]f64, scratch: [*]f64, m_ar
         x[ii] = if (diag != 0) sum / diag else 0;
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX MATMUL (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// matmul_c128: C[M×N] = A[M×K] × B[K×N], complex f64
+// Each element = 2 f64s (re,im). Pointers are to f64 arrays of 2*M*K etc.
+export fn matmul_c128(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, K: u32, N: u32) void {
+    const m = @as(usize, M);
+    const k = @as(usize, K);
+    const nn = @as(usize, N);
+
+    // Zero output: 2*m*nn f64s
+    for (0..m * nn * 2) |i| c[i] = 0;
+
+    // Tiled i-k-j loop with complex multiply-accumulate
+    const T = 32;
+    var ii: usize = 0;
+    while (ii < m) : (ii += T) {
+        const ie = if (ii + T < m) ii + T else m;
+        var kk: usize = 0;
+        while (kk < k) : (kk += T) {
+            const ke = if (kk + T < k) kk + T else k;
+            var jj: usize = 0;
+            while (jj < nn) : (jj += T) {
+                const je = if (jj + T < nn) jj + T else nn;
+                var ri: usize = ii;
+                while (ri < ie) : (ri += 1) {
+                    var rk: usize = kk;
+                    while (rk < ke) : (rk += 1) {
+                        const a_re = a[(ri * k + rk) * 2];
+                        const a_im = a[(ri * k + rk) * 2 + 1];
+                        var j: usize = jj;
+                        while (j < je) : (j += 1) {
+                            const b_re = b[(rk * nn + j) * 2];
+                            const b_im = b[(rk * nn + j) * 2 + 1];
+                            const ci = (ri * nn + j) * 2;
+                            c[ci] += a_re * b_re - a_im * b_im;
+                            c[ci + 1] += a_re * b_im + a_im * b_re;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// matmul_c64: C[M×N] = A[M×K] × B[K×N], complex f32
+export fn matmul_c64(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, K: u32, N: u32) void {
+    const m = @as(usize, M);
+    const k = @as(usize, K);
+    const nn = @as(usize, N);
+
+    for (0..m * nn * 2) |i| c[i] = 0;
+
+    const T = 32;
+    var ii: usize = 0;
+    while (ii < m) : (ii += T) {
+        const ie = if (ii + T < m) ii + T else m;
+        var kk: usize = 0;
+        while (kk < k) : (kk += T) {
+            const ke = if (kk + T < k) kk + T else k;
+            var jj: usize = 0;
+            while (jj < nn) : (jj += T) {
+                const je = if (jj + T < nn) jj + T else nn;
+                var ri: usize = ii;
+                while (ri < ie) : (ri += 1) {
+                    var rk: usize = kk;
+                    while (rk < ke) : (rk += 1) {
+                        const a_re = a[(ri * k + rk) * 2];
+                        const a_im = a[(ri * k + rk) * 2 + 1];
+                        var j: usize = jj;
+                        while (j < je) : (j += 1) {
+                            const b_re = b[(rk * nn + j) * 2];
+                            const b_im = b[(rk * nn + j) * 2 + 1];
+                            const ci = (ri * nn + j) * 2;
+                            c[ci] += a_re * b_re - a_im * b_im;
+                            c[ci + 1] += a_re * b_im + a_im * b_re;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

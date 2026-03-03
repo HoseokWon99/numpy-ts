@@ -273,3 +273,48 @@ pub unsafe extern "C" fn quantile_f32(ptr: *mut f32, n: u32, q: f64) -> f32 {
     if len == 1 { return *ptr; }
     linear_interp_f32(ptr, len, q)
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGER SORT (i32, i16, i8) — generic quicksort<T>
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[no_mangle]
+pub unsafe extern "C" fn sort_i32(ptr: *mut i32, n: u32) {
+    let len = n as usize;
+    if len <= 1 { return; }
+    quicksort(ptr, 0, len - 1);
+}
+#[no_mangle]
+pub unsafe extern "C" fn sort_i16(ptr: *mut i16, n: u32) {
+    let len = n as usize;
+    if len <= 1 { return; }
+    quicksort(ptr, 0, len - 1);
+}
+#[no_mangle]
+pub unsafe extern "C" fn sort_i8(ptr: *mut i8, n: u32) {
+    let len = n as usize;
+    if len <= 1 { return; }
+    quicksort(ptr, 0, len - 1);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn argsort_i32(vals: *const i32, idx: *mut u32, n: u32) {
+    let len = n as usize;
+    for i in 0..len { *idx.add(i) = i as u32; }
+    if len <= 1 { return; }
+    quicksort_idx(vals, idx, 0, len - 1);
+}
+#[no_mangle]
+pub unsafe extern "C" fn argsort_i16(vals: *const i16, idx: *mut u32, n: u32) {
+    let len = n as usize;
+    for i in 0..len { *idx.add(i) = i as u32; }
+    if len <= 1 { return; }
+    quicksort_idx(vals, idx, 0, len - 1);
+}
+#[no_mangle]
+pub unsafe extern "C" fn argsort_i8(vals: *const i8, idx: *mut u32, n: u32) {
+    let len = n as usize;
+    for i in 0..len { *idx.add(i) = i as u32; }
+    if len <= 1 { return; }
+    quicksort_idx(vals, idx, 0, len - 1);
+}

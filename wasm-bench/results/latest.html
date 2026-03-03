@@ -1,0 +1,7115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WASM Benchmark Results — Speedup vs JS</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; padding: 32px; }
+  h1 { font-size: 24px; margin-bottom: 4px; color: #f0f6fc; }
+  .subtitle { color: #8b949e; margin-bottom: 32px; font-size: 14px; }
+  .meta { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; margin-bottom: 24px; font-size: 12px; color: #8b949e; font-family: monospace; }
+  .legend { display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .legend-swatch { width: 16px; height: 16px; border-radius: 3px; }
+  .category { margin-bottom: 40px; }
+  .category h2 { font-size: 18px; color: #f0f6fc; margin-bottom: 16px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
+  .chart-row { display: flex; align-items: center; margin-bottom: 6px; }
+  .chart-label { width: 160px; text-align: right; padding-right: 12px; font-size: 12px; color: #8b949e; flex-shrink: 0; white-space: nowrap; }
+  .chart-bars { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .bar-group { display: flex; gap: 2px; align-items: center; height: 18px; }
+  .bar { height: 100%; border-radius: 2px; min-width: 1px; position: relative; display: flex; align-items: center; }
+  .bar-val { font-size: 10px; color: #f0f6fc; padding-left: 6px; white-space: nowrap; font-weight: 600; }
+  .bar-val.outside { position: absolute; left: calc(100% + 4px); color: #8b949e; }
+  .baseline { position: absolute; top: 0; bottom: 0; border-left: 2px dashed #484f58; z-index: 1; }
+  .baseline-label { position: absolute; top: -16px; font-size: 10px; color: #484f58; transform: translateX(-50%); }
+  .chart-area { position: relative; flex: 1; }
+  .group-spacer { height: 10px; }
+  .slower-note { font-size: 10px; color: #f85149; font-style: italic; margin-left: 4px; }
+  /* Bar colors set dynamically via inline styles */
+  .summary { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+  .summary h2 { font-size: 18px; color: #f0f6fc; margin-bottom: 16px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .summary-card { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 16px; }
+  .summary-card h3 { font-size: 13px; color: #8b949e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-stat { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .summary-stat:last-child { margin-bottom: 0; }
+  .summary-label { font-size: 12px; color: #8b949e; }
+  .summary-value { font-size: 16px; font-weight: 700; }
+  .summary-value.zig { color: #58a6ff; }
+  .summary-value.rust { color: #f0883e; }
+  .summary-value.neutral { color: #c9d1d9; }
+  .summary-detail { font-size: 10px; color: #484f58; margin-top: 2px; }
+  .h2h-row { display: flex; align-items: center; margin-bottom: 10px; }
+  .h2h-label { font-size: 12px; color: #8b949e; width: 80px; flex-shrink: 0; }
+  .h2h-bar-track { flex: 1; height: 24px; display: flex; border-radius: 4px; overflow: hidden; position: relative; }
+  .h2h-segment { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #f0f6fc; }
+  .h2h-center { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 2px dashed #484f58; z-index: 1; }
+  .sizes { margin-top: 48px; }
+  .sizes h2 { font-size: 18px; color: #f0f6fc; margin-bottom: 16px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
+  .sizes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .size-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .size-card h3 { font-size: 14px; color: #f0f6fc; margin-bottom: 12px; }
+  .size-bar-row { display: flex; align-items: center; margin-bottom: 8px; }
+  .size-bar-label { width: 80px; font-size: 11px; color: #8b949e; flex-shrink: 0; }
+  .size-bar-track { flex: 1; height: 22px; position: relative; }
+  .size-bar { height: 100%; border-radius: 3px; display: flex; align-items: center; position: relative; }
+  .size-bar .raw-segment { height: 100%; border-radius: 3px 0 0 3px; opacity: 0.35; }
+  .size-bar .gz-segment { height: 100%; border-radius: 0 3px 3px 0; }
+  .size-bar-text { font-size: 10px; color: #f0f6fc; font-weight: 600; padding-left: 6px; white-space: nowrap; }
+  .size-bar-text.outside { position: absolute; left: calc(100% + 6px); color: #8b949e; }
+  .size-total { margin-top: 16px; padding-top: 12px; border-top: 1px solid #30363d; }
+  .size-total-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .size-total-val { font-weight: 600; color: #f0f6fc; }
+  .size-legend { display: flex; gap: 16px; margin-bottom: 16px; font-size: 12px; color: #8b949e; }
+  .size-legend-item { display: flex; align-items: center; gap: 5px; }
+  .size-legend-swatch { width: 12px; height: 12px; border-radius: 2px; }
+  .size-legend-swatch.raw { opacity: 0.35; }
+</style>
+</head>
+<body>
+
+<h1>WASM vs JS — Speedup Multipliers</h1>
+<p class="subtitle">Horizontal bars = how many times faster than pure JS (numpy-ts float64). Dashed line = 1× (JS baseline).</p>
+<div class="meta">Generated: 2026-03-03T04:25:38.508Z · Node v24.12.0 · darwin/arm64</div>
+
+<div class="legend" id="legend"></div>
+
+<div id="charts"></div>
+
+<script>
+const DATA = [
+  {
+    "cat": "Matmul",
+    "entries": [
+      {
+        "label": "10×10",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 22.732725527568057,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 28.436374549827036,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 25.84560829235735,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 29.946270543912508,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.970944662465689,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.183272891064949,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.908406179743037,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.401062863478685,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1000×1000",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.289250475150642,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.751857664006836,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.035190121935942,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 9.679942929839498,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — sum",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.999999992724042,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.000000009701276,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.296610158844611,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.000000009701276,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 2.1120000040745364,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 2.1120000040745364,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 1.7226666629090388,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 1.722666664998047,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 1.6106666639567766,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 1.7062146854480336,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.7058346290815067,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.3901847101753395,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.6140836714360174,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.369319709144113,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 13.231913042733884,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 11.856552906952668,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 7.067628374340595,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 7.067628374340595,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 7.986633138715028,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 7.241639999571394,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.8990839984572627,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.755963922191084,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.4511051261714423,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.995094437265113,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 13.476638429680856,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 13.023339373972291,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 8.37724079205962,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 8.113376457759564,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 7.627983602726585,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 7.19514969063574,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — max",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.7314218837086846,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.3631406763102978,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.967492258932995,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.8740629668353126,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 1.221333335726315,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 1.221333335726315,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 2.637554585915939,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 2.8968825025406746,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 4.006006008040064,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 5.336000020314474,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.753509859185178,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.51026300342722,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.5037824207191988,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.994337078696637,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 6.101646700898744,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 6.718325392134189,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 16.074008669949738,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 15.655539051725443,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 5.466902158020211,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 5.466637634673399,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.454389482918529,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.2967555801653785,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.8970723445449194,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.4792207792173455,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 8.130215484424347,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 8.20080257031773,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 20.264425873937835,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 20.348132521951136,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 33.801269408914116,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 36.4795293626197,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — min",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6832552696139003,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.3337142865363205,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.7780000000751849,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.5560000020372682,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 1.1512605029905747,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 1.2786666635978294,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 2.723311550182261,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 2.5000000018189894,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 8.831999965599273,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 8.831999965599273,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.032394366157375,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.061036563299349,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.9678611496502807,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.982077881778765,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 6.298369833609983,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 6.099992026064489,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 12.821311999927275,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 14.267715974197682,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 4.847714998757855,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 4.842671892293434,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.5842109365538046,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.1169107901456345,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.1359502980723826,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.055885564587269,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 7.587494689098943,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 7.737099101101174,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 16.0305051401535,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 16.200312894732246,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 40.07908936934637,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 37.62224438364184,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — prod",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 6.258815217084468,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.64148678173774,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.3271308516973725,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.64148678173774,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.6434229505259967,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.531355393927758,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.7888265957079623,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.760738888321568,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.5325569339207803,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.0648547121815755,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.915498132385112,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.849426146354922,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — mean",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.8552259772280975,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.041439482675763,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.145499999205102,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 11.054666677952486,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.721762711832176,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.4583529413079415,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.7165972716410893,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.7660837148326065,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.4296140350879316,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.902556268034178,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.030792111021986,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.221398698281981,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — diff",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 30.041999994201063,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 22.537134281127337,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 21.520057312082276,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 21.84872727573579,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 142.09559502773814,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 239.26728427316928,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 142.53240739755893,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 283.30204651977664,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 125.01895713103572,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 251.57486243679116,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 125.45885888659804,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 248.5196314328057,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — nanmax",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.1569411765307094,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.1347795987526914,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.140173913039077,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.1683497684997772,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6218735287914476,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.6089095073025145,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.6087841183752731,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.6089095072970829,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.7629209379693769,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.8268208226923823,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.8222804692313814,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.8291082182715419,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction — nanmin",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.1442418649280843,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.1782319389714013,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.0302337660728778,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.1551724137857964,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6405007791666325,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.7135291002190113,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.7132317978857661,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.6825666382049975,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.7618632606628669,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.8293785310735342,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.8325929000472247,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.8346476157516559,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — sqrt",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 11.724169781518228,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 21.836769729356003,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 12.708999946259777,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 19.0825825777763,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 21.80353152021001,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 46.91400597831297,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 23.800351648246817,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 20.64348621677264,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 22.832060684778384,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 45.52770148076437,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 22.47513034538998,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 41.34300317531345,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — exp",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.223545454846595,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.225504418355247,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.4876932466304558,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.089818090494034,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.0920493259230868,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.4636602295936725,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.7927065240204008,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.95497028826537,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.0199097628009153,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.2371358523183902,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.5932272383358268,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.8163936868466803,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — log",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.825844266442847,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.263157894978702,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.059601301307387,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.381622506743753,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.4940297788057033,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.8011115144731757,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.078217702473353,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.177666341666635,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.523087651594669,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.9099092167423697,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.055148137297167,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.397551587626853,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — sin",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.478564100914541,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.113361699586021,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.2479999993231665,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.3718431695873554,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.9902629851959475,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.0574579918759497,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.9162413204721305,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.535858852021613,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.9772074331560048,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.609067076602468,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.8778891786209464,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.415352421865292,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — cos",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.144958389939712,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.7994514889525766,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.9703111104467101,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.6334798617578254,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.925012993903999,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.338332043431526,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.6449217694890323,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.2351350707800823,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.7731654727005508,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.298261221218513,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.673695116686259,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.1463217108950854,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — abs",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 11.167000038919097,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 22.333999915336957,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 11.166999957668478,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 19.187285205324084,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 10.6744309537046,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.990940337466309,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 9.688096385159627,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.698395600582006,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.197943713426441,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.62374835035783,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.4381369493828595,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.842758852150688,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — neg",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.249999967258191,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.666666669900426,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 6.70055450866346,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 12.414383526614039,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 11.286136985742006,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.604812385047603,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 9.89964433319835,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 9.385970774894226,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.934423339963657,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.406966412620276,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.833252505667428,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 9.608005830662863,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — ceil",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 8.456642038445166,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 15.696917768559986,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.86192108244284,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 13.764264260901507,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 9.31960493769714,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.150897048975618,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.420488845089936,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 14.517076921580228,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.409264017295211,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.805083103504268,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.558298182197567,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.897863267816504,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — floor",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.380073777270292,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 13.698630104132533,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 6.861063452340793,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 13.698630104132533,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 10.388366972864045,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 18.46113212955305,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.468658703066257,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 20.22021428174343,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.142465113825534,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.513505386855702,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.226937119682163,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.497308758776756,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — tan",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6792111087909306,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.1572089832859547,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.9848263786609807,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.0377358503309972,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.8889708907918783,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.1892042449245779,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.1816810677961227,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.5040863232146324,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.9075121594749754,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.1949184195993996,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.1541537579284404,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.493478351661654,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — signbit",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.667199992419034,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.882882875993331,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.1163434894672433,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.228782270633861,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 25.62465040824905,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 50.83599999589542,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 20.55506860916182,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 41.10799249007146,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 33.06421922133508,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 64.94778093660932,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 26.111145496124966,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 54.18406930897115,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — sinh",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.5293971102518041,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.8138644199052022,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.0699899293688064,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.116853538924158,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.5271218146718044,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.7234044924613898,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.0305813400956167,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.1018025778040987,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.5568081093372595,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.6876645555116749,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.9931545088968097,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.1145082135324782,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — cosh",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.41369411755453883,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.5828029699555028,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.7902022471450095,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.9253684210624672,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.4716655989257844,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.6243092141224743,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.8373553321704951,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.9685723770880116,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.46762840190363836,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.5753485041012316,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.8264479581944751,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.9189071305198079,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — tanh",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.5272068770753756,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.8144802484740017,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.8949629629827648,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.233990398949235,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6327562207576429,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.849195450597697,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.3070979857917333,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.5085723364910877,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6217588555818132,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.7449301578807254,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.2571228048844154,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.4505636918614724,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary — exp2",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.0873067007163981,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.23896353055076,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.5714285692507337,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.153846149885277,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.0456666055764177,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.664664383064481,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.5416055198015255,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.574771902353015,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.0778255331221238,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.809545346181333,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.562063267150803,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.591689665969471,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — add",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.2161234970873083,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.421232948905285,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.644569819422226,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.000000058207662,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 4.780821965936856,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 4.192192237532008,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 12.724551020039163,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 10.216345907132268,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 18.000000174622986,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 18.000000174622986,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.30201211949398,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 14.202565070790792,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.30201211949398,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 14.230075117485525,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 5.578258365523124,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 15.157655094137715,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 12.632566626790291,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 12.542735042899814,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 26.926719711532037,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 31.083407405456292,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.799529054483696,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.829983872901683,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.8954569861963426,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.7999443711652665,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 15.38944234355742,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 15.249638205478583,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 36.093423925865544,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 35.74356889164218,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 81.63492876895457,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 80.83099273830582,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — sub",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.266605148131986,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.91952061954082,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.266242935654051,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.944444360687175,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 4.136986349157162,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 3.627627592983023,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 11.601796529803869,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 9.27033502234189,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 18.000000232830647,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 18.000000232830647,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.394024690700946,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 14.49037065913767,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.394024690700946,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 14.548095609326559,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 14.772244361204798,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 15.193073171864558,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 13.51650450773577,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 11.482015492565786,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 26.933640383244246,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 31.13911803768792,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.4899803691274807,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.954575259107211,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.4948728784835685,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.983077672285071,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 15.115120895046639,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 15.294184091159188,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 35.903968642368916,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 34.26162641740059,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 80.19995969610896,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 80.8924493703829,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — mul",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.1531365156376103,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.132132122257107,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.5622188843236406,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.557333372759323,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 4.004504538853843,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 3.5560000292590512,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 12.09880198965629,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 8.08200008684583,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 8.561643931873713,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 8.591065398983142,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.568205053911614,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 13.137708103720893,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.522246146843456,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 15.04412831713379,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 17.289471112461946,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 17.046168672087436,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 13.698250219602556,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 12.642453643518026,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 9.349433704339724,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 9.090484106607608,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.4836683894652998,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.881930608390882,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.4219235357542206,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.936326706606137,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 17.53223410923152,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 17.840012004390196,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 39.8185760299599,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 40.30364569230264,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 9.092235335003634,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 9.150737416486,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — div",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 12.221269271459489,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 21.396396154868384,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.063559323035449,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 17.127404030642698,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 37.17424923699691,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 73.53138376232235,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 37.13722488525405,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 73.96898588109015,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 34.873050154986636,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 71.5301749296694,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 35.214509003322675,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 71.45880742036736,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — copysign",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 11.888418092638746,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 22.445333585876973,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 9.619428519683149,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 20.18465249965003,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 23.90019261662066,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 52.12709450859047,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 23.659755399432076,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 51.19996205693703,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 27.039338674739227,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 59.37834226410571,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 27.044222798163204,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 59.34774999981547,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — power",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.8082469274375554,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.5026809651250403,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.6236026492082777,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.8164319900165524,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.638395393242318,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.9847618777702851,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.5007172977955943,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.5668854589962707,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.6417214401503867,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.976744094898055,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.49118447038370194,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 0.5496507671720208,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — maximum",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.5992157802393554,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.018749064545069,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 8.97266663326517,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 20.148203796960697,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 5.136986246073132,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 4.504504473206254,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 26.449102083646938,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 17.668000204192477,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 36.336000408384955,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 36.336000408384955,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.691877373056593,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.8898715211584447,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 37.09360493563999,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 58.061799491918144,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 19.14354848192617,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 46.99039065904459,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 37.9851428492578,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 33.764571423512244,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 69.96765916723388,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 81.77411127640036,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.5851217822469175,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.5519783197513373,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 35.36610086338592,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 72.20391484111934,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 47.25115474090073,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 47.60722920698293,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 109.6441434903188,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 113.71416048997878,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 236.204235283134,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 221.62866085296645,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — minimum",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.534947368763204,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.5726887740331086,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.931034481254002,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 19.442666502236495,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 8.50750759753099,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 7.554666597386616,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 22.235577180385892,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 18.500000203726817,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 66.47619098765236,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 44.67200046752394,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.034345163746929,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.234226418723054,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 39.04812246899957,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 39.81708865561563,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 48.50353795856634,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 49.487804863808506,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 37.550710865847044,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 33.740426866295294,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 71.93085557188971,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 83.16769164223152,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.6225412740976142,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.4964702821662892,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 36.17877425633989,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 71.11220086217932,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 47.51915150058117,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 47.388822322590435,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 112.5111769317991,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 110.85787369710317,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 220.33300783913705,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 217.45492792300766,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — fmax",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.5669770779033914,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.64562569173132,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.824235831230223,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 15.648471786759155,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.5702647594404058,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.7248824112911125,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 34.43563068087648,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 68.86654804731194,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.3957279327758967,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.4675147925418754,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 33.96484972870903,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 67.21782182693175,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — fmin",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.640419945902614,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.560727272126916,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.679389330542074,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 14.083999940802808,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.7291894236058811,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.8051551720584904,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 34.08475428796937,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 68.03576969149178,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.3555556309623336,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.4933294808049244,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 32.94679971338434,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 67.05060024726193,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — logaddexp",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.6978578904777173,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.8248587568211723,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.159721996895672,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.243902439266778,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.7065343212380837,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.8777576165611809,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.1016222326198783,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.5837853930842163,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.7148430630924804,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 0.8672185629461789,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.1390285140548806,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.6232916547141687,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — logical_and",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.1244377795557634,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.557333392161876,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.501800703416518,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.1679999834690244,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 16.793751739042364,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 33.13831638846204,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 16.412802833281532,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 25.53617561726054,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 22.014864592934007,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 43.48596710895537,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 21.214873698735193,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 33.65317383778818,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — logical_xor",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 6.649717518653043,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 12.554666802174102,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.6518607073563665,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 9.415999964609743,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 14.92270899025518,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 28.519833326345243,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 20.414265894692534,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 31.532749993410192,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 17.172866702683702,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 34.17668955238397,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 23.093720836812906,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 32.735203309895795,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — mod",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.7773333450395405,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.554666616789169,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.2377143002353153,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.185589502134024,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.0227835355155563,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.377873991375875,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.0655517968262864,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.003499998758843,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.0691373843236707,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.13371401183006,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.970185111797046,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.9651209677866435,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — floor_divide",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.532799993611127,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.482036009019573,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.7773333170157857,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.8100961082284694,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.6788780490110677,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.297948517805814,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.6565818186469663,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.298654793910238,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.6293001019599527,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.665759513645784,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.8099002574367584,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.640972094656865,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary — hypot",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 12.974438416821734,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 25.074850007987216,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.054021631413297,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 18.286026404100973,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 34.18235458229429,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 62.356072718916494,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 33.70598525756581,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 62.44917878226688,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 33.96708071818152,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 63.277665832891785,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 34.066339527946894,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 64.17129497907642,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — sort",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 22.42293036432698,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 25.23423668464503,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 12.405436922834303,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 26.54463427256597,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 0.7999668970724729,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 0.7435384629848703,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 0.7784613045780828,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 0.8662215844986146,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 0.3699512198435044,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 0.3633053894897767,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.301297598593209,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.375914434390776,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.628977911011008,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.641607605734016,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 0.22026150418693669,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 0.2305105499102863,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 0.2408340342737184,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 0.22863809745300337,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 0.26428382909056286,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 0.26013045503304255,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.596776816732759,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.560274971628387,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.681435969694862,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.83009511486413,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 0.21341475102002044,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 0.2343898383510399,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 0.22045442460846984,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 0.23105745589303592,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 0.2267714229697382,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 0.23896384750965236,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — argsort",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 13.01124739133255,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 13.909254428907428,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 14.480952151112504,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 13.992047633324665,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 10.546575236792615,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 10.709851850120154,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 10.44607566778588,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 9.347565204758084,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 10.737239927817829,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 11.023279989815057,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.619026272735559,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 5.457886891822933,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.271814358955944,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.471821169243582,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 3.6095190620258384,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 3.604185096393261,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 3.616748077194051,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 3.5732999354444424,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 4.8641802250596555,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 5.080916100697777,
+            "color": "#fad2ab"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 6.601795880618357,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.61304251071252,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 6.713993533337559,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.543355410717065,
+            "color": "#f0883e"
+          },
+          {
+            "impl": "Zig (i32)",
+            "val": 3.7288129983235234,
+            "color": "#79c0ff"
+          },
+          {
+            "impl": "Rust (i32)",
+            "val": 3.73460223479578,
+            "color": "#f4a261"
+          },
+          {
+            "impl": "Zig (i16)",
+            "val": 3.810613468754242,
+            "color": "#a5d6ff"
+          },
+          {
+            "impl": "Rust (i16)",
+            "val": 4.0045260453368225,
+            "color": "#f7ba86"
+          },
+          {
+            "impl": "Zig (i8)",
+            "val": 5.457935678589702,
+            "color": "#cae8ff"
+          },
+          {
+            "impl": "Rust (i8)",
+            "val": 5.3264065793246465,
+            "color": "#fad2ab"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — partition",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 29.59574466678004,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 28.383121087220477,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 30.682018677012127,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 25.759259256464652,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.982553190027407,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.74360920954557,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 6.068835984669421,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.545084729118509,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 6.3638915061681205,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.214443575957377,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.564300588984927,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 5.708410750221588,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — argpartition",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 44.340114729516145,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 48.571428687249934,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 49.76580807441474,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 52.30769216475634,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 9.759518640204188,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.64224550052401,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.257996632840982,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 15.644859185143556,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 10.216402162515113,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.288023527284064,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 9.565469010538898,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.473494347537802,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — median",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 11.497000759268305,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.392718873092464,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 16.940656426601592,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.733599985732138,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.485740463013496,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 11.688152718282666,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 6.297977294379521,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.381216129094724,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 8.072645267983697,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.319076538994418,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 8.016801134027089,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 11.509648734418308,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — percentile",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 12.087141680928802,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.710298639781756,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 11.348727337111681,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 11.348727217005704,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 8.190212325329913,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.304568885853912,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.883767498919631,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.915569940766972,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.967460304014402,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.9459211311664015,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 8.28642895825711,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.32388825024206,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Sort — quantile",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 8.666666692536738,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 9.748050366352103,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 11.304347804520413,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 11.14540461772291,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 10.00067220509984,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.32795031522596,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 8.747298339817299,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.624847308048887,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 8.389024857237974,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 8.782761878874776,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 7.640645376520544,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 9.289696189859455,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Convolve — correlate",
+    "entries": [
+      {
+        "label": "100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 10.533012680331703,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 16.755653616261526,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 10.468926553789794,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 16.30941096869696,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 179.8139146424893,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 262.89825295394996,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 176.68934595878721,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 201.89733840409315,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1685.3813617040294,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2723.2608036600936,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1611.1391017192238,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2645.564519713958,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Convolve — convolve",
+    "entries": [
+      {
+        "label": "100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.356049234459613,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.292783505137671,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.6189705405866874,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.272540983637983,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 94.86551383838861,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 89.70149135842452,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 95.74276236453859,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 95.39753605828186,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 866.0722693969896,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 870.2149689667538,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 852.1505420106694,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 868.029838144582,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — matvec",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.5294117626917765,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.599999993015081,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.591576876884213,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.888888858707139,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.7050382260475236,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.2980605997628474,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.6916811731033878,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.264818808575649,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.896454543726235,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.17845669423314,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.865785351562563,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.098937497548684,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — vecmat",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.099580091696707,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.3605376929185407,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.301874384776631,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.649635025752679,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.3599999981373547,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.5384615470721394,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.4928173054828746,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.65740448061051,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 8.783169381394199,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 19.869716988724957,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 9.88372092878445,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 19.71608833447295,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — vecdot",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.2999040390565586,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.2425496723843485,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.3005280885147663,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.2425496723843485,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.145564492686733,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.0559289518632005,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.1371549368506955,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.116121203617869,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.942920204416744,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.7892996205852614,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.354306638539817,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.8083570985028072,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — outer",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.422582815094358,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.5829999841238607,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.3251135755271273,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.583000036263373,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.3710571794988984,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.377244504717934,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.3185777766767477,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.347333339703838,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 12.324701258172896,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 24.683661013491943,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 12.341830506745971,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 24.005010870982026,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — kron",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.7711574987848846,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.583142349290631,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.30672955035622,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.006017430472205,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.3033014114190795,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.3159216940679976,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.466525173658059,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.613730036520236,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": []
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — cross",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 26.841346483134366,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 26.841346483134366,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 26.841346483134366,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 26.841346483134366,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 21.157969396562233,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 22.52402376970113,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 22.490254852905554,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 22.490254852905554,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 24.41666668687766,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 23.136449705179853,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 23.136449705179853,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 23.751621295219923,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — norm",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.8136160580968321,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.5441657610731028,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.8136160728242803,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.5441657610731028,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.7731268317682665,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.050408068397774,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.6849642034751127,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.0199619804932545,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 7.099835586984167,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.491790391376584,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 8.032344733476203,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.528124822929509,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — matrix_power",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.9652263344896124,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.7425182757757725,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.84582377427127,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.5409915335214786,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.408191679950308,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.116713293856515,
+            "color": "#d47616"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — multi_dot3",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.0982190286392517,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.975068207160049,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.9489064747512375,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.643887341992449,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.185286627860855,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 4.989456605016275,
+            "color": "#d47616"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — qr",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.134051657336177,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.075885739456741,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.2096811855914553,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.1120741117856006,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.0170811426710096,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.9927179398491218,
+            "color": "#d47616"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg — lstsq",
+    "entries": [
+      {
+        "label": "50×50",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.91314230130974,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.941176470763375,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.2936481684187189,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.2258986856475893,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "500×500",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.8324501087869516,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.83779314856027,
+            "color": "#d47616"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — roll",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.749999963620213,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.725085871300664,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.749999963620213,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.708904182464673,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.3027573742611898,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.245050846769436,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.4685879876931094,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.244978898473696,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.726012968718823,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 11.741121681295857,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.731396959310329,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 11.595870967846206,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — flip",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.5008576269819964,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.799999990686774,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.5008576269819964,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.627627592983023,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 5.736145788183422,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 10.037694015635228,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 5.224998304322492,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 10.233229169251661,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.5909913637322,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.373990503074719,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.6573368817161156,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.24354780083705,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — tile",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.9152196057908477,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.59884835975686,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.7647058847698682,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.333333307463262,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.49204694032758,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.5518210281950555,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.878539979279332,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.047315239205282,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.9179047510185874,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.707343717199157,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.846706151586029,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.582076064766987,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — pad",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 0.7559976582741312,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.2919999958672561,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 0.7209821392863031,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.1929824457681835,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.4268559845117745,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.032451071023519,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.429284937010265,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.256872179165393,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.50579380426961,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.939823934865929,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.6085310393308747,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.902072448385128,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — take",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 4.352739774326704,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.8110944543436496,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.8110944543436496,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.8110944543436496,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 1.2428999534452496,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 1.5540732609235908,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.2968973233403314,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 1.547823569473633,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.1022395163295426,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.298229564924578,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.160868951936026,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.26871626890195,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — gradient",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.703111090794482,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.566066221704335,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 1.4592130690053782,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 4.552395260519586,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.0285699281695844,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 4.934074868553655,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.138340136165617,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 7.0609770968373935,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.490061129402519,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 6.630488031043633,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.555420967770696,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 8.112967949768228,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Arrayops — nonzero",
+    "entries": [
+      {
+        "label": "1K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 3.5770202472815065,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 3.400960398456246,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 3.7773333083945846,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 3.7773333083945846,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 6.046452232131497,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 7.706535141924145,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 6.190178118587806,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 6.47223050655952,
+            "color": "#f0883e"
+          }
+        ]
+      },
+      {
+        "label": "10M",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 2.4422036979156325,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Zig (f32)",
+            "val": 2.4073599569267965,
+            "color": "#58a6ff"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 2.385281239286175,
+            "color": "#d47616"
+          },
+          {
+            "impl": "Rust (f32)",
+            "val": 2.4147297335867424,
+            "color": "#f0883e"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Fft — rfft2",
+    "entries": [
+      {
+        "label": "32×32",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 28.190688239067686,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 21.237759308203593,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 17.127177613606992,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 16.77324761796403,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "256×256",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 402.36209630066134,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 396.8192290723352,
+            "color": "#d47616"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Fft — irfft2",
+    "entries": [
+      {
+        "label": "32×32",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 28.336206915758176,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 27.583834036416526,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "100×100",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 15.947639246313212,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 15.858355130778621,
+            "color": "#d47616"
+          }
+        ]
+      },
+      {
+        "label": "256×256",
+        "bars": [
+          {
+            "impl": "Zig (f64)",
+            "val": 370.3353909647582,
+            "color": "#1f6feb"
+          },
+          {
+            "impl": "Rust (f64)",
+            "val": 343.7399235514708,
+            "color": "#d47616"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary_complex — add",
+    "entries": [
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 3.344389969414561,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 3.238781406264248,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 17.45146019345926,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 17.762870364841206,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 7.565331966103972,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 7.664430891260452,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 17.411181663079255,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 17.572246163095908,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Binary_complex — mul",
+    "entries": [
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 2.154561142222237,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 2.883782427042613,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 9.469413451097964,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 17.534797551734073,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 5.286085435199127,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 7.6265543908576765,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 9.869064289373247,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 17.9524286536699,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary_complex — abs",
+    "entries": [
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 1.7110605328537418,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 0.08386592047871046,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 6.784433050356176,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 1.0118997234900045,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 5.462445521246234,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 0.2711184210517255,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 6.815723954007096,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 1.0042150565556114,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Unary_complex — exp",
+    "entries": [
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 1.0170395516160233,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 1.15171177245773,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1.329618107764436,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 1.5839926630792998,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 1.0597020644719362,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 1.1875235705788867,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1.2855282016960041,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 1.5674479508299228,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Reduction_complex",
+    "entries": [
+      {
+        "label": "100K",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 2.808648147922344,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 2.8526529610964713,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 2.7494808065991103,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 2.876950712160862,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1M",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 4.285122611422563,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 3.739452927524327,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 2.895282051330318,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 3.2408247808229054,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Linalg_complex",
+    "entries": [
+      {
+        "label": "64×64",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 2.3377959827828807,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 3.1877894737392296,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1.523483688009859,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 6.531439274274059,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "128×128",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 2.3001421031448355,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 2.9929988578104614,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1.3999649082592216,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 5.990725018969382,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "256×256",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 2.238047162175191,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 2.7301200919559805,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1.3288229906827944,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 5.601058348354766,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Fft_complex — fft",
+    "entries": [
+      {
+        "label": "256×256",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 595.447546143498,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 569.0890705507744,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 461.36739557372283,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 295.7499005805664,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1024×1024",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 1848.8315408398487,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 1818.6679669559333,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1468.7573237132308,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 1076.8416778469898,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "4096×4096",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 6442.806310972284,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 6270.2311448383025,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 4984.012338911768,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 3840.2898557071608,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "Fft_complex — ifft",
+    "entries": [
+      {
+        "label": "256×256",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 562.0224038261588,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 537.9234300134402,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 413.3227770103325,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 305.60398489426547,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "1024×1024",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 1735.471710649192,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 1684.2811959780936,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 1316.222523211767,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 945.416092719021,
+            "color": "#ffb77c"
+          }
+        ]
+      },
+      {
+        "label": "4096×4096",
+        "bars": [
+          {
+            "impl": "Zig (c128)",
+            "val": 5969.729129978837,
+            "color": "#388bfd"
+          },
+          {
+            "impl": "Rust (c128)",
+            "val": 5008.377683590474,
+            "color": "#e8843a"
+          },
+          {
+            "impl": "Zig (c64)",
+            "val": 4747.651016675323,
+            "color": "#6cb6ff"
+          },
+          {
+            "impl": "Rust (c64)",
+            "val": 4680.608717211605,
+            "color": "#ffb77c"
+          }
+        ]
+      }
+    ]
+  }
+];
+const IMPL_COLORS = {"Zig (f64)":"#1f6feb","Zig (f32)":"#58a6ff","Zig (i32)":"#79c0ff","Zig (i16)":"#a5d6ff","Zig (i8)":"#cae8ff","Zig (c128)":"#388bfd","Zig (c64)":"#6cb6ff","Rust (f64)":"#d47616","Rust (f32)":"#f0883e","Rust (i32)":"#f4a261","Rust (i16)":"#f7ba86","Rust (i8)":"#fad2ab","Rust (c128)":"#e8843a","Rust (c64)":"#ffb77c"};
+const SIZES = [
+  {
+    "kernel": "matmul",
+    "zig": {
+      "raw": 4682,
+      "gz": 2663
+    },
+    "rust": {
+      "raw": 2265,
+      "gz": 1620
+    }
+  },
+  {
+    "kernel": "reduction",
+    "zig": {
+      "raw": 10043,
+      "gz": 4534
+    },
+    "rust": {
+      "raw": 10014,
+      "gz": 4211
+    }
+  },
+  {
+    "kernel": "unary",
+    "zig": {
+      "raw": 37298,
+      "gz": 17894
+    },
+    "rust": {
+      "raw": 32531,
+      "gz": 17840
+    }
+  },
+  {
+    "kernel": "binary",
+    "zig": {
+      "raw": 31660,
+      "gz": 9109
+    },
+    "rust": {
+      "raw": 34445,
+      "gz": 12102
+    }
+  },
+  {
+    "kernel": "sort",
+    "zig": {
+      "raw": 11319,
+      "gz": 5054
+    },
+    "rust": {
+      "raw": 13089,
+      "gz": 6387
+    }
+  },
+  {
+    "kernel": "convolve",
+    "zig": {
+      "raw": 1836,
+      "gz": 1257
+    },
+    "rust": {
+      "raw": 1888,
+      "gz": 1099
+    }
+  },
+  {
+    "kernel": "linalg",
+    "zig": {
+      "raw": 22362,
+      "gz": 13110
+    },
+    "rust": {
+      "raw": 20856,
+      "gz": 11956
+    }
+  },
+  {
+    "kernel": "arrayops",
+    "zig": {
+      "raw": 11213,
+      "gz": 5570
+    },
+    "rust": {
+      "raw": 11047,
+      "gz": 5427
+    }
+  },
+  {
+    "kernel": "fft",
+    "zig": {
+      "raw": 16914,
+      "gz": 10362
+    },
+    "rust": {
+      "raw": 14511,
+      "gz": 8424
+    }
+  }
+];
+const zigTotal = {"raw":147327,"gz":69553};
+const rustTotal = {"raw":140646,"gz":69066};
+
+const container = document.getElementById('charts');
+
+// ── Build dynamic legend ──
+{
+  const legendEl = document.getElementById('legend');
+  // Collect all unique impl names that appear in data
+  const seen = new Set();
+  for (const cat of DATA) for (const e of cat.entries) for (const b of e.bars) seen.add(b.impl);
+  for (const impl of seen) {
+    const color = IMPL_COLORS[impl] || '#8b949e';
+    legendEl.insertAdjacentHTML('beforeend',
+      '<div class="legend-item"><div class="legend-swatch" style="background:' + color + '"></div> ' + impl + '</div>');
+  }
+}
+
+// ── Summary Section ──
+{
+  // Collect all speedup values (f64 only for apples-to-apples comparison)
+  const zigVals = [];
+  const rustVals = [];
+  const h2hVals = []; // zig/rust ratio (>1 = zig faster)
+  const details = []; // {cat, label, zig64, rust64}
+
+  for (const cat of DATA) {
+    for (const e of cat.entries) {
+      const zigF64 = e.bars.find(b => b.impl === 'Zig (f64)');
+      const rustF64 = e.bars.find(b => b.impl === 'Rust (f64)');
+      if (zigF64 && rustF64 && zigF64.val > 0 && rustF64.val > 0) {
+        zigVals.push({ val: zigF64.val, cat: cat.cat, label: e.label });
+        rustVals.push({ val: rustF64.val, cat: cat.cat, label: e.label });
+        h2hVals.push({ val: zigF64.val / rustF64.val, cat: cat.cat, label: e.label });
+        details.push({ cat: cat.cat, label: e.label, zig64: zigF64.val, rust64: rustF64.val });
+      }
+    }
+  }
+
+  const avg = arr => arr.reduce((s, x) => s + x.val, 0) / arr.length;
+  const geoMean = arr => Math.pow(arr.reduce((p, x) => p * x.val, 1), 1 / arr.length);
+  const best = arr => arr.reduce((a, b) => a.val > b.val ? a : b);
+  const worst = arr => arr.reduce((a, b) => a.val < b.val ? a : b);
+
+  const zigGeo = geoMean(zigVals);
+  const rustGeo = geoMean(rustVals);
+  const zigBest = best(zigVals);
+  const zigWorst = worst(zigVals);
+  const rustBest = best(rustVals);
+  const rustWorst = worst(rustVals);
+
+  const h2hGeo = geoMean(h2hVals);
+  const h2hBest = best(h2hVals); // most zig-favoring
+  const h2hWorst = worst(h2hVals); // most rust-favoring
+
+  // Count wins
+  let zigWins = 0, rustWins = 0, ties = 0;
+  for (const d of details) {
+    if (d.zig64 > d.rust64 * 1.01) zigWins++;
+    else if (d.rust64 > d.zig64 * 1.01) rustWins++;
+    else ties++;
+  }
+  const total = zigWins + rustWins + ties;
+
+  const fmt = v => v.toFixed(2) + '\u00d7';
+  const fmtDetail = d => d.cat + ' ' + d.label;
+
+  let summaryHtml = '<div class="summary"><h2>Summary (f64 vs JS baseline)</h2>';
+  summaryHtml += '<div class="summary-grid">';
+
+  // Zig card
+  summaryHtml += '<div class="summary-card"><h3 style="color:#58a6ff">Zig vs JS</h3>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Geo mean speedup</span><span class="summary-value zig">' + fmt(zigGeo) + '</span></div>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Best case</span><span class="summary-value zig">' + fmt(zigBest.val) + '</span></div>';
+  summaryHtml += '<div class="summary-detail">' + fmtDetail(zigBest) + '</div>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Worst case</span><span class="summary-value zig">' + fmt(zigWorst.val) + '</span></div>';
+  summaryHtml += '<div class="summary-detail">' + fmtDetail(zigWorst) + '</div>';
+  summaryHtml += '</div>';
+
+  // Rust card
+  summaryHtml += '<div class="summary-card"><h3 style="color:#f0883e">Rust vs JS</h3>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Geo mean speedup</span><span class="summary-value rust">' + fmt(rustGeo) + '</span></div>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Best case</span><span class="summary-value rust">' + fmt(rustBest.val) + '</span></div>';
+  summaryHtml += '<div class="summary-detail">' + fmtDetail(rustBest) + '</div>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Worst case</span><span class="summary-value rust">' + fmt(rustWorst.val) + '</span></div>';
+  summaryHtml += '<div class="summary-detail">' + fmtDetail(rustWorst) + '</div>';
+  summaryHtml += '</div>';
+
+  // Head-to-head card
+  const h2hWinner = h2hGeo > 1.01 ? 'zig' : h2hGeo < 0.99 ? 'rust' : 'neutral';
+  const h2hLabel = h2hGeo >= 1 ? 'Zig ' + fmt(h2hGeo) + ' faster' : 'Rust ' + fmt(1/h2hGeo) + ' faster';
+  summaryHtml += '<div class="summary-card"><h3>Zig vs Rust (head-to-head)</h3>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Geo mean</span><span class="summary-value ' + h2hWinner + '">' + h2hLabel + '</span></div>';
+
+  // Win/loss bar
+  const zigPct = (zigWins / total * 100).toFixed(0);
+  const rustPct = (rustWins / total * 100).toFixed(0);
+  const tiePct = (ties / total * 100).toFixed(0);
+  summaryHtml += '<div class="h2h-row" style="margin-top:12px"><div class="h2h-bar-track">';
+  if (zigWins > 0) summaryHtml += '<div class="h2h-segment" style="width:' + zigPct + '%;background:#58a6ff">Zig ' + zigWins + '</div>';
+  if (ties > 0) summaryHtml += '<div class="h2h-segment" style="width:' + tiePct + '%;background:#30363d">Tie ' + ties + '</div>';
+  if (rustWins > 0) summaryHtml += '<div class="h2h-segment" style="width:' + rustPct + '%;background:#f0883e">Rust ' + rustWins + '</div>';
+  summaryHtml += '</div></div>';
+
+  // Best/worst h2h
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Zig best margin</span><span class="summary-value zig">' + fmt(h2hBest.val) + '</span></div>';
+  summaryHtml += '<div class="summary-detail">' + fmtDetail(h2hBest) + '</div>';
+  summaryHtml += '<div class="summary-stat"><span class="summary-label">Rust best margin</span><span class="summary-value rust">' + fmt(1/h2hWorst.val) + '</span></div>';
+  summaryHtml += '<div class="summary-detail">' + fmtDetail(h2hWorst) + '</div>';
+  summaryHtml += '</div>';
+
+  summaryHtml += '</div></div>';
+  container.insertAdjacentHTML('beforeend', summaryHtml);
+}
+
+for (const cat of DATA) {
+  let maxVal = 1;
+  for (const e of cat.entries) {
+    for (const b of e.bars) maxVal = Math.max(maxVal, b.val);
+  }
+  const scale = maxVal * 1.25;
+  const section = document.createElement('div');
+  section.className = 'category';
+  let html = `<h2>${cat.cat}</h2>`;
+  for (const e of cat.entries) {
+    html += `<div class="chart-row"><div class="chart-label">${e.label}</div><div class="chart-area">`;
+    const baselinePct = (1 / scale) * 100;
+    html += `<div class="baseline" style="left:${baselinePct}%"><span class="baseline-label">1×</span></div>`;
+    for (const b of e.bars) {
+      if (b.val === 0) continue;
+      const pct = Math.max((b.val / scale) * 100, 0.5);
+      const valStr = b.val.toFixed(2) + '×';
+      const isSmall = pct < 8;
+      const slowerNote = b.val < 1 ? ' <span class="slower-note">(slower)</span>' : '';
+      html += `<div class="bar-group"><div class="bar" title="${b.impl}: ${valStr}" style="background:${b.color};width:${pct}%"><span class="bar-val${isSmall ? ' outside' : ''}">${valStr}${slowerNote}</span></div></div>`;
+    }
+    html += `</div></div><div class="group-spacer"></div>`;
+  }
+  section.innerHTML = html;
+  container.appendChild(section);
+}
+
+// Binary sizes
+const maxRaw = Math.max(...SIZES.flatMap(s => [s.zig.raw, s.rust.raw]));
+const barScale = maxRaw * 1.3;
+let sizesHtml = `
+<div class="sizes">
+  <h2>Binary Sizes (per kernel .wasm)</h2>
+  <div class="size-legend">
+    <div class="size-legend-item"><div class="size-legend-swatch raw" style="background:#58a6ff"></div> Raw .wasm</div>
+    <div class="size-legend-item"><div class="size-legend-swatch" style="background:#58a6ff"></div> b64+gzip (bundle cost)</div>
+  </div>
+  <div class="sizes-grid">`;
+
+for (const s of SIZES) {
+  const items = [
+    { label: "Zig", data: s.zig, color: "#58a6ff" },
+    { label: "Rust", data: s.rust, color: "#f0883e" },
+  ];
+  sizesHtml += `<div class="size-card"><h3>${s.kernel}</h3>`;
+  for (const item of items) {
+    const rawPct = (item.data.raw / barScale) * 100;
+    const gzPct = (item.data.gz / barScale) * 100;
+    const isSmall = gzPct < 12;
+    const text = `${(item.data.gz / 1024).toFixed(1)} KB gz — ${(item.data.raw / 1024).toFixed(1)} KB raw`;
+    sizesHtml += `
+      <div class="size-bar-row">
+        <div class="size-bar-label">${item.label}</div>
+        <div class="size-bar-track">
+          <div class="size-bar" style="width:${rawPct}%">
+            <div class="raw-segment" style="background:${item.color};width:100%;position:absolute"></div>
+            <div class="gz-segment" style="background:${item.color};width:${(item.data.gz/item.data.raw)*100}%;position:relative;z-index:1"></div>
+            <span class="size-bar-text${isSmall ? ' outside' : ''}" style="z-index:2;position:relative">${text}</span>
+          </div>
+        </div>
+      </div>`;
+  }
+  sizesHtml += `</div>`;
+}
+
+sizesHtml += `</div>
+  <div class="size-total">
+    <div class="size-total-row">
+      <span>Zig total (all ${SIZES.length} kernels)</span>
+      <span class="size-total-val" style="color:#58a6ff">${(zigTotal.raw/1024).toFixed(1)} KB raw — ${(zigTotal.gz/1024).toFixed(1)} KB b64+gzip</span>
+    </div>
+    <div class="size-total-row">
+      <span>Rust total (all ${SIZES.length} kernels)</span>
+      <span class="size-total-val" style="color:#f0883e">${(rustTotal.raw/1024).toFixed(1)} KB raw — ${(rustTotal.gz/1024).toFixed(1)} KB b64+gzip</span>
+    </div>
+  </div>
+</div>`;
+
+container.insertAdjacentHTML('beforeend', sizesHtml);
+</script>
+</body>
+</html>

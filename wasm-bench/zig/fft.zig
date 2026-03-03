@@ -237,6 +237,47 @@ export fn rfft2_f64(inp: [*]const f64, out: [*]f64, scratch: [*]f64, m: u32, n: 
 
 // ─── irfft2: M×(N/2+1) complex → M×N real ─────────────────────────────────
 
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX-TO-COMPLEX FFT (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// fft_c128: forward complex FFT. Input/output: 2*n f64s (interleaved).
+// scratch: 6*nextPow2(2*n-1) f64s
+export fn fft_c128(inp: [*]const f64, out: [*]f64, scratch: [*]f64, n: u32) void {
+    bluesteinFft(inp, out, @as(usize, n), false, scratch);
+}
+
+// ifft_c128: inverse complex FFT.
+export fn ifft_c128(inp: [*]const f64, out: [*]f64, scratch: [*]f64, n: u32) void {
+    bluesteinFft(inp, out, @as(usize, n), true, scratch);
+}
+
+// fft_c64: forward complex FFT for f32.
+// Upcast to f64, run FFT, downcast back.
+export fn fft_c64(inp: [*]const f32, out: [*]f32, scratch: [*]f64, n: u32) void {
+    const N = @as(usize, n);
+    // Use scratch: first 2*N f64s for input, next 2*N for output, rest for bluestein
+    const in_f64 = scratch;
+    const out_f64 = scratch + 2 * N;
+    const fft_scratch = out_f64 + 2 * N;
+    // Upcast
+    for (0..2 * N) |i| in_f64[i] = @as(f64, inp[i]);
+    bluesteinFft(in_f64, out_f64, N, false, fft_scratch);
+    // Downcast
+    for (0..2 * N) |i| out[i] = @as(f32, @floatCast(out_f64[i]));
+}
+
+// ifft_c64: inverse complex FFT for f32.
+export fn ifft_c64(inp: [*]const f32, out: [*]f32, scratch: [*]f64, n: u32) void {
+    const N = @as(usize, n);
+    const in_f64 = scratch;
+    const out_f64 = scratch + 2 * N;
+    const fft_scratch = out_f64 + 2 * N;
+    for (0..2 * N) |i| in_f64[i] = @as(f64, inp[i]);
+    bluesteinFft(in_f64, out_f64, N, true, fft_scratch);
+    for (0..2 * N) |i| out[i] = @as(f32, @floatCast(out_f64[i]));
+}
+
 export fn irfft2_f64(inp: [*]const f64, out: [*]f64, scratch: [*]f64, m: u32, n: u32) void {
     const M = @as(usize, m);
     const N = @as(usize, n);

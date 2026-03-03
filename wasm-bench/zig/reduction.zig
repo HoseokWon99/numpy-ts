@@ -280,3 +280,172 @@ export fn diff_f32(in_ptr: [*]const f32, out_ptr: [*]f32, n: u32) void {
         out_ptr[i] = in_ptr[i + 1] - in_ptr[i];
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGER REDUCTIONS (i32, i16, i8) — widened accumulators for i16/i8
+// ═══════════════════════════════════════════════════════════════════════════
+
+const V4i32 = @Vector(4, i32);
+
+inline fn load4_i32(ptr: [*]const i32, i: usize) V4i32 {
+    return @as(*align(1) const V4i32, @ptrCast(ptr + i)).*;
+}
+
+// ─── i32 reductions ──────────────────────────────────────────────────────
+
+export fn sum_i32(ptr: [*]const i32, n: u32) i32 {
+    const len = @as(usize, n);
+    var acc0: V4i32 = @splat(0);
+    var acc1: V4i32 = @splat(0);
+    var i: usize = 0;
+    while (i + 8 <= len) : (i += 8) {
+        acc0 +%= load4_i32(ptr, i);
+        acc1 +%= load4_i32(ptr, i + 4);
+    }
+    while (i + 4 <= len) : (i += 4) {
+        acc0 +%= load4_i32(ptr, i);
+    }
+    acc0 +%= acc1;
+    var result: i32 = acc0[0] +% acc0[1] +% acc0[2] +% acc0[3];
+    while (i < len) : (i += 1) {
+        result +%= ptr[i];
+    }
+    return result;
+}
+
+export fn max_i32(ptr: [*]const i32, n: u32) i32 {
+    const len = @as(usize, n);
+    if (len == 0) return -2147483648; // i32 min
+    var acc: V4i32 = @splat(ptr[0]);
+    var i: usize = 0;
+    while (i + 4 <= len) : (i += 4) {
+        acc = @max(acc, load4_i32(ptr, i));
+    }
+    var result: i32 = @max(acc[0], @max(acc[1], @max(acc[2], acc[3])));
+    while (i < len) : (i += 1) {
+        if (ptr[i] > result) result = ptr[i];
+    }
+    return result;
+}
+
+export fn min_i32(ptr: [*]const i32, n: u32) i32 {
+    const len = @as(usize, n);
+    if (len == 0) return 2147483647; // i32 max
+    var acc: V4i32 = @splat(ptr[0]);
+    var i: usize = 0;
+    while (i + 4 <= len) : (i += 4) {
+        acc = @min(acc, load4_i32(ptr, i));
+    }
+    var result: i32 = @min(acc[0], @min(acc[1], @min(acc[2], acc[3])));
+    while (i < len) : (i += 1) {
+        if (ptr[i] < result) result = ptr[i];
+    }
+    return result;
+}
+
+// ─── i16 reductions (widen to i32 accumulators) ──────────────────────────
+
+export fn sum_i16(ptr: [*]const i16, n: u32) i32 {
+    const len = @as(usize, n);
+    var result: i32 = 0;
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        result +%= @as(i32, ptr[i]);
+    }
+    return result;
+}
+
+export fn max_i16(ptr: [*]const i16, n: u32) i16 {
+    const len = @as(usize, n);
+    if (len == 0) return -32768;
+    var result: i16 = ptr[0];
+    var i: usize = 1;
+    while (i < len) : (i += 1) {
+        if (ptr[i] > result) result = ptr[i];
+    }
+    return result;
+}
+
+export fn min_i16(ptr: [*]const i16, n: u32) i16 {
+    const len = @as(usize, n);
+    if (len == 0) return 32767;
+    var result: i16 = ptr[0];
+    var i: usize = 1;
+    while (i < len) : (i += 1) {
+        if (ptr[i] < result) result = ptr[i];
+    }
+    return result;
+}
+
+// ─── i8 reductions (widen to i32 accumulators) ───────────────────────────
+
+export fn sum_i8(ptr: [*]const i8, n: u32) i32 {
+    const len = @as(usize, n);
+    var result: i32 = 0;
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        result +%= @as(i32, ptr[i]);
+    }
+    return result;
+}
+
+export fn max_i8(ptr: [*]const i8, n: u32) i8 {
+    const len = @as(usize, n);
+    if (len == 0) return -128;
+    var result: i8 = ptr[0];
+    var i: usize = 1;
+    while (i < len) : (i += 1) {
+        if (ptr[i] > result) result = ptr[i];
+    }
+    return result;
+}
+
+export fn min_i8(ptr: [*]const i8, n: u32) i8 {
+    const len = @as(usize, n);
+    if (len == 0) return 127;
+    var result: i8 = ptr[0];
+    var i: usize = 1;
+    while (i < len) : (i += 1) {
+        if (ptr[i] < result) result = ptr[i];
+    }
+    return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX REDUCTIONS (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// sum_c128: sum of n complex numbers (2n f64s), writes 2 f64s to out
+export fn sum_c128(ptr: [*]const f64, out: [*]f64, n: u32) void {
+    // Treat as f64 sum on 2*n elements, accumulate re and im in V2f64
+    const len = @as(usize, n);
+    var acc0: V2f64 = @splat(0.0);
+    var acc1: V2f64 = @splat(0.0);
+    var i: usize = 0;
+    while (i + 4 <= len) : (i += 4) {
+        acc0 += load2_f64(ptr, i * 2);
+        acc0 += load2_f64(ptr, (i + 1) * 2);
+        acc1 += load2_f64(ptr, (i + 2) * 2);
+        acc1 += load2_f64(ptr, (i + 3) * 2);
+    }
+    while (i < len) : (i += 1) {
+        acc0 += load2_f64(ptr, i * 2);
+    }
+    acc0 += acc1;
+    out[0] = acc0[0];
+    out[1] = acc0[1];
+}
+
+// sum_c64: sum of n complex numbers (2n f32s), writes 2 f32s to out
+export fn sum_c64(ptr: [*]const f32, out: [*]f32, n: u32) void {
+    const len = @as(usize, n);
+    var re_sum: f32 = 0.0;
+    var im_sum: f32 = 0.0;
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        re_sum += ptr[2 * i];
+        im_sum += ptr[2 * i + 1];
+    }
+    out[0] = re_sum;
+    out[1] = im_sum;
+}

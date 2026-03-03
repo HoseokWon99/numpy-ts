@@ -172,3 +172,51 @@ pub unsafe extern "C" fn signbit_f32(inp: *const f32, out: *mut f32, n: u32) {
         i += 1;
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLEX UNARY OPS (c128, c64)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// abs_c128: |z| = sqrt(re²+im²). Input: 2n f64s, output: n f64s
+#[no_mangle]
+pub unsafe extern "C" fn abs_c128(inp: *const f64, out: *mut f64, n: u32) {
+    for i in 0..n as usize {
+        let re = *inp.add(2 * i);
+        let im = *inp.add(2 * i + 1);
+        *out.add(i) = libm::sqrt(re * re + im * im);
+    }
+}
+
+// abs_c64: |z| = sqrt(re²+im²). Input: 2n f32s, output: n f32s
+#[no_mangle]
+pub unsafe extern "C" fn abs_c64(inp: *const f32, out: *mut f32, n: u32) {
+    for i in 0..n as usize {
+        let re = *inp.add(2 * i);
+        let im = *inp.add(2 * i + 1);
+        *out.add(i) = libm::sqrtf(re * re + im * im);
+    }
+}
+
+// exp_c128: exp(a+bi) = exp(a)*(cos(b)+i*sin(b)). Input/output: 2n f64s
+#[no_mangle]
+pub unsafe extern "C" fn exp_c128(inp: *const f64, out: *mut f64, n: u32) {
+    for i in 0..n as usize {
+        let re = *inp.add(2 * i);
+        let im = *inp.add(2 * i + 1);
+        let ea = libm::exp(re);
+        *out.add(2 * i) = ea * libm::cos(im);
+        *out.add(2 * i + 1) = ea * libm::sin(im);
+    }
+}
+
+// exp_c64: exp(a+bi) = exp(a)*(cos(b)+i*sin(b)). Input/output: 2n f32s
+#[no_mangle]
+pub unsafe extern "C" fn exp_c64(inp: *const f32, out: *mut f32, n: u32) {
+    for i in 0..n as usize {
+        let re = *inp.add(2 * i);
+        let im = *inp.add(2 * i + 1);
+        let ea = libm::expf(re);
+        *out.add(2 * i) = ea * libm::cosf(im);
+        *out.add(2 * i + 1) = ea * libm::sinf(im);
+    }
+}

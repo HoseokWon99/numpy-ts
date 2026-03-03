@@ -265,3 +265,42 @@ export fn quantile_f32(ptr: [*]f32, n: u32, q: f64) f32 {
     if (len == 1) return ptr[0];
     return linearInterp(f32, ptr, len, q);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGER SORT (i32, i16, i8) — trivial thanks to comptime T
+// ═══════════════════════════════════════════════════════════════════════════
+
+export fn sort_i32(ptr: [*]i32, n: u32) void {
+    const len = @as(usize, n);
+    if (len <= 1) return;
+    quicksort(i32, ptr, 0, len - 1);
+}
+export fn sort_i16(ptr: [*]i16, n: u32) void {
+    const len = @as(usize, n);
+    if (len <= 1) return;
+    quicksort(i16, ptr, 0, len - 1);
+}
+export fn sort_i8(ptr: [*]i8, n: u32) void {
+    const len = @as(usize, n);
+    if (len <= 1) return;
+    quicksort(i8, ptr, 0, len - 1);
+}
+
+export fn argsort_i32(vals: [*]const i32, idx: [*]u32, n: u32) void {
+    const len = @as(usize, n);
+    for (0..len) |i| idx[i] = @as(u32, @intCast(i));
+    if (len <= 1) return;
+    quicksortIdx(i32, vals, idx, 0, len - 1);
+}
+export fn argsort_i16(vals: [*]const i16, idx: [*]u32, n: u32) void {
+    const len = @as(usize, n);
+    for (0..len) |i| idx[i] = @as(u32, @intCast(i));
+    if (len <= 1) return;
+    quicksortIdx(i16, vals, idx, 0, len - 1);
+}
+export fn argsort_i8(vals: [*]const i8, idx: [*]u32, n: u32) void {
+    const len = @as(usize, n);
+    for (0..len) |i| idx[i] = @as(u32, @intCast(i));
+    if (len <= 1) return;
+    quicksortIdx(i8, vals, idx, 0, len - 1);
+}
