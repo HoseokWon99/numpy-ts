@@ -230,3 +230,31 @@ export fn gradient_f32(inp: [*]const f32, out: [*]f32, n: u32) void {
         out[i] = (inp[i + 1] - inp[i - 1]) * 0.5;
     }
 }
+
+// ─── nonzero: return indices of non-zero elements ────────────────────────
+
+export fn nonzero_f64(ptr: [*]const f64, out: [*]u32, n: u32) u32 {
+    const len = @as(usize, n);
+    var count: usize = 0;
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        if (ptr[i] != 0.0) {
+            out[count] = @as(u32, @intCast(i));
+            count += 1;
+        }
+    }
+    return @as(u32, @intCast(count));
+}
+
+export fn nonzero_f32(ptr: [*]const f32, out: [*]u32, n: u32) u32 {
+    const len = @as(usize, n);
+    var count: usize = 0;
+    var i: usize = 0;
+    while (i < len) : (i += 1) {
+        if (ptr[i] != 0.0) {
+            out[count] = @as(u32, @intCast(i));
+            count += 1;
+        }
+    }
+    return @as(u32, @intCast(count));
+}

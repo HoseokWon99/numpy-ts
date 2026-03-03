@@ -78,6 +78,11 @@ fn signbitOp_f64(v: V2f64) V2f64 {
     return @select(f64, has_sign, one, zero);
 }
 
+fn sinhOp_f64(v: V2f64) V2f64 { const e = @exp(v); const em = @exp(-v); return (e - em) * @as(V2f64, @splat(0.5)); }
+fn coshOp_f64(v: V2f64) V2f64 { const e = @exp(v); const em = @exp(-v); return (e + em) * @as(V2f64, @splat(0.5)); }
+fn tanhOp_f64(v: V2f64) V2f64 { const e = @exp(v); const em = @exp(-v); return (e - em) / (e + em); }
+fn exp2Op_f64(v: V2f64) V2f64 { return @exp2(v); }
+
 fn sqrtOp_f32(v: V4f32) V4f32 { return @sqrt(v); }
 fn expOp_f32(v: V4f32) V4f32 { return @exp(v); }
 fn logOp_f32(v: V4f32) V4f32 { return @log(v); }
@@ -88,6 +93,11 @@ fn negOp_f32(v: V4f32) V4f32 { return -v; }
 fn ceilOp_f32(v: V4f32) V4f32 { return @ceil(v); }
 fn floorOp_f32(v: V4f32) V4f32 { return @floor(v); }
 fn tanOp_f32(v: V4f32) V4f32 { return @sin(v) / @cos(v); }
+fn sinhOp_f32(v: V4f32) V4f32 { const e = @exp(v); const em = @exp(-v); return (e - em) * @as(V4f32, @splat(0.5)); }
+fn coshOp_f32(v: V4f32) V4f32 { const e = @exp(v); const em = @exp(-v); return (e + em) * @as(V4f32, @splat(0.5)); }
+fn tanhOp_f32(v: V4f32) V4f32 { const e = @exp(v); const em = @exp(-v); return (e - em) / (e + em); }
+fn exp2Op_f32(v: V4f32) V4f32 { return @exp2(v); }
+
 fn signbitOp_f32(v: V4f32) V4f32 {
     const V4u32 = @Vector(4, u32);
     const sign_mask: V4u32 = @splat(0x80000000);
@@ -110,6 +120,10 @@ export fn ceil_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, 
 export fn floor_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, floorOp_f64); }
 export fn tan_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, tanOp_f64); }
 export fn signbit_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, signbitOp_f64); }
+export fn sinh_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, sinhOp_f64); }
+export fn cosh_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, coshOp_f64); }
+export fn tanh_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, tanhOp_f64); }
+export fn exp2_f64(i: [*]const f64, o: [*]f64, n: u32) void { unaryV2_f64(i, o, n, exp2Op_f64); }
 
 // ─── f32 exports ───────────────────────────────────────────────────────────
 
@@ -124,3 +138,7 @@ export fn ceil_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, 
 export fn floor_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, floorOp_f32); }
 export fn tan_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, tanOp_f32); }
 export fn signbit_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, signbitOp_f32); }
+export fn sinh_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, sinhOp_f32); }
+export fn cosh_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, coshOp_f32); }
+export fn tanh_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, tanhOp_f32); }
+export fn exp2_f32(i: [*]const f32, o: [*]f32, n: u32) void { unaryV4_f32(i, o, n, exp2Op_f32); }

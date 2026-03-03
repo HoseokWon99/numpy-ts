@@ -185,3 +185,31 @@ pub unsafe extern "C" fn gradient_f32(inp: *const f32, out: *mut f32, n: u32) {
         i += 1;
     }
 }
+
+// ─── nonzero: return indices of non-zero elements ────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn nonzero_f64(ptr: *const f64, out: *mut u32, n: u32) -> u32 {
+    let len = n as usize;
+    let mut count: usize = 0;
+    for i in 0..len {
+        if *ptr.add(i) != 0.0 {
+            *out.add(count) = i as u32;
+            count += 1;
+        }
+    }
+    count as u32
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nonzero_f32(ptr: *const f32, out: *mut u32, n: u32) -> u32 {
+    let len = n as usize;
+    let mut count: usize = 0;
+    for i in 0..len {
+        if *ptr.add(i) != 0.0 {
+            *out.add(count) = i as u32;
+            count += 1;
+        }
+    }
+    count as u32
+}

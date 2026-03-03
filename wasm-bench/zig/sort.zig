@@ -213,3 +213,55 @@ export fn argpartition_f32(vals: [*]const f32, idx: [*]u32, n: u32, kth: u32) vo
     if (len <= 1) return;
     quickselectIdx(f32, vals, idx, 0, len - 1, @as(usize, kth));
 }
+
+// ─── Statistics: median, percentile, quantile ───────────────────────────
+// All work in-place (destructive). Caller must copy data beforehand.
+
+fn linearInterp(comptime T: type, data: [*]T, n: usize, frac: f64) T {
+    // frac in [0,1] → virtual index
+    const idx_f = frac * @as(f64, @floatFromInt(n - 1));
+    const lo: usize = @intFromFloat(@floor(idx_f));
+    const hi: usize = if (lo + 1 < n) lo + 1 else lo;
+    const t: T = @floatCast(idx_f - @floor(idx_f));
+    // Ensure both lo and hi are in sorted position
+    quickselect(T, data, 0, n - 1, lo);
+    if (hi != lo) quickselect(T, data, lo + 1, n - 1, hi);
+    return data[lo] * (1 - t) + data[hi] * t;
+}
+
+export fn median_f64(ptr: [*]f64, n: u32) f64 {
+    const len = @as(usize, n);
+    if (len == 0) return 0;
+    if (len == 1) return ptr[0];
+    return linearInterp(f64, ptr, len, 0.5);
+}
+export fn median_f32(ptr: [*]f32, n: u32) f32 {
+    const len = @as(usize, n);
+    if (len == 0) return 0;
+    if (len == 1) return ptr[0];
+    return linearInterp(f32, ptr, len, 0.5);
+}
+export fn percentile_f64(ptr: [*]f64, n: u32, p: f64) f64 {
+    const len = @as(usize, n);
+    if (len == 0) return 0;
+    if (len == 1) return ptr[0];
+    return linearInterp(f64, ptr, len, p / 100.0);
+}
+export fn percentile_f32(ptr: [*]f32, n: u32, p: f64) f32 {
+    const len = @as(usize, n);
+    if (len == 0) return 0;
+    if (len == 1) return ptr[0];
+    return linearInterp(f32, ptr, len, p / 100.0);
+}
+export fn quantile_f64(ptr: [*]f64, n: u32, q: f64) f64 {
+    const len = @as(usize, n);
+    if (len == 0) return 0;
+    if (len == 1) return ptr[0];
+    return linearInterp(f64, ptr, len, q);
+}
+export fn quantile_f32(ptr: [*]f32, n: u32, q: f64) f32 {
+    const len = @as(usize, n);
+    if (len == 0) return 0;
+    if (len == 1) return ptr[0];
+    return linearInterp(f32, ptr, len, q);
+}

@@ -136,6 +136,35 @@ binary_simd_f64!(fmin_f64, fmin_v128_f64);
 binary_simd_f32!(fmax_f32, fmax_v128_f32);
 binary_simd_f32!(fmin_f32, fmin_v128_f32);
 
+// ─── mod (floored remainder): a - floor(a/b) * b ─────────────────────────
+
+unsafe fn mod_v128_f64(a: v128, b: v128) -> v128 {
+    f64x2_sub(a, f64x2_mul(f64x2_floor(f64x2_div(a, b)), b))
+}
+unsafe fn mod_v128_f32(a: v128, b: v128) -> v128 {
+    f32x4_sub(a, f32x4_mul(f32x4_floor(f32x4_div(a, b)), b))
+}
+binary_simd_f64!(mod_f64, mod_v128_f64);
+binary_simd_f32!(mod_f32, mod_v128_f32);
+
+// ─── floor_divide: floor(a / b) ─────────────────────────────────────────
+
+unsafe fn floor_divide_v128_f64(a: v128, b: v128) -> v128 { f64x2_floor(f64x2_div(a, b)) }
+unsafe fn floor_divide_v128_f32(a: v128, b: v128) -> v128 { f32x4_floor(f32x4_div(a, b)) }
+binary_simd_f64!(floor_divide_f64, floor_divide_v128_f64);
+binary_simd_f32!(floor_divide_f32, floor_divide_v128_f32);
+
+// ─── hypot: sqrt(a² + b²) ──────────────────────────────────────────────
+
+unsafe fn hypot_v128_f64(a: v128, b: v128) -> v128 {
+    f64x2_sqrt(f64x2_add(f64x2_mul(a, a), f64x2_mul(b, b)))
+}
+unsafe fn hypot_v128_f32(a: v128, b: v128) -> v128 {
+    f32x4_sqrt(f32x4_add(f32x4_mul(a, a), f32x4_mul(b, b)))
+}
+binary_simd_f64!(hypot_f64, hypot_v128_f64);
+binary_simd_f32!(hypot_f32, hypot_v128_f32);
+
 // ─── logical_and / logical_xor ──────────────────────────────────────────────
 
 unsafe fn logical_and_v128_f64(a: v128, b: v128) -> v128 {

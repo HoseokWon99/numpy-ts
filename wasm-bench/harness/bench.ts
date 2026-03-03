@@ -228,6 +228,32 @@ interface WasmKernels {
   take_f32?: (data: number, indices: number, out: number, n: number) => void;
   gradient_f64?: (inp: number, out: number, n: number) => void;
   gradient_f32?: (inp: number, out: number, n: number) => void;
+  // Binary extensions
+  mod_f64?: (a: number, b: number, out: number, n: number) => void;
+  mod_f32?: (a: number, b: number, out: number, n: number) => void;
+  floor_divide_f64?: (a: number, b: number, out: number, n: number) => void;
+  floor_divide_f32?: (a: number, b: number, out: number, n: number) => void;
+  hypot_f64?: (a: number, b: number, out: number, n: number) => void;
+  hypot_f32?: (a: number, b: number, out: number, n: number) => void;
+  // Unary extensions (hyperbolic + exp2)
+  sinh_f64?: (inp: number, out: number, n: number) => void;
+  sinh_f32?: (inp: number, out: number, n: number) => void;
+  cosh_f64?: (inp: number, out: number, n: number) => void;
+  cosh_f32?: (inp: number, out: number, n: number) => void;
+  tanh_f64?: (inp: number, out: number, n: number) => void;
+  tanh_f32?: (inp: number, out: number, n: number) => void;
+  exp2_f64?: (inp: number, out: number, n: number) => void;
+  exp2_f32?: (inp: number, out: number, n: number) => void;
+  // Stats (in sort module)
+  median_f64?: (ptr: number, n: number) => number;
+  median_f32?: (ptr: number, n: number) => number;
+  percentile_f64?: (ptr: number, n: number, p: number) => number;
+  percentile_f32?: (ptr: number, n: number, p: number) => number;
+  quantile_f64?: (ptr: number, n: number, q: number) => number;
+  quantile_f32?: (ptr: number, n: number, q: number) => number;
+  // Search (in arrayops module)
+  nonzero_f64?: (ptr: number, out: number, n: number) => number;
+  nonzero_f32?: (ptr: number, out: number, n: number) => number;
 }
 
 async function loadWasm(filename: string, name: string): Promise<WasmKernels | null> {
@@ -302,6 +328,13 @@ async function loadWasm(filename: string, name: string): Promise<WasmKernels | n
     'roll_f64', 'roll_f32', 'flip_f64', 'flip_f32',
     'tile_f64', 'tile_f32', 'pad_f64', 'pad_f32',
     'take_f64', 'take_f32', 'gradient_f64', 'gradient_f32',
+    'mod_f64', 'mod_f32', 'floor_divide_f64', 'floor_divide_f32',
+    'hypot_f64', 'hypot_f32',
+    'sinh_f64', 'sinh_f32', 'cosh_f64', 'cosh_f32',
+    'tanh_f64', 'tanh_f32', 'exp2_f64', 'exp2_f32',
+    'median_f64', 'median_f32', 'percentile_f64', 'percentile_f32',
+    'quantile_f64', 'quantile_f32',
+    'nonzero_f64', 'nonzero_f32',
   ] as const;
   for (const fn of fnNames) {
     if (typeof exp[fn] === 'function') {
@@ -671,7 +704,7 @@ function benchWasmBinary(
   const aData = new ArrayType(size);
   const bData = new ArrayType(size);
   for (let i = 0; i < size; i++) {
-    if (opName === 'div') {
+    if (opName === 'div' || opName === 'floor_divide' || opName === 'mod') {
       aData[i] = Math.random() * 2 - 1;
       bData[i] = Math.random() * 2 + 0.5;
     } else if (opName === 'power') {
@@ -683,6 +716,9 @@ function benchWasmBinary(
     } else if (opName === 'logical_and' || opName === 'logical_xor') {
       aData[i] = Math.random() > 0.3 ? Math.random() * 5 : 0;
       bData[i] = Math.random() > 0.3 ? Math.random() * 5 : 0;
+    } else if (opName === 'hypot') {
+      aData[i] = Math.random() * 10;
+      bData[i] = Math.random() * 10;
     } else {
       aData[i] = Math.random() * 2 - 1;
       bData[i] = Math.random() * 2 - 1;
@@ -718,7 +754,7 @@ function benchJsBinary(
   const aData = new Float64Array(size);
   const bData = new Float64Array(size);
   for (let i = 0; i < size; i++) {
-    if (opName === 'divide') {
+    if (opName === 'divide' || opName === 'floor_divide' || opName === 'mod') {
       aData[i] = Math.random() * 2 - 1;
       bData[i] = Math.random() * 2 + 0.5;
     } else if (opName === 'power') {
@@ -730,6 +766,9 @@ function benchJsBinary(
     } else if (opName === 'logical_and' || opName === 'logical_xor') {
       aData[i] = Math.random() > 0.3 ? Math.random() * 5 : 0;
       bData[i] = Math.random() > 0.3 ? Math.random() * 5 : 0;
+    } else if (opName === 'hypot') {
+      aData[i] = Math.random() * 10;
+      bData[i] = Math.random() * 10;
     } else {
       aData[i] = Math.random() * 2 - 1;
       bData[i] = Math.random() * 2 - 1;
@@ -1514,6 +1553,21 @@ function benchWasmArrayOp(
       runFn = () => fn(base, base + bufBytes, N);
       break;
     }
+    case 'nonzero': {
+      const fn = (wasm as Record<string, unknown>)[`nonzero_${dtype}`] as ((ptr: number, out: number, n: number) => number) | undefined;
+      if (!fn) return null;
+      const inputBytes = N * bytesPerElem;
+      const outputBytes = N * 4; // u32 indices
+      ensureMemory(wasm, inputBytes + outputBytes);
+      // Create sparse data (~70% nonzero)
+      const srcData = new ArrayType(N);
+      for (let i = 0; i < N; i++) srcData[i] = Math.random() > 0.3 ? Math.random() * 10 : 0;
+      new ArrayType(wasm.memory.buffer, base, N).set(srcData);
+      const outPtr = base + inputBytes;
+      throughputBytes = N * bytesPerElem;
+      runFn = () => fn(base, outPtr, N);
+      break;
+    }
     default:
       return null;
   }
@@ -1595,6 +1649,16 @@ function benchJsArrayOp(
       };
       break;
     }
+    case 'nonzero': {
+      const data = new Float64Array(N);
+      for (let i = 0; i < N; i++) data[i] = Math.random() > 0.3 ? Math.random() * 10 : 0;
+      const indices: number[] = [];
+      runFn = () => {
+        indices.length = 0;
+        for (let i = 0; i < N; i++) { if (data[i] !== 0) indices.push(i); }
+      };
+      break;
+    }
     default:
       runFn = () => {};
   }
@@ -1615,6 +1679,105 @@ function benchJsArrayOp(
     timeMs: ms,
     metric: computeGBs(N, 8, ms),
     metricUnit: 'GB/s',
+  };
+}
+
+// ─── Stats Benchmarks (sort-category) ────────────────────────────────────────
+
+function benchWasmStats(
+  wasm: WasmKernels, opName: string, size: number, dtype: 'f64' | 'f32',
+  iterations: number, warmup: number
+): TimingResult | null {
+  const fn64 = (wasm as Record<string, unknown>)[`${opName}_${dtype}`] as ((...args: number[]) => number) | undefined;
+  if (!fn64) return null;
+  const mem = wasm.memory;
+  const N = size;
+  const bytesPerElem = dtype === 'f64' ? 8 : 4;
+  const dataBytes = N * bytesPerElem;
+
+  // ptr = baseOffset for data buffer (in-place, destructive)
+  const ptrOffset = wasm.baseOffset;
+
+  // Generate source random data
+  const ArrayType = dtype === 'f64' ? Float64Array : Float32Array;
+  const srcData = new ArrayType(N);
+  for (let i = 0; i < N; i++) srcData[i] = Math.random() * 200 - 100;
+
+  ensureMemory(wasm, dataBytes);
+
+  // Warmup
+  for (let w = 0; w < warmup; w++) {
+    new ArrayType(mem.buffer, ptrOffset, N).set(srcData);
+    if (opName === 'percentile') fn64(ptrOffset, N, 50.0);
+    else if (opName === 'quantile') fn64(ptrOffset, N, 0.5);
+    else fn64(ptrOffset, N);
+  }
+
+  // Benchmark
+  const times: number[] = [];
+  for (let iter = 0; iter < iterations; iter++) {
+    // Re-copy data (in-place operation is destructive)
+    new ArrayType(mem.buffer, ptrOffset, N).set(srcData);
+    const t0 = performance.now();
+    if (opName === 'percentile') fn64(ptrOffset, N, 50.0);
+    else if (opName === 'quantile') fn64(ptrOffset, N, 0.5);
+    else fn64(ptrOffset, N);
+    times.push(performance.now() - t0);
+  }
+
+  const avgMs = median(times);
+  const mElemPerSec = (N / 1e6) / (avgMs / 1000);
+
+  return {
+    impl: `${wasm.name} (${dtype})`,
+    op: opName,
+    size: N,
+    timeMs: avgMs,
+    metric: mElemPerSec,
+    metricUnit: 'M elem/s',
+  };
+}
+
+function benchJsStats(
+  opName: string, size: number, iterations: number, warmup: number
+): TimingResult {
+  const N = size;
+  const srcData = new Float64Array(N);
+  for (let i = 0; i < N; i++) srcData[i] = Math.random() * 200 - 100;
+  const workBuf = new Float64Array(N);
+
+  const runFn = () => {
+    workBuf.set(srcData);
+    // Sort then pick — JS doesn't have quickselect
+    workBuf.sort();
+    if (opName === 'median') {
+      const mid = Math.floor(N / 2);
+      return N % 2 === 1 ? workBuf[mid] : (workBuf[mid - 1] + workBuf[mid]) / 2;
+    } else {
+      // percentile(50) and quantile(0.5) are same as median
+      const idx = 0.5 * (N - 1);
+      const lo = Math.floor(idx);
+      const t = idx - lo;
+      return workBuf[lo] * (1 - t) + workBuf[Math.min(lo + 1, N - 1)] * t;
+    }
+  };
+
+  for (let w = 0; w < warmup; w++) runFn();
+  const times: number[] = [];
+  for (let iter = 0; iter < iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    times.push(performance.now() - t0);
+  }
+
+  const avgMs = median(times);
+  return {
+    impl: 'JS (f64)',
+    op: opName,
+    size: N,
+    timeMs: avgMs,
+    metric: (N / 1e6) / (avgMs / 1000),
+    metricUnit: 'M elem/s',
   };
 }
 
@@ -2043,6 +2206,108 @@ function verifyAll(wasms: WasmKernels[]): boolean {
       const r = new Float64Array(wasm.memory.buffer, B + 32, 4);
       const expected = [2, 2.5, 3.5, 4];
       checks.push(['gradient', expected.every((v, i) => Math.abs(r[i] - v) < 1e-10)]);
+    }
+
+    // Binary extensions — mod: [7,3] mod [2,2] = [1,1]
+    if (wasm.mod_f64) {
+      ensureMemory(wasm, 48);
+      new Float64Array(wasm.memory.buffer, B, 2).set([7, 3]);
+      new Float64Array(wasm.memory.buffer, B + 16, 2).set([2, 2]);
+      wasm.mod_f64(B, B + 16, B + 32, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 32, 2);
+      checks.push(['mod', Math.abs(r[0] - 1) < 1e-10 && Math.abs(r[1] - 1) < 1e-10]);
+    }
+
+    // Binary extensions — floor_divide: [7,3] floor_divide [2,2] = [3,1]
+    if (wasm.floor_divide_f64) {
+      ensureMemory(wasm, 48);
+      new Float64Array(wasm.memory.buffer, B, 2).set([7, 3]);
+      new Float64Array(wasm.memory.buffer, B + 16, 2).set([2, 2]);
+      wasm.floor_divide_f64(B, B + 16, B + 32, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 32, 2);
+      checks.push(['floor_divide', Math.abs(r[0] - 3) < 1e-10 && Math.abs(r[1] - 1) < 1e-10]);
+    }
+
+    // Binary extensions — hypot: [3,0] hypot [4,5] = [5,5]
+    if (wasm.hypot_f64) {
+      ensureMemory(wasm, 48);
+      new Float64Array(wasm.memory.buffer, B, 2).set([3, 0]);
+      new Float64Array(wasm.memory.buffer, B + 16, 2).set([4, 5]);
+      wasm.hypot_f64(B, B + 16, B + 32, 2);
+      const r = new Float64Array(wasm.memory.buffer, B + 32, 2);
+      checks.push(['hypot', Math.abs(r[0] - 5) < 1e-10 && Math.abs(r[1] - 5) < 1e-10]);
+    }
+
+    // Unary extensions — sinh(0) = 0
+    if (wasm.sinh_f64) {
+      ensureMemory(wasm, 16);
+      new Float64Array(wasm.memory.buffer, B, 1).set([0]);
+      wasm.sinh_f64(B, B + 8, 1);
+      const r = new Float64Array(wasm.memory.buffer, B + 8, 1);
+      checks.push(['sinh', Math.abs(r[0]) < 1e-10]);
+    }
+
+    // Unary extensions — cosh(0) = 1
+    if (wasm.cosh_f64) {
+      ensureMemory(wasm, 16);
+      new Float64Array(wasm.memory.buffer, B, 1).set([0]);
+      wasm.cosh_f64(B, B + 8, 1);
+      const r = new Float64Array(wasm.memory.buffer, B + 8, 1);
+      checks.push(['cosh', Math.abs(r[0] - 1) < 1e-10]);
+    }
+
+    // Unary extensions — tanh(0) = 0
+    if (wasm.tanh_f64) {
+      ensureMemory(wasm, 16);
+      new Float64Array(wasm.memory.buffer, B, 1).set([0]);
+      wasm.tanh_f64(B, B + 8, 1);
+      const r = new Float64Array(wasm.memory.buffer, B + 8, 1);
+      checks.push(['tanh', Math.abs(r[0]) < 1e-10]);
+    }
+
+    // Unary extensions — exp2(3) = 8
+    if (wasm.exp2_f64) {
+      ensureMemory(wasm, 16);
+      new Float64Array(wasm.memory.buffer, B, 1).set([3]);
+      wasm.exp2_f64(B, B + 8, 1);
+      const r = new Float64Array(wasm.memory.buffer, B + 8, 1);
+      checks.push(['exp2', Math.abs(r[0] - 8) < 1e-10]);
+    }
+
+    // Stats — median([1,2,3,4,5]) = 3
+    if (wasm.median_f64) {
+      ensureMemory(wasm, 5 * 8);
+      new Float64Array(wasm.memory.buffer, B, 5).set([1, 2, 3, 4, 5]);
+      const result = wasm.median_f64(B, 5);
+      checks.push(['median', Math.abs(result - 3) < 1e-10]);
+    }
+
+    // Stats — percentile([1,2,3,4,5], 50) = 3
+    if (wasm.percentile_f64) {
+      ensureMemory(wasm, 5 * 8);
+      new Float64Array(wasm.memory.buffer, B, 5).set([1, 2, 3, 4, 5]);
+      const result = wasm.percentile_f64(B, 5, 50.0);
+      checks.push(['percentile', Math.abs(result - 3) < 1e-10]);
+    }
+
+    // Stats — quantile([1,2,3,4,5], 0.25) = 2
+    if (wasm.quantile_f64) {
+      ensureMemory(wasm, 5 * 8);
+      new Float64Array(wasm.memory.buffer, B, 5).set([1, 2, 3, 4, 5]);
+      const result = wasm.quantile_f64(B, 5, 0.25);
+      checks.push(['quantile', Math.abs(result - 2) < 1e-10]);
+    }
+
+    // Search — nonzero([0,1,0,3,0,5]) → count=3, indices=[1,3,5]
+    if (wasm.nonzero_f64) {
+      const inputBytes = 6 * 8;
+      const outputBytes = 6 * 4;
+      ensureMemory(wasm, inputBytes + outputBytes);
+      new Float64Array(wasm.memory.buffer, B, 6).set([0, 1, 0, 3, 0, 5]);
+      const outPtr = B + inputBytes;
+      const count = wasm.nonzero_f64(B, outPtr, 6);
+      const indices = new Uint32Array(wasm.memory.buffer, outPtr, 3);
+      checks.push(['nonzero', count === 3 && indices[0] === 1 && indices[1] === 3 && indices[2] === 5]);
     }
 
     const allPass = checks.every(([, ok]) => ok);
@@ -2685,6 +2950,10 @@ async function main() {
             { wasm: 'floor', js: 'floor' },
             { wasm: 'tan', js: null },
             { wasm: 'signbit', js: null },
+            { wasm: 'sinh', js: null },
+            { wasm: 'cosh', js: null },
+            { wasm: 'tanh', js: null },
+            { wasm: 'exp2', js: null },
           ];
           for (const { wasm: wasmOp, js: jsOp } of unaryOps) {
             if (jsOp) {
@@ -2694,9 +2963,20 @@ async function main() {
               const data = new Float64Array(size);
               for (let i = 0; i < size; i++) data[i] = Math.random() * 4 - 2;
               const out = new Float64Array(size);
-              const jsFn = wasmOp === 'tan'
-                ? () => { for (let i = 0; i < size; i++) out[i] = Math.tan(data[i]); }
-                : () => { for (let i = 0; i < size; i++) out[i] = (1 / data[i] < 0) ? 1 : 0; }; // signbit
+              let jsFn: () => void;
+              if (wasmOp === 'tan') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.tan(data[i]); };
+              } else if (wasmOp === 'sinh') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.sinh(data[i]); };
+              } else if (wasmOp === 'cosh') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.cosh(data[i]); };
+              } else if (wasmOp === 'tanh') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.tanh(data[i]); };
+              } else if (wasmOp === 'exp2') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = 2 ** data[i]; };
+              } else {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = (1 / data[i] < 0) ? 1 : 0; }; // signbit
+              }
               const times: number[] = [];
               for (let iter = 0; iter < warmup + iterations; iter++) {
                 const t0 = performance.now();
@@ -2731,9 +3011,45 @@ async function main() {
             { wasm: 'logaddexp', js: 'logaddexp' },
             { wasm: 'logical_and', js: 'logical_and' },
             { wasm: 'logical_xor', js: 'logical_xor' },
+            { wasm: 'mod', js: null as unknown as keyof Baselines },
+            { wasm: 'floor_divide', js: null as unknown as keyof Baselines },
+            { wasm: 'hypot', js: null as unknown as keyof Baselines },
           ];
           for (const { wasm: wasmOp, js: jsOp } of binaryOps) {
-            results.push(benchJsBinary(baselines, jsOp as 'add', size, iterations, warmup, wasmOp));
+            if (!jsOp) {
+              // JS loop baseline for binary ops without numpy-ts import
+              const aData = new Float64Array(size);
+              const bData = new Float64Array(size);
+              for (let i = 0; i < size; i++) {
+                if (wasmOp === 'mod' || wasmOp === 'floor_divide') {
+                  aData[i] = Math.random() * 2 - 1;
+                  bData[i] = Math.random() * 2 + 0.5;
+                } else {
+                  aData[i] = Math.random() * 10;
+                  bData[i] = Math.random() * 10;
+                }
+              }
+              const out = new Float64Array(size);
+              let jsFn: () => void;
+              if (wasmOp === 'mod') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = aData[i] - Math.floor(aData[i] / bData[i]) * bData[i]; };
+              } else if (wasmOp === 'floor_divide') {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.floor(aData[i] / bData[i]); };
+              } else {
+                jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.hypot(aData[i], bData[i]); };
+              }
+              const times: number[] = [];
+              for (let iter = 0; iter < warmup + iterations; iter++) {
+                const t0 = performance.now();
+                jsFn();
+                const t1 = performance.now();
+                if (iter >= warmup) times.push(t1 - t0);
+              }
+              const ms = median(times);
+              results.push({ impl: 'JS (f64)', op: wasmOp, size, timeMs: ms, metric: computeGBs(size, 8, ms), metricUnit: 'GB/s' });
+            } else {
+              results.push(benchJsBinary(baselines, jsOp as 'add', size, iterations, warmup, wasmOp));
+            }
             for (const wasm of wasmModules) {
               const r64 = benchWasmBinary(wasm, wasmOp, size, 'f64', iterations, warmup);
               const r32 = benchWasmBinary(wasm, wasmOp, size, 'f32', iterations, warmup);
@@ -2776,6 +3092,17 @@ async function main() {
             if (r64) results.push(r64);
             if (r32) results.push(r32);
           }
+          // stats: median, percentile, quantile
+          const statsOps = ['median', 'percentile', 'quantile'];
+          for (const op of statsOps) {
+            results.push(benchJsStats(op, size, iterations, warmup));
+            for (const wasm of wasmModules) {
+              const r64 = benchWasmStats(wasm, op, size, 'f64', iterations, warmup);
+              const r32 = benchWasmStats(wasm, op, size, 'f32', iterations, warmup);
+              if (r64) results.push(r64);
+              if (r32) results.push(r32);
+            }
+          }
           break;
         }
         case 'convolve': {
@@ -2805,7 +3132,7 @@ async function main() {
           break;
         }
         case 'arrayops': {
-          const arrayOps = ['roll', 'flip', 'tile', 'pad', 'take', 'gradient'];
+          const arrayOps = ['roll', 'flip', 'tile', 'pad', 'take', 'gradient', 'nonzero'];
           for (const op of arrayOps) {
             const jsR = benchJsArrayOp(op, size, iterations, warmup);
             if (jsR) results.push(jsR);

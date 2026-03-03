@@ -112,6 +112,20 @@ unary_libm_f32!(log_f32, libm::logf);
 unary_libm_f32!(sin_f32, libm::sinf);
 unary_libm_f32!(cos_f32, libm::cosf);
 
+// ─── sinh, cosh, tanh (libm scalar) ───────────────────────────────────
+
+unary_libm_f64!(sinh_f64, libm::sinh);
+unary_libm_f64!(cosh_f64, libm::cosh);
+unary_libm_f64!(tanh_f64, libm::tanh);
+unary_libm_f32!(sinh_f32, libm::sinhf);
+unary_libm_f32!(cosh_f32, libm::coshf);
+unary_libm_f32!(tanh_f32, libm::tanhf);
+
+// ─── exp2: 2^x ─────────────────────────────────────────────────────────
+
+unary_libm_f64!(exp2_f64, libm::exp2);
+unary_libm_f32!(exp2_f32, libm::exp2f);
+
 // ─── tan (sin/cos) ─────────────────────────────────────────────────────────
 
 unary_libm_f64!(tan_f64, libm::tan);

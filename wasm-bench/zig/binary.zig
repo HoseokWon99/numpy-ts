@@ -156,6 +156,21 @@ fn logicalXorOp_f32(a: V4f32, b: V4f32) V4f32 {
     return @select(f32, a_bool != b_bool, one, zero);
 }
 
+// ─── mod (floored remainder): a - floor(a/b) * b ────────────────────────
+
+fn modOp_f64(a: V2f64, b: V2f64) V2f64 { return a - @floor(a / b) * b; }
+fn modOp_f32(a: V4f32, b: V4f32) V4f32 { return a - @floor(a / b) * b; }
+
+// ─── floor_divide: floor(a / b) ─────────────────────────────────────────
+
+fn floorDivOp_f64(a: V2f64, b: V2f64) V2f64 { return @floor(a / b); }
+fn floorDivOp_f32(a: V4f32, b: V4f32) V4f32 { return @floor(a / b); }
+
+// ─── hypot: sqrt(a² + b²) ──────────────────────────────────────────────
+
+fn hypotOp_f64(a: V2f64, b: V2f64) V2f64 { return @sqrt(a * a + b * b); }
+fn hypotOp_f32(a: V4f32, b: V4f32) V4f32 { return @sqrt(a * a + b * b); }
+
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -193,3 +208,13 @@ export fn fmin_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { b
 export fn logaddexp_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, logaddexpOp_f32); }
 export fn logical_and_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, logicalAndOp_f32); }
 export fn logical_xor_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, logicalXorOp_f32); }
+
+// ─── f64 new batch 2 ────
+export fn mod_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, modOp_f64); }
+export fn floor_divide_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, floorDivOp_f64); }
+export fn hypot_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, hypotOp_f64); }
+
+// ─── f32 new batch 2 ────
+export fn mod_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, modOp_f32); }
+export fn floor_divide_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, floorDivOp_f32); }
+export fn hypot_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, hypotOp_f32); }

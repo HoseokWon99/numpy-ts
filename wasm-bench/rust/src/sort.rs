@@ -145,6 +145,28 @@ unsafe fn quickselect_idx<T: PartialOrd + Copy>(vals: *const T, idx: *mut u32, m
     }
 }
 
+// ─── Statistics helpers ─────────────────────────────────────────────────
+
+unsafe fn linear_interp_f64(data: *mut f64, n: usize, frac: f64) -> f64 {
+    let idx_f = frac * (n - 1) as f64;
+    let lo = libm::floor(idx_f) as usize;
+    let hi = if lo + 1 < n { lo + 1 } else { lo };
+    let t = idx_f - libm::floor(idx_f);
+    quickselect(data, 0, n - 1, lo);
+    if hi != lo { quickselect(data, lo + 1, n - 1, hi); }
+    data.add(lo).read() * (1.0 - t) + data.add(hi).read() * t
+}
+
+unsafe fn linear_interp_f32(data: *mut f32, n: usize, frac: f64) -> f32 {
+    let idx_f = frac * (n - 1) as f64;
+    let lo = libm::floor(idx_f) as usize;
+    let hi = if lo + 1 < n { lo + 1 } else { lo };
+    let t = (idx_f - libm::floor(idx_f)) as f32;
+    quickselect(data, 0, n - 1, lo);
+    if hi != lo { quickselect(data, lo + 1, n - 1, hi); }
+    data.add(lo).read() * (1.0 - t) + data.add(hi).read() * t
+}
+
 // ─── Exports ────────────────────────────────────────────────────────────────
 
 #[no_mangle]
@@ -205,4 +227,49 @@ pub unsafe extern "C" fn argpartition_f32(vals: *const f32, idx: *mut u32, n: u3
     for i in 0..len { *idx.add(i) = i as u32; }
     if len <= 1 { return; }
     quickselect_idx(vals, idx, 0, len - 1, kth as usize);
+}
+
+// ─── Statistics: median, percentile, quantile ───────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn median_f64(ptr: *mut f64, n: u32) -> f64 {
+    let len = n as usize;
+    if len == 0 { return 0.0; }
+    if len == 1 { return *ptr; }
+    linear_interp_f64(ptr, len, 0.5)
+}
+#[no_mangle]
+pub unsafe extern "C" fn median_f32(ptr: *mut f32, n: u32) -> f32 {
+    let len = n as usize;
+    if len == 0 { return 0.0; }
+    if len == 1 { return *ptr; }
+    linear_interp_f32(ptr, len, 0.5)
+}
+#[no_mangle]
+pub unsafe extern "C" fn percentile_f64(ptr: *mut f64, n: u32, p: f64) -> f64 {
+    let len = n as usize;
+    if len == 0 { return 0.0; }
+    if len == 1 { return *ptr; }
+    linear_interp_f64(ptr, len, p / 100.0)
+}
+#[no_mangle]
+pub unsafe extern "C" fn percentile_f32(ptr: *mut f32, n: u32, p: f64) -> f32 {
+    let len = n as usize;
+    if len == 0 { return 0.0; }
+    if len == 1 { return *ptr; }
+    linear_interp_f32(ptr, len, p / 100.0)
+}
+#[no_mangle]
+pub unsafe extern "C" fn quantile_f64(ptr: *mut f64, n: u32, q: f64) -> f64 {
+    let len = n as usize;
+    if len == 0 { return 0.0; }
+    if len == 1 { return *ptr; }
+    linear_interp_f64(ptr, len, q)
+}
+#[no_mangle]
+pub unsafe extern "C" fn quantile_f32(ptr: *mut f32, n: u32, q: f64) -> f32 {
+    let len = n as usize;
+    if len == 0 { return 0.0; }
+    if len == 1 { return *ptr; }
+    linear_interp_f32(ptr, len, q)
 }
