@@ -6,7 +6,7 @@ DIST_DIR="$SCRIPT_DIR/../dist"
 
 mkdir -p "$DIST_DIR"
 
-KERNELS=(matmul reduction unary binary sort convolve linalg arrayops)
+KERNELS=(matmul reduction unary binary sort convolve linalg arrayops fft)
 
 for kern in "${KERNELS[@]}"; do
   echo "Building Zig WASM kernel: $kern..."

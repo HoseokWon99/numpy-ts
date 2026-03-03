@@ -394,3 +394,191 @@ pub unsafe extern "C" fn norm_f32(ptr: *const f32, n: u32) -> f32 {
     while i < len { let v = *ptr.add(i); sum += v * v; i += 1; }
     f32x4_extract_lane::<0>(f32x4_sqrt(f32x4_splat(sum)))
 }
+
+// ─── Internal tiled matmul (duplicated from lib.rs for linalg module) ───────
+
+const TILE_INT: usize = 48;
+
+unsafe fn matmul_internal_f64(a: *const f64, b: *const f64, c: *mut f64, m: usize, n: usize, k: usize) {
+    for i in 0..m * n { *c.add(i) = 0.0; }
+    let mut ii = 0;
+    while ii < m {
+        let ie = if ii + TILE_INT < m { ii + TILE_INT } else { m };
+        let mut kk = 0;
+        while kk < k {
+            let ke = if kk + TILE_INT < k { kk + TILE_INT } else { k };
+            let mut jj = 0;
+            while jj < n {
+                let je = if jj + TILE_INT < n { jj + TILE_INT } else { n };
+                let mut ri = ii;
+                while ri < ie {
+                    let mut rk = kk;
+                    while rk < ke {
+                        let aik = *a.add(ri * k + rk);
+                        let mut j = jj;
+                        while j < je {
+                            *c.add(ri * n + j) += aik * *b.add(rk * n + j);
+                            j += 1;
+                        }
+                        rk += 1;
+                    }
+                    ri += 1;
+                }
+                jj += TILE_INT;
+            }
+            kk += TILE_INT;
+        }
+        ii += TILE_INT;
+    }
+}
+
+unsafe fn copy_f64(dst: *mut f64, src: *const f64, len: usize) {
+    for i in 0..len { *dst.add(i) = *src.add(i); }
+}
+
+fn sqrt_f64_scalar(x: f64) -> f64 {
+    f64x2_extract_lane::<0>(f64x2_sqrt(f64x2_splat(x)))
+}
+
+// ─── matrix_power: out = a^power via binary exponentiation ──────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn matrix_power_f64(a: *const f64, out: *mut f64, scratch: *mut f64, n: u32, power: u32) {
+    let nn = n as usize;
+    let sz = nn * nn;
+    let cur = scratch;
+    let tmp = scratch.add(sz);
+    let mut p = power as usize;
+
+    for i in 0..sz { *out.add(i) = 0.0; }
+    for i in 0..nn { *out.add(i * nn + i) = 1.0; }
+    copy_f64(cur, a, sz);
+
+    while p > 0 {
+        if p & 1 != 0 {
+            matmul_internal_f64(out as *const f64, cur as *const f64, tmp, nn, nn, nn);
+            copy_f64(out, tmp as *const f64, sz);
+        }
+        p >>= 1;
+        if p > 0 {
+            matmul_internal_f64(cur as *const f64, cur as *const f64, tmp, nn, nn, nn);
+            copy_f64(cur, tmp as *const f64, sz);
+        }
+    }
+}
+
+// ─── multi_dot3: out = a @ b @ c ────────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn multi_dot3_f64(a: *const f64, b: *const f64, c: *const f64, out: *mut f64, tmp: *mut f64, n: u32) {
+    let nn = n as usize;
+    matmul_internal_f64(a, b, tmp, nn, nn, nn);
+    matmul_internal_f64(tmp as *const f64, c, out, nn, nn, nn);
+}
+
+// ─── qr: Householder QR decomposition ──────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn qr_f64(a: *mut f64, q: *mut f64, r: *mut f64, tau: *mut f64, _scratch: *mut f64, m: u32, n: u32) {
+    let rows = m as usize;
+    let cols = n as usize;
+    let k = if rows < cols { rows } else { cols };
+
+    for j in 0..k {
+        let mut norm_sq = 0.0f64;
+        for i in j..rows { let v = *a.add(i * cols + j); norm_sq += v * v; }
+        let mut nrm = sqrt_f64_scalar(norm_sq);
+        if nrm == 0.0 { *tau.add(j) = 0.0; continue; }
+
+        let ajj = *a.add(j * cols + j);
+        if ajj >= 0.0 { nrm = -nrm; }
+        let alpha = nrm;
+
+        *a.add(j * cols + j) -= alpha;
+        let v0 = *a.add(j * cols + j);
+
+        let mut vtv = v0 * v0;
+        for i in (j + 1)..rows { let vi = *a.add(i * cols + j); vtv += vi * vi; }
+        if vtv == 0.0 {
+            *tau.add(j) = 0.0;
+            *a.add(j * cols + j) = alpha;
+            continue;
+        }
+        *tau.add(j) = 2.0 / vtv;
+
+        for col in (j + 1)..cols {
+            let mut dot = 0.0f64;
+            for i in j..rows { dot += *a.add(i * cols + j) * *a.add(i * cols + col); }
+            let factor = *tau.add(j) * dot;
+            for i in j..rows { *a.add(i * cols + col) -= factor * *a.add(i * cols + j); }
+        }
+
+        *a.add(j * cols + j) = alpha;
+    }
+
+    // Extract R
+    for i in 0..k {
+        for j in 0..cols {
+            *r.add(i * cols + j) = if j >= i { *a.add(i * cols + j) } else { 0.0 };
+        }
+    }
+
+    // Reconstruct Q
+    for i in 0..rows * k { *q.add(i) = 0.0; }
+    for i in 0..k { *q.add(i * k + i) = 1.0; }
+
+    let mut jrev = k;
+    while jrev > 0 {
+        jrev -= 1;
+        let j = jrev;
+        if *tau.add(j) == 0.0 { continue; }
+
+        let mut sub_sq = 0.0f64;
+        for i in (j + 1)..rows { let vi = *a.add(i * cols + j); sub_sq += vi * vi; }
+        let vtv2 = 2.0 / *tau.add(j);
+        let v0sq = vtv2 - sub_sq;
+        let v0 = if v0sq > 0.0 { sqrt_f64_scalar(v0sq) } else { 0.0 };
+
+        for col in 0..k {
+            let mut dot = v0 * *q.add(j * k + col);
+            for i in (j + 1)..rows { dot += *a.add(i * cols + j) * *q.add(i * k + col); }
+            let factor = *tau.add(j) * dot;
+            *q.add(j * k + col) -= factor * v0;
+            for i in (j + 1)..rows { *q.add(i * k + col) -= factor * *a.add(i * cols + j); }
+        }
+    }
+}
+
+// ─── lstsq: solve Ax=b via QR ──────────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn lstsq_f64(a: *mut f64, b: *const f64, x: *mut f64, scratch: *mut f64, m: u32, n: u32) {
+    let rows = m as usize;
+    let cols = n as usize;
+    let k = if rows < cols { rows } else { cols };
+
+    let a_copy = scratch;
+    let q_ptr = a_copy.add(rows * cols);
+    let r_ptr = q_ptr.add(rows * k);
+    let tau_ptr = r_ptr.add(k * cols);
+    let qtb_ptr = tau_ptr.add(k);
+    let qr_scratch = qtb_ptr.add(k);
+
+    copy_f64(a_copy, a as *const f64, rows * cols);
+    qr_f64(a_copy, q_ptr, r_ptr, tau_ptr, qr_scratch, m, n);
+
+    for i in 0..k {
+        let mut sum = 0.0f64;
+        for j in 0..rows { sum += *q_ptr.add(j * k + i) * *b.add(j); }
+        *qtb_ptr.add(i) = sum;
+    }
+
+    let mut ii = k;
+    while ii > 0 {
+        ii -= 1;
+        let mut sum = *qtb_ptr.add(ii);
+        for j in (ii + 1)..cols { sum -= *r_ptr.add(ii * cols + j) * *x.add(j); }
+        let diag = *r_ptr.add(ii * cols + ii);
+        *x.add(ii) = if diag != 0.0 { sum / diag } else { 0.0 };
+    }
+}

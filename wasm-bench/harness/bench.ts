@@ -105,6 +105,15 @@ const CATEGORIES: CategoryConfig[] = [
     ],
     metric: 'GB/s',
   },
+  {
+    name: 'fft',
+    sizes: [
+      { size: 32, iterations: 50, warmup: 10 },
+      { size: 100, iterations: 20, warmup: 5 },
+      { size: 256, iterations: 10, warmup: 3 },
+    ],
+    metric: 'GFLOP/s',
+  },
 ];
 
 // ─── WASM Loading ────────────────────────────────────────────────────────────
@@ -254,6 +263,14 @@ interface WasmKernels {
   // Search (in arrayops module)
   nonzero_f64?: (ptr: number, out: number, n: number) => number;
   nonzero_f32?: (ptr: number, out: number, n: number) => number;
+  // Linalg extensions
+  matrix_power_f64?: (a: number, out: number, scratch: number, n: number, power: number) => void;
+  multi_dot3_f64?: (a: number, b: number, c: number, out: number, tmp: number, n: number) => void;
+  qr_f64?: (a: number, q: number, r: number, tau: number, scratch: number, m: number, n: number) => void;
+  lstsq_f64?: (a: number, b: number, x: number, scratch: number, m: number, n: number) => void;
+  // FFT
+  rfft2_f64?: (inp: number, out: number, scratch: number, m: number, n: number) => void;
+  irfft2_f64?: (inp: number, out: number, scratch: number, m: number, n: number) => void;
 }
 
 async function loadWasm(filename: string, name: string): Promise<WasmKernels | null> {
@@ -335,6 +352,10 @@ async function loadWasm(filename: string, name: string): Promise<WasmKernels | n
     'median_f64', 'median_f32', 'percentile_f64', 'percentile_f32',
     'quantile_f64', 'quantile_f32',
     'nonzero_f64', 'nonzero_f32',
+    // Linalg extensions
+    'matrix_power_f64', 'multi_dot3_f64', 'qr_f64', 'lstsq_f64',
+    // FFT
+    'rfft2_f64', 'irfft2_f64',
   ] as const;
   for (const fn of fnNames) {
     if (typeof exp[fn] === 'function') {
@@ -1337,6 +1358,82 @@ function benchWasmLinalg(
       runFn = () => fn(base, totalElems);
       break;
     }
+    case 'matrix_power': {
+      if (dtype !== 'f64') return null;
+      const fn = wasm.matrix_power_f64;
+      if (!fn) return null;
+      const matBytes = N * N * 8;
+      const scratchBytes = 2 * N * N * 8;
+      ensureMemory(wasm, matBytes + matBytes + scratchBytes);
+      const aData = new Float64Array(N * N); for (let i = 0; i < N * N; i++) aData[i] = Math.random() * 0.1;
+      for (let i = 0; i < N; i++) aData[i * N + i] += 1; // diagonally dominant
+      new Float64Array(wasm.memory.buffer, base, N * N).set(aData);
+      const aOff = base, outOff = base + matBytes, scrOff = base + 2 * matBytes;
+      const power = 3;
+      flops = 4 * N * N * N; // 2 matmuls for power=3
+      runFn = () => fn(aOff, outOff, scrOff, N, power);
+      break;
+    }
+    case 'multi_dot3': {
+      if (dtype !== 'f64') return null;
+      const fn = wasm.multi_dot3_f64;
+      if (!fn) return null;
+      const matBytes = N * N * 8;
+      ensureMemory(wasm, 4 * matBytes + matBytes);
+      const fill = () => { const d = new Float64Array(N * N); for (let i = 0; i < N * N; i++) d[i] = Math.random() * 2 - 1; return d; };
+      new Float64Array(wasm.memory.buffer, base, N * N).set(fill());
+      new Float64Array(wasm.memory.buffer, base + matBytes, N * N).set(fill());
+      new Float64Array(wasm.memory.buffer, base + 2 * matBytes, N * N).set(fill());
+      const aOff = base, bOff = base + matBytes, cOff = base + 2 * matBytes;
+      const outOff = base + 3 * matBytes, tmpOff = base + 4 * matBytes;
+      flops = 4 * N * N * N;
+      runFn = () => fn(aOff, bOff, cOff, outOff, tmpOff, N);
+      break;
+    }
+    case 'qr': {
+      if (dtype !== 'f64') return null;
+      const fn = wasm.qr_f64;
+      if (!fn) return null;
+      const matBytes = N * N * 8;
+      const qBytes = N * N * 8; // m×k where m=n, k=n
+      const rBytes = N * N * 8;
+      const tauBytes = N * 8;
+      const scrBytes = N * 8;
+      ensureMemory(wasm, matBytes + qBytes + rBytes + tauBytes + scrBytes);
+      const aData = new Float64Array(N * N); for (let i = 0; i < N * N; i++) aData[i] = Math.random() * 2 - 1;
+      new Float64Array(wasm.memory.buffer, base, N * N).set(aData);
+      const aOff = base, qOff = base + matBytes, rOff = qOff + qBytes;
+      const tauOff = rOff + rBytes, scrOff = tauOff + tauBytes;
+      flops = (4 * N * N * N) / 3;
+      runFn = () => {
+        // Re-copy a each time since qr modifies it in place
+        new Float64Array(wasm.memory.buffer, base, N * N).set(aData);
+        fn(aOff, qOff, rOff, tauOff, scrOff, N, N);
+      };
+      break;
+    }
+    case 'lstsq': {
+      if (dtype !== 'f64') return null;
+      const fn = wasm.lstsq_f64;
+      if (!fn) return null;
+      const M = N, Nc = Math.max(Math.floor(N * 0.8), 1);
+      const aBytes = M * Nc * 8;
+      const bBytes = M * 8;
+      const xBytes = Nc * 8;
+      const scrBytes = (M * Nc + M * Nc + Nc * Nc + Nc + Nc + Nc) * 8;
+      ensureMemory(wasm, aBytes + bBytes + xBytes + scrBytes);
+      const aData = new Float64Array(M * Nc); for (let i = 0; i < M * Nc; i++) aData[i] = Math.random() * 2 - 1;
+      const bData = new Float64Array(M); for (let i = 0; i < M; i++) bData[i] = Math.random() * 2 - 1;
+      new Float64Array(wasm.memory.buffer, base, M * Nc).set(aData);
+      new Float64Array(wasm.memory.buffer, base + aBytes, M).set(bData);
+      const aOff = base, bOff = base + aBytes, xOff = bOff + bBytes, scrOff = xOff + xBytes;
+      flops = 2 * N * N * N;
+      runFn = () => {
+        new Float64Array(wasm.memory.buffer, base, M * Nc).set(aData);
+        fn(aOff, bOff, xOff, scrOff, M, Nc);
+      };
+      break;
+    }
     default:
       return null;
   }
@@ -1436,6 +1533,85 @@ function benchJsLinalg(
       const data = new Float64Array(totalElems); for (let i = 0; i < totalElems; i++) data[i] = Math.random() * 2 - 1;
       flops = 2 * N * N;
       runFn = () => { let s = 0; for (let i = 0; i < totalElems; i++) s += data[i] * data[i]; Math.sqrt(s); };
+      break;
+    }
+    case 'matrix_power': {
+      const A = new Float64Array(N * N); for (let i = 0; i < N * N; i++) A[i] = Math.random() * 0.1;
+      for (let i = 0; i < N; i++) A[i * N + i] += 1;
+      const out = new Float64Array(N * N);
+      const cur = new Float64Array(N * N);
+      const tmp = new Float64Array(N * N);
+      flops = 4 * N * N * N;
+      const naiveMatmul = (a: Float64Array, b: Float64Array, c: Float64Array) => {
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { let s = 0; for (let k = 0; k < N; k++) s += a[i * N + k] * b[k * N + j]; c[i * N + j] = s; }
+      };
+      runFn = () => {
+        for (let i = 0; i < N * N; i++) out[i] = 0;
+        for (let i = 0; i < N; i++) out[i * N + i] = 1;
+        cur.set(A);
+        let p = 3;
+        while (p > 0) {
+          if (p & 1) { naiveMatmul(out, cur, tmp); out.set(tmp); }
+          p >>= 1;
+          if (p > 0) { naiveMatmul(cur, cur, tmp); cur.set(tmp); }
+        }
+      };
+      break;
+    }
+    case 'multi_dot3': {
+      const a = new Float64Array(N * N); for (let i = 0; i < N * N; i++) a[i] = Math.random() * 2 - 1;
+      const b = new Float64Array(N * N); for (let i = 0; i < N * N; i++) b[i] = Math.random() * 2 - 1;
+      const c = new Float64Array(N * N); for (let i = 0; i < N * N; i++) c[i] = Math.random() * 2 - 1;
+      const tmp2 = new Float64Array(N * N);
+      const out2 = new Float64Array(N * N);
+      flops = 4 * N * N * N;
+      const naiveMatmul2 = (a2: Float64Array, b2: Float64Array, c2: Float64Array) => {
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { let s = 0; for (let k = 0; k < N; k++) s += a2[i * N + k] * b2[k * N + j]; c2[i * N + j] = s; }
+      };
+      runFn = () => { naiveMatmul2(a, b, tmp2); naiveMatmul2(tmp2, c, out2); };
+      break;
+    }
+    case 'qr': {
+      const A = new Float64Array(N * N); for (let i = 0; i < N * N; i++) A[i] = Math.random() * 2 - 1;
+      const Q = new Float64Array(N * N);
+      const R = new Float64Array(N * N);
+      flops = (4 * N * N * N) / 3;
+      runFn = () => {
+        // Simple Gram-Schmidt QR
+        const copy = new Float64Array(N * N); copy.set(A);
+        for (let j = 0; j < N; j++) {
+          for (let i = 0; i < j; i++) {
+            let dot = 0; for (let k = 0; k < N; k++) dot += Q[k * N + i] * copy[k * N + j];
+            R[i * N + j] = dot;
+            for (let k = 0; k < N; k++) copy[k * N + j] -= dot * Q[k * N + i];
+          }
+          let nrm = 0; for (let k = 0; k < N; k++) nrm += copy[k * N + j] * copy[k * N + j]; nrm = Math.sqrt(nrm);
+          R[j * N + j] = nrm;
+          if (nrm > 0) for (let k = 0; k < N; k++) Q[k * N + j] = copy[k * N + j] / nrm;
+        }
+      };
+      break;
+    }
+    case 'lstsq': {
+      const M = N, Nc = Math.max(Math.floor(N * 0.8), 1);
+      const A = new Float64Array(M * Nc); for (let i = 0; i < M * Nc; i++) A[i] = Math.random() * 2 - 1;
+      const bv = new Float64Array(M); for (let i = 0; i < M; i++) bv[i] = Math.random() * 2 - 1;
+      const x = new Float64Array(Nc);
+      flops = 2 * N * N * N;
+      runFn = () => {
+        // Simple normal equations: x = (A^T A)^-1 A^T b (for benchmarking only)
+        const AtA = new Float64Array(Nc * Nc);
+        const Atb = new Float64Array(Nc);
+        for (let i = 0; i < Nc; i++) {
+          for (let j = 0; j < Nc; j++) { let s = 0; for (let k = 0; k < M; k++) s += A[k * Nc + i] * A[k * Nc + j]; AtA[i * Nc + j] = s; }
+          let s = 0; for (let k = 0; k < M; k++) s += A[k * Nc + i] * bv[k]; Atb[i] = s;
+        }
+        // Solve via back-sub (simplified)
+        for (let i = Nc - 1; i >= 0; i--) {
+          let s = Atb[i]; for (let j = i + 1; j < Nc; j++) s -= AtA[i * Nc + j] * x[j];
+          x[i] = AtA[i * Nc + i] !== 0 ? s / AtA[i * Nc + i] : 0;
+        }
+      };
       break;
     }
     default:
@@ -1778,6 +1954,156 @@ function benchJsStats(
     timeMs: avgMs,
     metric: (N / 1e6) / (avgMs / 1000),
     metricUnit: 'M elem/s',
+  };
+}
+
+// ─── FFT Benchmarks ─────────────────────────────────────────────────────────
+
+function benchWasmFft(
+  wasm: WasmKernels, opName: string, size: number, dtype: 'f64' | 'f32', iterations: number, warmup: number
+): TimingResult | null {
+  if (dtype !== 'f64') return null;
+  const M = size, N = size;
+  const base = wasm.baseOffset;
+
+  let flops: number;
+  let runFn: () => void;
+
+  switch (opName) {
+    case 'rfft2': {
+      const fn = wasm.rfft2_f64;
+      if (!fn) return null;
+      const inpBytes = M * N * 8;
+      const halfN = Math.floor(N / 2) + 1;
+      const outBytes = M * halfN * 2 * 8;
+      const scratchBytes = 8 * Math.max(M, N) * Math.max(M, N) * 8;
+      ensureMemory(wasm, inpBytes + outBytes + scratchBytes);
+      const data = new Float64Array(M * N); for (let i = 0; i < M * N; i++) data[i] = Math.random() * 2 - 1;
+      new Float64Array(wasm.memory.buffer, base, M * N).set(data);
+      const inpOff = base, outOff = base + inpBytes, scrOff = base + inpBytes + outBytes;
+      flops = 5 * M * N * Math.log2(M * N);
+      runFn = () => fn(inpOff, outOff, scrOff, M, N);
+      break;
+    }
+    case 'irfft2': {
+      const fn = wasm.irfft2_f64;
+      if (!fn) return null;
+      const halfN = Math.floor(N / 2) + 1;
+      const inpBytes = M * halfN * 2 * 8;
+      const outBytes = M * N * 8;
+      const scratchBytes = 8 * Math.max(M, N) * Math.max(M, N) * 8;
+      ensureMemory(wasm, inpBytes + outBytes + scratchBytes);
+      const data = new Float64Array(M * halfN * 2); for (let i = 0; i < M * halfN * 2; i++) data[i] = Math.random() * 2 - 1;
+      new Float64Array(wasm.memory.buffer, base, M * halfN * 2).set(data);
+      const inpOff = base, outOff = base + inpBytes, scrOff = base + inpBytes + outBytes;
+      flops = 5 * M * N * Math.log2(M * N);
+      runFn = () => fn(inpOff, outOff, scrOff, M, N);
+      break;
+    }
+    default:
+      return null;
+  }
+
+  const times: number[] = [];
+  for (let iter = 0; iter < warmup + iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    const t1 = performance.now();
+    if (iter >= warmup) times.push(t1 - t0);
+  }
+
+  const ms = median(times);
+  return {
+    impl: `${wasm.name} (${dtype})`,
+    op: opName,
+    size,
+    timeMs: ms,
+    metric: computeGflopsCustom(flops, ms),
+    metricUnit: 'GFLOP/s',
+  };
+}
+
+function benchJsFft(
+  opName: string, size: number, iterations: number, warmup: number
+): TimingResult {
+  const M = size, N = size;
+  let flops: number;
+  let runFn: () => void;
+
+  // Naive JS DFT for baseline
+  const naiveDft = (re: Float64Array, im: Float64Array, outRe: Float64Array, outIm: Float64Array, n: number, inv: boolean) => {
+    const sign = inv ? 1 : -1;
+    for (let k = 0; k < n; k++) {
+      let sr = 0, si = 0;
+      for (let j = 0; j < n; j++) {
+        const angle = sign * 2 * Math.PI * k * j / n;
+        const cr = Math.cos(angle), ci = Math.sin(angle);
+        sr += re[j] * cr - im[j] * ci;
+        si += re[j] * ci + im[j] * cr;
+      }
+      outRe[k] = inv ? sr / n : sr;
+      outIm[k] = inv ? si / n : si;
+    }
+  };
+
+  switch (opName) {
+    case 'rfft2': {
+      const data = new Float64Array(M * N); for (let i = 0; i < M * N; i++) data[i] = Math.random() * 2 - 1;
+      const halfN = Math.floor(N / 2) + 1;
+      const outRe = new Float64Array(M * halfN);
+      const outIm = new Float64Array(M * halfN);
+      flops = 5 * M * N * Math.log2(M * N);
+      runFn = () => {
+        // Row FFTs then column FFTs (naive O(N^2) per transform)
+        const re = new Float64Array(N), im = new Float64Array(N);
+        const ore = new Float64Array(N), oim = new Float64Array(N);
+        for (let r = 0; r < M; r++) {
+          for (let j = 0; j < N; j++) { re[j] = data[r * N + j]; im[j] = 0; }
+          naiveDft(re, im, ore, oim, N, false);
+          for (let j = 0; j < halfN; j++) { outRe[r * halfN + j] = ore[j]; outIm[r * halfN + j] = oim[j]; }
+        }
+      };
+      break;
+    }
+    case 'irfft2': {
+      const halfN = Math.floor(N / 2) + 1;
+      const inpRe = new Float64Array(M * halfN); for (let i = 0; i < M * halfN; i++) inpRe[i] = Math.random() * 2 - 1;
+      const inpIm = new Float64Array(M * halfN); for (let i = 0; i < M * halfN; i++) inpIm[i] = Math.random() * 2 - 1;
+      const out = new Float64Array(M * N);
+      flops = 5 * M * N * Math.log2(M * N);
+      runFn = () => {
+        const re = new Float64Array(N), im = new Float64Array(N);
+        const ore = new Float64Array(N), oim = new Float64Array(N);
+        for (let r = 0; r < M; r++) {
+          for (let j = 0; j < halfN; j++) { re[j] = inpRe[r * halfN + j]; im[j] = inpIm[r * halfN + j]; }
+          for (let j = halfN; j < N; j++) { re[j] = re[N - j]; im[j] = -im[N - j]; }
+          naiveDft(re, im, ore, oim, N, true);
+          for (let j = 0; j < N; j++) out[r * N + j] = ore[j];
+        }
+      };
+      break;
+    }
+    default:
+      flops = 0;
+      runFn = () => {};
+  }
+
+  const times: number[] = [];
+  for (let iter = 0; iter < warmup + iterations; iter++) {
+    const t0 = performance.now();
+    runFn();
+    const t1 = performance.now();
+    if (iter >= warmup) times.push(t1 - t0);
+  }
+
+  const ms = median(times);
+  return {
+    impl: 'JS (f64)',
+    op: opName,
+    size,
+    timeMs: ms,
+    metric: computeGflopsCustom(flops, ms),
+    metricUnit: 'GFLOP/s',
   };
 }
 
@@ -2310,6 +2636,113 @@ function verifyAll(wasms: WasmKernels[]): boolean {
       checks.push(['nonzero', count === 3 && indices[0] === 1 && indices[1] === 3 && indices[2] === 5]);
     }
 
+    // Linalg — matrix_power: [[1,1],[0,1]]^3 = [[1,3],[0,1]]
+    if (wasm.matrix_power_f64) {
+      const sz = 2 * 2;
+      ensureMemory(wasm, (sz + sz + 2 * sz) * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, 1, 0, 1]);
+      const aOff = B, outOff = B + sz * 8, scrOff = B + 2 * sz * 8;
+      wasm.matrix_power_f64(aOff, outOff, scrOff, 2, 3);
+      const r = new Float64Array(wasm.memory.buffer, outOff, 4);
+      checks.push(['matrix_power', Math.abs(r[0] - 1) < 1e-10 && Math.abs(r[1] - 3) < 1e-10 && Math.abs(r[2]) < 1e-10 && Math.abs(r[3] - 1) < 1e-10]);
+    }
+
+    // Linalg — multi_dot3: I @ A @ I = A for [[1,2],[3,4]]
+    if (wasm.multi_dot3_f64) {
+      const sz = 4;
+      ensureMemory(wasm, 5 * sz * 8);
+      new Float64Array(wasm.memory.buffer, B, 4).set([1, 0, 0, 1]); // I
+      new Float64Array(wasm.memory.buffer, B + 32, 4).set([1, 2, 3, 4]); // A
+      new Float64Array(wasm.memory.buffer, B + 64, 4).set([1, 0, 0, 1]); // I
+      const outOff = B + 96, tmpOff = B + 128;
+      wasm.multi_dot3_f64(B, B + 32, B + 64, outOff, tmpOff, 2);
+      const r = new Float64Array(wasm.memory.buffer, outOff, 4);
+      checks.push(['multi_dot3', Math.abs(r[0] - 1) < 1e-10 && Math.abs(r[1] - 2) < 1e-10 && Math.abs(r[2] - 3) < 1e-10 && Math.abs(r[3] - 4) < 1e-10]);
+    }
+
+    // Linalg — qr: 3×3 matrix, verify |Q*R - A| < ε and |Q^T*Q - I| < ε
+    if (wasm.qr_f64) {
+      const m3 = 3, n3 = 3, k3 = 3;
+      const aBytes = m3 * n3 * 8, qBytes = m3 * k3 * 8, rBytes = k3 * n3 * 8;
+      const tauBytes = k3 * 8, scrBytes = n3 * 8;
+      ensureMemory(wasm, aBytes + qBytes + rBytes + tauBytes + scrBytes);
+      const A = [2, -1, 0, -1, 2, -1, 0, -1, 2];
+      new Float64Array(wasm.memory.buffer, B, 9).set(A);
+      const aOff = B, qOff = B + aBytes, rOff = qOff + qBytes;
+      const tauOff = rOff + rBytes, scrOff = tauOff + tauBytes;
+      wasm.qr_f64(aOff, qOff, rOff, tauOff, scrOff, m3, n3);
+      const Q = new Float64Array(wasm.memory.buffer, qOff, m3 * k3);
+      const R = new Float64Array(wasm.memory.buffer, rOff, k3 * n3);
+      // Check Q*R ≈ A
+      let qrOk = true;
+      for (let i = 0; i < m3; i++) for (let j = 0; j < n3; j++) {
+        let s = 0; for (let k = 0; k < k3; k++) s += Q[i * k3 + k] * R[k * n3 + j];
+        if (Math.abs(s - A[i * n3 + j]) > 1e-8) qrOk = false;
+      }
+      // Check Q^T*Q ≈ I
+      for (let i = 0; i < k3; i++) for (let j = 0; j < k3; j++) {
+        let s = 0; for (let k = 0; k < m3; k++) s += Q[k * k3 + i] * Q[k * k3 + j];
+        const expected = i === j ? 1 : 0;
+        if (Math.abs(s - expected) > 1e-8) qrOk = false;
+      }
+      checks.push(['qr', qrOk]);
+    }
+
+    // Linalg — lstsq: A=[[1,1],[1,2],[1,3]], b=[1,2,2] → x≈[2/3, 1/2]
+    if (wasm.lstsq_f64) {
+      const mL = 3, nL = 2, kL = 2;
+      const aBytes = mL * nL * 8, bBytes = mL * 8, xBytes = nL * 8;
+      const scrBytes = (mL * nL + mL * kL + kL * nL + kL + kL + nL + 16) * 8;
+      ensureMemory(wasm, aBytes + bBytes + xBytes + scrBytes);
+      new Float64Array(wasm.memory.buffer, B, 6).set([1, 1, 1, 2, 1, 3]);
+      new Float64Array(wasm.memory.buffer, B + aBytes, 3).set([1, 2, 2]);
+      const aOff = B, bOff = B + aBytes, xOff = bOff + bBytes, scrOff = xOff + xBytes;
+      wasm.lstsq_f64(aOff, bOff, xOff, scrOff, mL, nL);
+      const x = new Float64Array(wasm.memory.buffer, xOff, 2);
+      checks.push(['lstsq', Math.abs(x[0] - 2/3) < 1e-6 && Math.abs(x[1] - 0.5) < 1e-6]);
+    }
+
+    // FFT — rfft2: 4×4 ones → DC=16, rest≈0
+    if (wasm.rfft2_f64) {
+      const fM = 4, fN = 4, halfN = fN / 2 + 1;
+      const inpBytes = fM * fN * 8;
+      const outBytes = fM * halfN * 2 * 8;
+      const scrBytes = 8 * fN * fN * 8;
+      ensureMemory(wasm, inpBytes + outBytes + scrBytes);
+      const ones = new Float64Array(fM * fN); ones.fill(1);
+      new Float64Array(wasm.memory.buffer, B, fM * fN).set(ones);
+      const inpOff = B, outOff = B + inpBytes, scrOff = B + inpBytes + outBytes;
+      wasm.rfft2_f64(inpOff, outOff, scrOff, fM, fN);
+      const out = new Float64Array(wasm.memory.buffer, outOff, fM * halfN * 2);
+      // DC component (index 0,0) should be 16, rest should be ~0
+      let fftOk = Math.abs(out[0] - 16) < 1e-8;
+      for (let i = 1; i < fM * halfN; i++) {
+        if (Math.abs(out[2 * i]) > 1e-8 || Math.abs(out[2 * i + 1]) > 1e-8) fftOk = false;
+      }
+      checks.push(['rfft2', fftOk]);
+    }
+
+    // FFT — irfft2: roundtrip rfft2→irfft2 recovers original
+    if (wasm.rfft2_f64 && wasm.irfft2_f64) {
+      const fM = 4, fN = 4, halfN = fN / 2 + 1;
+      const inpBytes = fM * fN * 8;
+      const outBytes = fM * halfN * 2 * 8;
+      const scrBytes = 8 * fN * fN * 8;
+      ensureMemory(wasm, inpBytes + outBytes + scrBytes + inpBytes);
+      const orig = new Float64Array(fM * fN); for (let i = 0; i < fM * fN; i++) orig[i] = i + 1;
+      new Float64Array(wasm.memory.buffer, B, fM * fN).set(orig);
+      const inpOff = B, fftOut = B + inpBytes, scrOff = B + inpBytes + outBytes;
+      const recoverOff = scrOff + scrBytes;
+      wasm.rfft2_f64(inpOff, fftOut, scrOff, fM, fN);
+      wasm.irfft2_f64(fftOut, recoverOff, scrOff, fM, fN);
+      const recovered = new Float64Array(wasm.memory.buffer, recoverOff, fM * fN);
+      let roundtripOk = true;
+      for (let i = 0; i < fM * fN; i++) {
+        if (Math.abs(recovered[i] - orig[i]) > 1e-6) roundtripOk = false;
+      }
+      checks.push(['irfft2_roundtrip', roundtripOk]);
+    }
+
     const allPass = checks.every(([, ok]) => ok);
     const details = checks.map(([name, ok]) => `${name}:${ok ? 'PASS' : 'FAIL'}`).join(' ');
     console.log(`  ${wasm.name.padEnd(12)} ${allPass ? 'PASS' : 'FAIL'}  (${details})`);
@@ -2342,7 +2775,7 @@ function printCategoryResults(category: string, metric: string, results: TimingR
 
   for (const size of sizes) {
     const sizeResults = results.filter((r) => r.size === size);
-    const sizeLabel = (category === 'matmul' || category === 'linalg') ? `${size}x${size}` : formatSize(size);
+    const sizeLabel = (category === 'matmul' || category === 'linalg' || category === 'fft') ? `${size}x${size}` : formatSize(size);
     console.log(`\n${'═'.repeat(90)}`);
     console.log(`  ${category.toUpperCase()} — Size: ${sizeLabel}`);
     console.log(`${'═'.repeat(90)}`);
@@ -2477,7 +2910,7 @@ function generateHTML(report: BenchmarkReport) {
       const entries: ChartEntry['entries'] = [];
 
       for (const size of sizes) {
-        const sizeLabel = (catName === 'matmul' || catName === 'linalg') ? `${size}×${size}` : formatSize(size);
+        const sizeLabel = (catName === 'matmul' || catName === 'linalg' || catName === 'fft') ? `${size}×${size}` : formatSize(size);
         const sizeResults = results.filter((r) => r.size === size && r.op === op);
 
         // Find JS baseline time
@@ -2811,7 +3244,7 @@ function capitalize(s: string): string {
 
 // ─── Per-Category WASM Loading ───────────────────────────────────────────────
 
-const KERNEL_NAMES = ['matmul', 'reduction', 'unary', 'binary', 'sort', 'convolve', 'linalg', 'arrayops'] as const;
+const KERNEL_NAMES = ['matmul', 'reduction', 'unary', 'binary', 'sort', 'convolve', 'linalg', 'arrayops', 'fft'] as const;
 type KernelName = (typeof KERNEL_NAMES)[number];
 
 async function loadCategoryWasms(): Promise<Record<KernelName, WasmKernels[]>> {
@@ -2874,7 +3307,7 @@ async function main() {
     const results: TimingResult[] = [];
 
     for (const { size, iterations, warmup } of cat.sizes) {
-      const sizeLabel = (cat.name === 'matmul' || cat.name === 'linalg') ? `${size}x${size}` : formatSize(size);
+      const sizeLabel = (cat.name === 'matmul' || cat.name === 'linalg' || cat.name === 'fft') ? `${size}x${size}` : formatSize(size);
       console.log(`  ${sizeLabel} (${iterations} iters, ${warmup} warmup)...`);
 
       switch (cat.name) {
@@ -3118,7 +3551,7 @@ async function main() {
           break;
         }
         case 'linalg': {
-          const linalgOps = ['matvec', 'vecmat', 'vecdot', 'outer', 'kron', 'cross', 'norm'];
+          const linalgOps = ['matvec', 'vecmat', 'vecdot', 'outer', 'kron', 'cross', 'norm', 'matrix_power', 'multi_dot3', 'qr', 'lstsq'];
           for (const op of linalgOps) {
             const jsR = benchJsLinalg(op, size, iterations, warmup);
             if (jsR) results.push(jsR);
@@ -3141,6 +3574,18 @@ async function main() {
               const r32 = benchWasmArrayOp(wasm, op, size, 'f32', iterations, warmup);
               if (r64) results.push(r64);
               if (r32) results.push(r32);
+            }
+          }
+          break;
+        }
+        case 'fft': {
+          const fftOps = ['rfft2', 'irfft2'];
+          for (const op of fftOps) {
+            const jsR = benchJsFft(op, size, iterations, warmup);
+            if (jsR) results.push(jsR);
+            for (const wasm of wasmModules) {
+              const r64 = benchWasmFft(wasm, op, size, 'f64', iterations, warmup);
+              if (r64) results.push(r64);
             }
           }
           break;

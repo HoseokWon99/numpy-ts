@@ -350,3 +350,231 @@ export fn norm_f32(ptr: [*]const f32, n: u32) f32 {
     }
     return @sqrt(sum);
 }
+
+// ─── Internal tiled matmul (copied from matmul.zig for separate WASM module) ─
+
+const TILE = 48;
+
+fn matmulF64(a: [*]const f64, b: [*]const f64, c: [*]f64, M: usize, N: usize, K: usize) void {
+    for (0..M * N) |i| c[i] = 0;
+    var ii: usize = 0;
+    while (ii < M) : (ii += TILE) {
+        const ie = if (ii + TILE < M) ii + TILE else M;
+        var kk: usize = 0;
+        while (kk < K) : (kk += TILE) {
+            const ke = if (kk + TILE < K) kk + TILE else K;
+            var jj: usize = 0;
+            while (jj < N) : (jj += TILE) {
+                const je = if (jj + TILE < N) jj + TILE else N;
+                var ri: usize = ii;
+                while (ri < ie) : (ri += 1) {
+                    var rk: usize = kk;
+                    while (rk < ke) : (rk += 1) {
+                        const aik = a[ri * K + rk];
+                        const av: V2f64 = @splat(aik);
+                        const br = rk * N;
+                        const cr = ri * N;
+                        var j: usize = jj;
+                        while (j + 4 <= je) : (j += 4) {
+                            store2_f64(c, cr + j, load2_f64(c, cr + j) + av * load2_f64(b, br + j));
+                            store2_f64(c, cr + j + 2, load2_f64(c, cr + j + 2) + av * load2_f64(b, br + j + 2));
+                        }
+                        while (j + 2 <= je) : (j += 2) {
+                            store2_f64(c, cr + j, load2_f64(c, cr + j) + av * load2_f64(b, br + j));
+                        }
+                        while (j < je) : (j += 1) {
+                            c[cr + j] += aik * b[br + j];
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn copyF64(dst: [*]f64, src: [*]const f64, len: usize) void {
+    for (0..len) |i| dst[i] = src[i];
+}
+
+// ─── matrix_power: out = a^power via binary exponentiation ──────────────────
+
+export fn matrix_power_f64(a: [*]const f64, out: [*]f64, scratch: [*]f64, n: u32, power: u32) void {
+    const N = @as(usize, n);
+    const nn = N * N;
+    const cur = scratch;
+    const tmp = scratch + nn;
+    var p = @as(usize, power);
+
+    // out = I
+    for (0..nn) |idx| out[idx] = 0;
+    for (0..N) |di| out[di * N + di] = 1;
+
+    // cur = a
+    copyF64(cur, a, nn);
+
+    while (p > 0) {
+        if (p & 1 != 0) {
+            matmulF64(out, cur, tmp, N, N, N);
+            copyF64(out, tmp, nn);
+        }
+        p >>= 1;
+        if (p > 0) {
+            matmulF64(cur, cur, tmp, N, N, N);
+            copyF64(cur, tmp, nn);
+        }
+    }
+}
+
+// ─── multi_dot3: out = a @ b @ c (3 square matrices) ────────────────────────
+
+export fn multi_dot3_f64(a: [*]const f64, b: [*]const f64, c: [*]const f64, out: [*]f64, tmp: [*]f64, n: u32) void {
+    const N = @as(usize, n);
+    matmulF64(a, b, tmp, N, N, N);
+    matmulF64(tmp, c, out, N, N, N);
+}
+
+// ─── qr: Householder QR decomposition ──────────────────────────────────────
+
+export fn qr_f64(a: [*]f64, q: [*]f64, r: [*]f64, tau_out: [*]f64, scratch: [*]f64, m_arg: u32, n_arg: u32) void {
+    const M = @as(usize, m_arg);
+    const N = @as(usize, n_arg);
+    const K = if (M < N) M else N;
+    _ = scratch;
+
+    // Householder reflections — modify a in place
+    for (0..K) |j| {
+        // Compute norm of a[j:,j]
+        var norm_sq: f64 = 0;
+        for (j..M) |ri| {
+            const v = a[ri * N + j];
+            norm_sq += v * v;
+        }
+        var nrm = @sqrt(norm_sq);
+        if (nrm == 0) {
+            tau_out[j] = 0;
+            continue;
+        }
+
+        // alpha = -sign(a[j,j]) * norm
+        const ajj = a[j * N + j];
+        if (ajj >= 0) nrm = -nrm;
+        const alpha = nrm;
+
+        // Form Householder vector v in a[j:,j]
+        a[j * N + j] -= alpha;
+        const v0 = a[j * N + j];
+
+        // tau = 2 / (v^T v)
+        var vtv: f64 = v0 * v0;
+        for (j + 1..M) |ri| {
+            const vi = a[ri * N + j];
+            vtv += vi * vi;
+        }
+        if (vtv == 0) {
+            tau_out[j] = 0;
+            a[j * N + j] = alpha;
+            continue;
+        }
+        tau_out[j] = 2.0 / vtv;
+
+        // Apply reflection to trailing columns
+        for (j + 1..N) |col| {
+            var dot: f64 = 0;
+            for (j..M) |ri| {
+                dot += a[ri * N + j] * a[ri * N + col];
+            }
+            const factor = tau_out[j] * dot;
+            for (j..M) |ri| {
+                a[ri * N + col] -= factor * a[ri * N + j];
+            }
+        }
+
+        // Store alpha on diagonal
+        a[j * N + j] = alpha;
+    }
+
+    // Extract R: upper triangle of a
+    for (0..K) |ri| {
+        for (0..N) |ci| {
+            r[ri * N + ci] = if (ci >= ri) a[ri * N + ci] else 0;
+        }
+    }
+
+    // Reconstruct Q: start with I[m×K], apply H_{K-1} ... H_0
+    for (0..M * K) |idx| q[idx] = 0;
+    for (0..K) |di| q[di * K + di] = 1;
+
+    // Apply reflectors in reverse order
+    var jrev: usize = K;
+    while (jrev > 0) {
+        jrev -= 1;
+        const j = jrev;
+        if (tau_out[j] == 0) continue;
+
+        // Recover |v[0]| from tau and sub-diagonal elements
+        var sub_sq: f64 = 0;
+        for (j + 1..M) |ri| {
+            const vi = a[ri * N + j];
+            sub_sq += vi * vi;
+        }
+        const vtv2 = 2.0 / tau_out[j];
+        const v0sq = vtv2 - sub_sq;
+        const v0 = if (v0sq > 0) @sqrt(v0sq) else 0.0;
+
+        // Apply H_j to Q: Q -= tau * v * (v^T * Q)
+        for (0..K) |col| {
+            var dot: f64 = v0 * q[j * K + col];
+            for (j + 1..M) |ri| {
+                dot += a[ri * N + j] * q[ri * K + col];
+            }
+            const factor = tau_out[j] * dot;
+            q[j * K + col] -= factor * v0;
+            for (j + 1..M) |ri| {
+                q[ri * K + col] -= factor * a[ri * N + j];
+            }
+        }
+    }
+}
+
+// ─── lstsq: solve Ax=b via QR (overdetermined, m >= n) ─────────────────────
+
+export fn lstsq_f64(a: [*]f64, b: [*]const f64, x: [*]f64, scratch: [*]f64, m_arg: u32, n_arg: u32) void {
+    const M = @as(usize, m_arg);
+    const N = @as(usize, n_arg);
+    const K = if (M < N) M else N;
+
+    // Partition scratch: a_copy[M*N] + Q[M*K] + R[K*N] + tau[K] + QtB[K]
+    const a_copy = scratch;
+    const q_ptr = a_copy + M * N;
+    const r_ptr = q_ptr + M * K;
+    const tau_ptr = r_ptr + K * N;
+    const qtb_ptr = tau_ptr + K;
+    const qr_scratch = qtb_ptr + K;
+
+    // Copy a since qr modifies in place
+    copyF64(a_copy, a, M * N);
+
+    // QR decomposition
+    qr_f64(a_copy, q_ptr, r_ptr, tau_ptr, qr_scratch, m_arg, n_arg);
+
+    // QtB = Q^T * b
+    for (0..K) |ci| {
+        var sum: f64 = 0;
+        for (0..M) |ri| {
+            sum += q_ptr[ri * K + ci] * b[ri];
+        }
+        qtb_ptr[ci] = sum;
+    }
+
+    // Back-substitution: R * x = QtB
+    var ii: usize = K;
+    while (ii > 0) {
+        ii -= 1;
+        var sum: f64 = qtb_ptr[ii];
+        for (ii + 1..N) |j| {
+            sum -= r_ptr[ii * N + j] * x[j];
+        }
+        const diag = r_ptr[ii * N + ii];
+        x[ii] = if (diag != 0) sum / diag else 0;
+    }
+}

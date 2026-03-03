@@ -14,6 +14,8 @@ mod convolve;
 mod linalg;
 #[cfg(feature = "kern-arrayops")]
 mod arrayops;
+#[cfg(feature = "kern-fft")]
+mod fft;
 
 use core::panic::PanicInfo;
 

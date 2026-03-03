@@ -13,8 +13,9 @@ kern-unary = ["dep:libm"]
 kern-binary = ["dep:libm"]
 kern-sort = ["dep:libm"]
 kern-convolve = []
-kern-linalg = []
+kern-linalg = ["dep:libm"]
 kern-arrayops = []
+kern-fft = ["dep:libm"]
 
 [dependencies]
 libm = { version = "0.2", optional = true }
