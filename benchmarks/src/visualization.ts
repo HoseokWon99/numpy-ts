@@ -4,13 +4,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { BenchmarkReport, BenchmarkComparison } from './types';
+import type { BenchmarkReport, BenchmarkComparison, MultiRuntimeReport, RuntimeComparison } from './types';
 import {
   groupByCategory,
   getCategorySummaries,
   formatDuration,
   formatRatio,
   formatOpsPerSec,
+  groupMultiRuntimeByCategory,
 } from './analysis';
 
 export function generateHTMLReport(report: BenchmarkReport, outputPath: string): void {
@@ -321,6 +322,226 @@ function createHTML(report: BenchmarkReport): string {
   </script>
 </body>
 </html>`;
+}
+
+// --- Multi-runtime HTML report ---
+
+export function generateMultiRuntimeHTMLReport(
+  report: MultiRuntimeReport,
+  outputPath: string
+): void {
+  const html = createMultiRuntimeHTML(report);
+  fs.writeFileSync(outputPath, html, 'utf-8');
+}
+
+function createMultiRuntimeHTML(report: MultiRuntimeReport): string {
+  const { timestamp, environment, results, summaries } = report;
+  const groups = groupMultiRuntimeByCategory(results);
+  const runtimeNames = Object.keys(environment.runtimes);
+
+  // Colors per runtime
+  const runtimeColors: Record<string, string> = {
+    node: 'rgba(54, 162, 235, 0.8)',
+    deno: 'rgba(75, 192, 192, 0.8)',
+    bun: 'rgba(255, 159, 64, 0.8)',
+  };
+
+  // Compute per-category avg slowdown for each runtime
+  const categories = Array.from(groups.keys());
+  const datasets = runtimeNames.map((rt) => {
+    const data = categories.map((cat) => {
+      const items = groups.get(cat)!;
+      const ratios = items
+        .filter((item) => item.runtimes[rt])
+        .map((item) => item.runtimes[rt]!.ratio);
+      return ratios.length > 0 ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
+    });
+    return {
+      label: rt,
+      data,
+      backgroundColor: runtimeColors[rt] || 'rgba(153, 102, 255, 0.8)',
+    };
+  });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NumPy vs numpy-ts Multi-Runtime Benchmark Results</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #2c3e50; margin-bottom: 10px; font-size: 2.5em; }
+    .subtitle { color: #7f8c8d; margin-bottom: 30px; font-size: 1.1em; }
+    .meta { background: #ecf0f1; padding: 15px; border-radius: 5px; margin-bottom: 30px; font-family: monospace; font-size: 0.9em; }
+    .runtime-cards { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; }
+    .runtime-card { background: #34495e; color: white; padding: 12px 20px; border-radius: 8px; flex: 1; min-width: 200px; }
+    .runtime-card h3 { font-size: 1.1em; margin-bottom: 5px; text-transform: capitalize; }
+    .runtime-card .version { opacity: 0.8; font-size: 0.9em; }
+    .runtime-card.node { border-left: 4px solid #36a2eb; }
+    .runtime-card.deno { border-left: 4px solid #4bc0c0; }
+    .runtime-card.bun { border-left: 4px solid #ff9f40; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 40px; }
+    .summary-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+    .summary-card h3 { font-size: 0.85em; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+    .summary-card .runtime-label { font-size: 0.8em; opacity: 0.7; margin-bottom: 8px; text-transform: capitalize; }
+    .summary-card .value { font-size: 2em; font-weight: bold; }
+    .chart-container { margin: 40px 0; padding: 20px; background: white; border-radius: 8px; border: 1px solid #e0e0e0; }
+    .chart-container h2 { margin-bottom: 20px; color: #2c3e50; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 0.9em; }
+    th { background: #34495e; color: white; font-weight: 600; text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.5px; }
+    tr:hover { background: #f8f9fa; }
+    .ratio { font-weight: bold; padding: 3px 6px; border-radius: 4px; }
+    .ratio.good { background: #d4edda; color: #155724; }
+    .ratio.ok { background: #fff3cd; color: #856404; }
+    .ratio.bad { background: #f8d7da; color: #721c24; }
+    .ratio.best { outline: 2px solid #28a745; }
+    .category-section { margin: 40px 0; }
+    .category-section h2 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; margin-bottom: 20px; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e0e0e0; text-align: center; color: #7f8c8d; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>NumPy vs numpy-ts Multi-Runtime Benchmarks</h1>
+    <p class="subtitle">Performance comparison across Node.js, Deno, and Bun</p>
+
+    <div class="meta">
+      <div><strong>Timestamp:</strong> ${new Date(timestamp).toLocaleString()}</div>
+      ${environment.python_version ? `<div><strong>Python:</strong> ${environment.python_version}</div>` : ''}
+      ${environment.numpy_version ? `<div><strong>NumPy:</strong> ${environment.numpy_version}</div>` : ''}
+      <div><strong>numpy-ts:</strong> ${environment.numpyjs_version}</div>
+      <div><strong>Total Benchmarks:</strong> ${results.length}</div>
+    </div>
+
+    <div class="runtime-cards">
+      ${runtimeNames.map((rt) => `
+        <div class="runtime-card ${rt}">
+          <h3>${rt}</h3>
+          <div class="version">v${environment.runtimes[rt]}</div>
+          ${summaries[rt] ? `<div class="version">Avg: ${formatRatio(summaries[rt]!.avg_slowdown)} | Median: ${formatRatio(summaries[rt]!.median_slowdown)}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="summary-grid">
+      ${runtimeNames.map((rt) => {
+        const s = summaries[rt];
+        if (!s) return '';
+        return `
+        <div class="summary-card">
+          <h3>Average Slowdown</h3>
+          <div class="runtime-label">${rt}</div>
+          <div class="value">${formatRatio(s.avg_slowdown)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="chart-container">
+      <h2>Average Slowdown by Category (Grouped)</h2>
+      <canvas id="categoryChart"></canvas>
+    </div>
+
+    ${generateMultiRuntimeCategoryTables(groups, runtimeNames)}
+
+    <div class="footer">
+      <p>Generated by numpy-ts Benchmark Suite</p>
+      <p>Lower ratios are better (closer to NumPy performance)</p>
+    </div>
+  </div>
+
+  <script>
+    new Chart(document.getElementById('categoryChart'), {
+      type: 'bar',
+      data: {
+        labels: ${JSON.stringify(categories.map((c) => c.charAt(0).toUpperCase() + c.slice(1)))},
+        datasets: ${JSON.stringify(datasets.map((ds) => ({
+          label: ds.label.charAt(0).toUpperCase() + ds.label.slice(1),
+          data: ds.data,
+          backgroundColor: ds.backgroundColor,
+          borderWidth: 1,
+        })))}
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Slowdown Ratio (lower is better)' }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function generateMultiRuntimeCategoryTables(
+  groups: Map<string, RuntimeComparison[]>,
+  runtimeNames: string[]
+): string {
+  let html = '';
+
+  for (const [category, items] of groups) {
+    html += `
+    <div class="category-section">
+      <h2>${category.toUpperCase()}</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ms)</th>
+            ${runtimeNames.map((rt) => `<th>${rt} (ms)</th><th>${rt} ratio</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>`;
+
+    for (const item of items) {
+      // Find best (lowest) ratio
+      let bestRatio = Infinity;
+      let bestRuntime = '';
+      for (const rt of runtimeNames) {
+        const entry = item.runtimes[rt];
+        if (entry && entry.ratio < bestRatio) {
+          bestRatio = entry.ratio;
+          bestRuntime = rt;
+        }
+      }
+
+      html += `
+          <tr>
+            <td>${item.name}</td>
+            <td>${formatDuration(item.numpy.mean_ms)}</td>`;
+
+      for (const rt of runtimeNames) {
+        const entry = item.runtimes[rt];
+        if (entry) {
+          const ratioClass = entry.ratio < 2 ? 'good' : entry.ratio < 5 ? 'ok' : 'bad';
+          const bestClass = rt === bestRuntime && runtimeNames.length > 1 ? ' best' : '';
+          html += `
+            <td>${formatDuration(entry.timing.mean_ms)}</td>
+            <td><span class="ratio ${ratioClass}${bestClass}">${formatRatio(entry.ratio)}</span></td>`;
+        } else {
+          html += `<td>-</td><td>-</td>`;
+        }
+      }
+
+      html += `</tr>`;
+    }
+
+    html += `
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  return html;
 }
 
 function generateCategoryTables(groups: Map<string, BenchmarkComparison[]>): string {

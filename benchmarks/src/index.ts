@@ -1,18 +1,32 @@
 /**
  * Main benchmark orchestrator
- * Runs benchmarks for both Python NumPy and numpy-ts, compares results
+ * Runs benchmarks for both Python NumPy and numpy-ts across multiple JS runtimes
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { getBenchmarkSpecs, filterByCategory } from './specs';
-import { runBenchmarks, setBenchmarkConfig } from './runner';
+import { setBenchmarkConfig } from './runner';
 import { runPythonBenchmarks } from './python-runner';
-import { compareResults, calculateSummary, printResults } from './analysis';
-import { generateHTMLReport } from './visualization';
-import { generatePNGChart } from './chart-generator';
+import { detectRuntimes, spawnRuntimeBenchmark } from './runtime-spawner';
+import {
+  compareResults,
+  calculateSummary,
+  printResults,
+  compareMultiRuntime,
+  calculateMultiRuntimeSummaries,
+  printMultiRuntimeResults,
+} from './analysis';
+import { generateHTMLReport, generateMultiRuntimeHTMLReport } from './visualization';
+import { generatePNGChart, generateMultiRuntimePNGChart } from './chart-generator';
 import { validateBenchmarks } from './validation';
-import type { BenchmarkOptions, BenchmarkReport } from './types';
+import type {
+  BenchmarkOptions,
+  BenchmarkReport,
+  BenchmarkTiming,
+  RuntimeName,
+  MultiRuntimeReport,
+} from './types';
 
 // Read version from root package.json
 const packageJson = JSON.parse(
@@ -41,6 +55,8 @@ async function main() {
       options.output = args[++i];
     } else if (arg === '--single-thread') {
       options.singleThread = true;
+    } else if (arg === '--runtime' && i + 1 < args.length) {
+      options.runtimes = args[++i]!.split(',').map((s) => s.trim()) as RuntimeName[];
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -52,27 +68,50 @@ async function main() {
   let targetSamples: number;
 
   if (options.mode === 'quick') {
-    // Quick mode: single sample, shorter sample time for fast feedback
     minSampleTimeMs = 50;
     targetSamples = 1;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else if (options.mode === 'large') {
-    // Large mode: fewer samples, longer sample time for large arrays
     minSampleTimeMs = 200;
     targetSamples = 3;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else {
-    // Standard mode: multiple samples, full sample time for accurate results
     minSampleTimeMs = 100;
     targetSamples = 5;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
   }
 
-  console.log('🚀 NumPy vs numpy-ts Benchmark Suite\n');
+  console.log('NumPy vs numpy-ts Benchmark Suite\n');
   console.log(`Mode: ${options.mode}`);
   if (options.singleThread) {
     console.log('NumPy threading: single-threaded (OMP/MKL/OpenBLAS threads = 1)');
   }
+
+  // Detect available runtimes
+  const allRuntimes = await detectRuntimes();
+  let selectedRuntimes = allRuntimes;
+
+  if (options.runtimes) {
+    // Filter to requested runtimes
+    selectedRuntimes = [];
+    for (const requested of options.runtimes) {
+      const found = allRuntimes.find((r) => r.name === requested);
+      if (found) {
+        selectedRuntimes.push(found);
+      } else {
+        console.log(`Warning: ${requested} not found on PATH, skipping`);
+      }
+    }
+    if (selectedRuntimes.length === 0) {
+      console.error('No requested runtimes are available');
+      process.exit(1);
+    }
+  }
+
+  const runtimeStr = selectedRuntimes
+    .map((r) => `${r.name} v${r.version}`)
+    .join(', ');
+  console.log(`Runtimes: ${runtimeStr}`);
 
   // Get benchmark specifications
   let specs = getBenchmarkSpecs(options.mode || 'standard');
@@ -82,7 +121,7 @@ async function main() {
     specs = filterByCategory(specs, options.category);
 
     if (specs.length === 0) {
-      console.error(`❌ No benchmarks found for category: ${options.category}`);
+      console.error('No benchmarks found for category: ' + options.category);
       process.exit(1);
     }
   }
@@ -91,7 +130,6 @@ async function main() {
 
   try {
     // Validate correctness before benchmarking
-    // Skip: BigInt, IO, and complex linalg operations (numerical differences are expected)
     const nonValidatableOperations = new Set([
       'linalg_det', 'linalg_qr', 'linalg_cholesky', 'linalg_svd', 'linalg_eig', 'linalg_eigh',
       'linalg_eigvals', 'linalg_eigvalsh', 'linalg_matrix_rank', 'linalg_pinv', 'linalg_cond',
@@ -111,16 +149,12 @@ async function main() {
     const skippedCount = specs.length - validatableSpecs.length;
     if (skippedCount > 0) {
       console.log(
-        `⚠️  Skipping validation for ${skippedCount} benchmarks (BigInt/IO/Complex linalg)\n`
+        `Skipping validation for ${skippedCount} benchmarks (BigInt/IO/Complex linalg)\n`
       );
     }
 
-    // Run numpy-ts benchmarks
-    console.log('Running numpy-ts benchmarks...');
-    const numpyjsResults = await runBenchmarks(specs);
-
-    // Run Python NumPy benchmarks
-    console.log('\nRunning Python NumPy benchmarks...');
+    // Run Python NumPy benchmarks (once, as the baseline)
+    console.log('Running Python NumPy benchmarks...');
     const { results: numpyResults, pythonVersion, numpyVersion } = await runPythonBenchmarks(
       specs,
       minSampleTimeMs,
@@ -128,71 +162,130 @@ async function main() {
       options.singleThread ?? false
     );
 
-    // Compare results
-    const comparisons = compareResults(specs, numpyResults, numpyjsResults);
-    const summary = calculateSummary(comparisons);
+    // Run each JS runtime via subprocess
+    const runtimeResultsMap = new Map<string, BenchmarkTiming[]>();
+    const runtimeVersions: Record<string, string> = {};
 
-    // Print results to console
-    printResults(comparisons, summary);
-
-    // Create report
-    const report: BenchmarkReport = {
-      timestamp: new Date().toISOString(),
-      environment: {
-        node_version: process.version,
-        python_version: pythonVersion,
-        numpy_version: numpyVersion,
-        numpyjs_version: packageJson.version,
-      },
-      results: comparisons,
-      summary,
-    };
-
-    // Save results
-    const resultsDir = path.resolve(__dirname, '../results');
-    const plotsDir = path.resolve(resultsDir, 'plots');
-
-    // Ensure directories exist
-    if (!fs.existsSync(resultsDir)) {
-      fs.mkdirSync(resultsDir, { recursive: true });
+    for (const runtime of selectedRuntimes) {
+      console.log(`\nRunning numpy-ts benchmarks under ${runtime.name}...`);
+      try {
+        const { results, version } = await spawnRuntimeBenchmark(
+          runtime.name,
+          specs,
+          minSampleTimeMs,
+          targetSamples
+        );
+        runtimeResultsMap.set(runtime.name, results);
+        runtimeVersions[runtime.name] = version;
+      } catch (err) {
+        console.error(`Warning: ${runtime.name} benchmarks failed: ${err}`);
+        console.error(`Skipping ${runtime.name}\n`);
+      }
     }
-    if (!fs.existsSync(plotsDir)) {
-      fs.mkdirSync(plotsDir, { recursive: true });
+
+    if (runtimeResultsMap.size === 0) {
+      console.error('All runtime benchmarks failed');
+      process.exit(1);
     }
 
     // Determine file suffix based on mode and threading
     const modeSuffix =
       (options.mode === 'large' ? '-large' : '') + (options.singleThread ? '_single' : '');
 
-    // Save JSON results
-    const jsonPath = options.output
-      ? path.resolve(options.output)
-      : path.join(resultsDir, `latest${modeSuffix}.json`);
-    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
-    console.log(`Results saved to: ${jsonPath}`);
+    // Save results
+    const resultsDir = path.resolve(__dirname, '../results');
+    const plotsDir = path.resolve(resultsDir, 'plots');
+    if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true });
+    if (!fs.existsSync(plotsDir)) fs.mkdirSync(plotsDir, { recursive: true });
 
-    // Save historical results
-    const historyDir = path.join(resultsDir, 'history');
-    if (!fs.existsSync(historyDir)) {
-      fs.mkdirSync(historyDir, { recursive: true });
+    if (runtimeResultsMap.size === 1) {
+      // Single runtime: use legacy BenchmarkReport format for backward compatibility
+      const [runtimeName, jsResults] = [...runtimeResultsMap.entries()][0]!;
+      const comparisons = compareResults(specs, numpyResults, jsResults);
+      const summary = calculateSummary(comparisons);
+
+      printResults(comparisons, summary);
+
+      const report: BenchmarkReport = {
+        timestamp: new Date().toISOString(),
+        environment: {
+          node_version: runtimeVersions[runtimeName] || process.version,
+          python_version: pythonVersion,
+          numpy_version: numpyVersion,
+          numpyjs_version: packageJson.version,
+        },
+        results: comparisons,
+        summary,
+      };
+
+      const jsonPath = options.output
+        ? path.resolve(options.output)
+        : path.join(resultsDir, `latest${modeSuffix}.json`);
+      fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+      console.log(`Results saved to: ${jsonPath}`);
+
+      const historyDir = path.join(resultsDir, 'history');
+      if (!fs.existsSync(historyDir)) fs.mkdirSync(historyDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      fs.writeFileSync(
+        path.join(historyDir, `benchmark${modeSuffix}-${timestamp}.json`),
+        JSON.stringify(report, null, 2)
+      );
+
+      const htmlPath = path.join(plotsDir, `latest${modeSuffix}.html`);
+      generateHTMLReport(report, htmlPath);
+      console.log(`HTML report saved to: ${htmlPath}`);
+
+      const pngPath = path.join(plotsDir, `latest${modeSuffix}.png`);
+      await generatePNGChart(report, pngPath);
+      console.log(`PNG chart saved to: ${pngPath}`);
+
+      console.log(`\nView report: open ${htmlPath}`);
+    } else {
+      // Multiple runtimes: use MultiRuntimeReport format
+      const comparisons = compareMultiRuntime(specs, numpyResults, runtimeResultsMap);
+      const summaries = calculateMultiRuntimeSummaries(comparisons);
+
+      printMultiRuntimeResults(comparisons, summaries);
+
+      const report: MultiRuntimeReport = {
+        timestamp: new Date().toISOString(),
+        environment: {
+          python_version: pythonVersion,
+          numpy_version: numpyVersion,
+          numpyjs_version: packageJson.version,
+          runtimes: runtimeVersions,
+        },
+        results: comparisons,
+        summaries,
+      };
+
+      const jsonPath = options.output
+        ? path.resolve(options.output)
+        : path.join(resultsDir, `latest${modeSuffix}.json`);
+      fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+      console.log(`Results saved to: ${jsonPath}`);
+
+      const historyDir = path.join(resultsDir, 'history');
+      if (!fs.existsSync(historyDir)) fs.mkdirSync(historyDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      fs.writeFileSync(
+        path.join(historyDir, `benchmark${modeSuffix}-${timestamp}.json`),
+        JSON.stringify(report, null, 2)
+      );
+
+      const htmlPath = path.join(plotsDir, `latest${modeSuffix}.html`);
+      generateMultiRuntimeHTMLReport(report, htmlPath);
+      console.log(`HTML report saved to: ${htmlPath}`);
+
+      const pngPath = path.join(plotsDir, `latest${modeSuffix}.png`);
+      await generateMultiRuntimePNGChart(report, pngPath);
+      console.log(`PNG chart saved to: ${pngPath}`);
+
+      console.log(`\nView report: open ${htmlPath}`);
     }
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const historyPath = path.join(historyDir, `benchmark${modeSuffix}-${timestamp}.json`);
-    fs.writeFileSync(historyPath, JSON.stringify(report, null, 2));
-
-    // Generate HTML report
-    const htmlPath = path.join(plotsDir, `latest${modeSuffix}.html`);
-    generateHTMLReport(report, htmlPath);
-    console.log(`HTML report saved to: ${htmlPath}`);
-
-    // Generate PNG chart
-    const pngPath = path.join(plotsDir, `latest${modeSuffix}.png`);
-    await generatePNGChart(report, pngPath);
-    console.log(`PNG chart saved to: ${pngPath}`);
-
-    console.log(`\nView report: open ${htmlPath}`);
   } catch (error) {
-    console.error('❌ Benchmark failed:', error);
+    console.error('Benchmark failed:', error);
     process.exit(1);
   }
 }
@@ -212,6 +305,8 @@ Options:
   --large              Large array benchmarks (3 samples, 200ms/sample, ~10-20min)
                        Arrays: 10K, 316x316 (~100K), 1000x1000 (1M)
   --single-thread      Force NumPy to run single-threaded (OMP/MKL/OpenBLAS)
+  --runtime <list>     Comma-separated runtimes to use (default: auto-detect)
+                       Values: node, deno, bun  (e.g. --runtime node,bun)
   --category <name>    Run only benchmarks in specified category
   --output <path>      Save JSON results to specified path
   --help, -h           Show this help message
@@ -226,13 +321,14 @@ Categories:
   bigint               BigInt (int64/uint64) operations
 
 Examples:
-  npm run bench                           # Run standard benchmarks
+  npm run bench                           # Run standard benchmarks (all detected runtimes)
   npm run bench:quick                     # Run quick benchmarks
-  npm run bench:large                     # Run large array benchmarks
-  npm run bench:quick:single              # Quick benchmarks, NumPy single-threaded
-  npm run bench:single                    # Standard benchmarks, NumPy single-threaded
+  npm run bench -- --runtime node         # Node.js only (legacy behavior)
+  npm run bench -- --runtime node,bun     # Node + Bun
+  npm run bench:node                      # Shorthand: Node only
+  npm run bench:deno                      # Shorthand: Deno only
+  npm run bench:bun                       # Shorthand: Bun only
   npm run bench -- --category linalg      # Run only linalg benchmarks
-  npm run bench -- --output out.json      # Standard benchmarks, save to out.json
 `);
 }
 
