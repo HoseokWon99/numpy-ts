@@ -2369,7 +2369,7 @@ function benchJsBinaryInt(
   switch (opName) {
     case 'add': jsFn = () => { for (let i = 0; i < size; i++) out[i] = a[i] + b[i]; }; break;
     case 'sub': jsFn = () => { for (let i = 0; i < size; i++) out[i] = a[i] - b[i]; }; break;
-    case 'mul': jsFn = () => { for (let i = 0; i < size; i++) out[i] = a[i] * b[i]; }; break;
+    case 'mul': jsFn = () => { for (let i = 0; i < size; i++) out[i] = Math.imul(a[i], b[i]); }; break;
     case 'maximum': jsFn = () => { for (let i = 0; i < size; i++) out[i] = a[i] > b[i] ? a[i] : b[i]; }; break;
     case 'minimum': jsFn = () => { for (let i = 0; i < size; i++) out[i] = a[i] < b[i] ? a[i] : b[i]; }; break;
     default: jsFn = () => {};
