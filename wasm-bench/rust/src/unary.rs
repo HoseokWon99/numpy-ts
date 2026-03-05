@@ -54,12 +54,16 @@ macro_rules! unary_simd_f32 {
             fn inner(input: &[f32], output: &mut [f32]) {
                 let len = input.len();
                 let mut i = 0;
-                while i + 8 <= len {
+                while i + 16 <= len {
                     let v0 = load_f32x4(input, i);
                     let v1 = load_f32x4(input, i + 4);
+                    let v2 = load_f32x4(input, i + 8);
+                    let v3 = load_f32x4(input, i + 12);
                     store_f32x4(output, i, $op(v0));
                     store_f32x4(output, i + 4, $op(v1));
-                    i += 8;
+                    store_f32x4(output, i + 8, $op(v2));
+                    store_f32x4(output, i + 12, $op(v3));
+                    i += 16;
                 }
                 while i + 4 <= len {
                     let v = load_f32x4(input, i);
@@ -238,19 +242,59 @@ pub unsafe extern "C" fn signbit_f32(inp: *const f32, out: *mut f32, n: u32) {
 
 fn abs_c128_inner(input: &[f64], output: &mut [f64]) {
     let n = output.len();
-    for i in 0..n {
+    let mut i = 0;
+    // Process 2 complex numbers at a time using f64x2 SIMD
+    while i + 2 <= n {
+        // Load [re0, im0] and [re1, im1]
+        let v0 = load_f64x2(input, 2 * i);     // [re0, im0]
+        let v1 = load_f64x2(input, 2 * i + 2); // [re1, im1]
+        // Square: [re0², im0²], [re1², im1²]
+        let sq0 = f64x2_mul(v0, v0);
+        let sq1 = f64x2_mul(v1, v1);
+        // Sum re²+im² for each: extract and add
+        let mag0 = f64x2_extract_lane::<0>(sq0) + f64x2_extract_lane::<1>(sq0);
+        let mag1 = f64x2_extract_lane::<0>(sq1) + f64x2_extract_lane::<1>(sq1);
+        // sqrt using SIMD
+        let mags = f64x2_sqrt(f64x2_replace_lane::<1>(f64x2_splat(mag0), mag1));
+        output[i] = f64x2_extract_lane::<0>(mags);
+        output[i + 1] = f64x2_extract_lane::<1>(mags);
+        i += 2;
+    }
+    while i < n {
         let re = input[2 * i];
         let im = input[2 * i + 1];
-        output[i] = libm::sqrt(re * re + im * im);
+        output[i] = f64x2_extract_lane::<0>(f64x2_sqrt(f64x2_splat(re * re + im * im)));
+        i += 1;
     }
 }
 
 fn abs_c64_inner(input: &[f32], output: &mut [f32]) {
     let n = output.len();
-    for i in 0..n {
+    let mut i = 0;
+    // Process 4 complex numbers at a time using f32x4 SIMD
+    while i + 4 <= n {
+        // Load 4 complex pairs = 8 f32s
+        let v0 = load_f32x4(input, 2 * i);     // [re0, im0, re1, im1]
+        let v1 = load_f32x4(input, 2 * i + 4); // [re2, im2, re3, im3]
+        // Square all
+        let sq0 = f32x4_mul(v0, v0); // [re0², im0², re1², im1²]
+        let sq1 = f32x4_mul(v1, v1); // [re2², im2², re3², im3²]
+        // Sum adjacent pairs: re²+im² for each complex number
+        let mag0 = f32x4_extract_lane::<0>(sq0) + f32x4_extract_lane::<1>(sq0);
+        let mag1 = f32x4_extract_lane::<2>(sq0) + f32x4_extract_lane::<3>(sq0);
+        let mag2 = f32x4_extract_lane::<0>(sq1) + f32x4_extract_lane::<1>(sq1);
+        let mag3 = f32x4_extract_lane::<2>(sq1) + f32x4_extract_lane::<3>(sq1);
+        // Pack and sqrt
+        let mags = f32x4(mag0, mag1, mag2, mag3);
+        let result = f32x4_sqrt(mags);
+        store_f32x4(output, i, result);
+        i += 4;
+    }
+    while i < n {
         let re = input[2 * i];
         let im = input[2 * i + 1];
-        output[i] = libm::sqrtf(re * re + im * im);
+        output[i] = f32x4_extract_lane::<0>(f32x4_sqrt(f32x4_splat(re * re + im * im)));
+        i += 1;
     }
 }
 

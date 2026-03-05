@@ -77,38 +77,64 @@ fn powerOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 { return @exp(b * @log(a
 
 // ─── maximum / minimum: propagates NaN (matches NumPy) ──────────────────────
 
-fn maximumOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 { return @max(a, b); }
-fn minimumOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 { return @min(a, b); }
-fn maximumOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 { return @max(a, b); }
-fn minimumOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 { return @min(a, b); }
+// maximum/minimum propagate NaN: if either input is NaN, result is NaN.
+// Use simd.max/min (which use @select to avoid scalarization) + NaN propagation.
+fn maximumOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 {
+    const any_nan = (a != a) | (b != b);
+    const nan_vec: simd.V2f64 = @splat(@as(f64, @bitCast(@as(u64, 0x7FF8000000000000))));
+    return @select(f64, any_nan, nan_vec, simd.max_f64x2(a, b));
+}
+fn minimumOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 {
+    const any_nan = (a != a) | (b != b);
+    const nan_vec: simd.V2f64 = @splat(@as(f64, @bitCast(@as(u64, 0x7FF8000000000000))));
+    return @select(f64, any_nan, nan_vec, simd.min_f64x2(a, b));
+}
+fn maximumOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 {
+    const any_nan = (a != a) | (b != b);
+    const nan_vec: simd.V4f32 = @splat(@as(f32, @bitCast(@as(u32, 0x7FC00000))));
+    return @select(f32, any_nan, nan_vec, simd.max_f32x4(a, b));
+}
+fn minimumOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 {
+    const any_nan = (a != a) | (b != b);
+    const nan_vec: simd.V4f32 = @splat(@as(f32, @bitCast(@as(u32, 0x7FC00000))));
+    return @select(f32, any_nan, nan_vec, simd.min_f32x4(a, b));
+}
 
 // ─── fmax / fmin: ignores NaN (returns the non-NaN value) ───────────────────
 
 fn fmaxOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 {
     const a_nan = a != a;
     const b_nan = b != b;
-    return @select(f64, a_nan, b, @select(f64, b_nan, a, @max(a, b)));
+    return @select(f64, a_nan, b, @select(f64, b_nan, a, simd.max_f64x2(a, b)));
 }
 fn fminOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 {
     const a_nan = a != a;
     const b_nan = b != b;
-    return @select(f64, a_nan, b, @select(f64, b_nan, a, @min(a, b)));
+    return @select(f64, a_nan, b, @select(f64, b_nan, a, simd.min_f64x2(a, b)));
 }
 fn fmaxOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 {
     const a_nan = a != a;
     const b_nan = b != b;
-    return @select(f32, a_nan, b, @select(f32, b_nan, a, @max(a, b)));
+    return @select(f32, a_nan, b, @select(f32, b_nan, a, simd.max_f32x4(a, b)));
 }
 fn fminOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 {
     const a_nan = a != a;
     const b_nan = b != b;
-    return @select(f32, a_nan, b, @select(f32, b_nan, a, @min(a, b)));
+    return @select(f32, a_nan, b, @select(f32, b_nan, a, simd.min_f32x4(a, b)));
 }
 
 // ─── logaddexp: log(exp(a) + exp(b)) ────────────────────────────────────────
 
 fn logaddexpOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 { return @log(@exp(a) + @exp(b)); }
 fn logaddexpOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 { return @log(@exp(a) + @exp(b)); }
+
+// Scalar logaddexp for better WASM performance (builtins scalarize poorly)
+fn logaddexpScalar_f64(av: f64, bv: f64) f64 {
+    return @log(@exp(av) + @exp(bv));
+}
+fn logaddexpScalar_f32(av: f32, bv: f32) f32 {
+    return @log(@exp(av) + @exp(bv));
+}
 
 // ─── logical_and: (a != 0 && b != 0) ? 1.0 : 0.0 ──────────────────────────
 
@@ -128,16 +154,17 @@ fn logicalAndOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 {
 fn logicalXorOp_f64(a: simd.V2f64, b: simd.V2f64) simd.V2f64 {
     const zero: simd.V2f64 = @splat(0.0);
     const one: simd.V2f64 = @splat(1.0);
-    const a_bool = @select(f64, a != zero, one, zero);
-    const b_bool = @select(f64, b != zero, one, zero);
-    return @select(f64, a_bool != b_bool, one, zero);
+    // XOR the raw comparison masks directly (avoids intermediate float conversion)
+    const a_nz = a != zero;
+    const b_nz = b != zero;
+    return @select(f64, a_nz != b_nz, one, zero);
 }
 fn logicalXorOp_f32(a: simd.V4f32, b: simd.V4f32) simd.V4f32 {
     const zero: simd.V4f32 = @splat(0.0);
     const one: simd.V4f32 = @splat(1.0);
-    const a_bool = @select(f32, a != zero, one, zero);
-    const b_bool = @select(f32, b != zero, one, zero);
-    return @select(f32, a_bool != b_bool, one, zero);
+    const a_nz = a != zero;
+    const b_nz = b != zero;
+    return @select(f32, a_nz != b_nz, one, zero);
 }
 
 // ─── mod (floored remainder): a - floor(a/b) * b ────────────────────────
@@ -178,7 +205,19 @@ export fn maximum_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void 
 export fn minimum_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, minimumOp_f64); }
 export fn fmax_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, fmaxOp_f64); }
 export fn fmin_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, fminOp_f64); }
-export fn logaddexp_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, logaddexpOp_f64); }
+export fn logaddexp_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void {
+    const len = @as(usize, n);
+    var i: usize = 0;
+    while (i + 4 <= len) : (i += 4) {
+        o[i] = logaddexpScalar_f64(a[i], b[i]);
+        o[i + 1] = logaddexpScalar_f64(a[i + 1], b[i + 1]);
+        o[i + 2] = logaddexpScalar_f64(a[i + 2], b[i + 2]);
+        o[i + 3] = logaddexpScalar_f64(a[i + 3], b[i + 3]);
+    }
+    while (i < len) : (i += 1) {
+        o[i] = logaddexpScalar_f64(a[i], b[i]);
+    }
+}
 export fn logical_and_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, logicalAndOp_f64); }
 export fn logical_xor_f64(a: [*]const f64, b: [*]const f64, o: [*]f64, n: u32) void { binaryV2_f64(a, b, o, n, logicalXorOp_f64); }
 
@@ -189,7 +228,19 @@ export fn maximum_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void 
 export fn minimum_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, minimumOp_f32); }
 export fn fmax_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, fmaxOp_f32); }
 export fn fmin_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, fminOp_f32); }
-export fn logaddexp_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, logaddexpOp_f32); }
+export fn logaddexp_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void {
+    const len = @as(usize, n);
+    var i: usize = 0;
+    while (i + 4 <= len) : (i += 4) {
+        o[i] = logaddexpScalar_f32(a[i], b[i]);
+        o[i + 1] = logaddexpScalar_f32(a[i + 1], b[i + 1]);
+        o[i + 2] = logaddexpScalar_f32(a[i + 2], b[i + 2]);
+        o[i + 3] = logaddexpScalar_f32(a[i + 3], b[i + 3]);
+    }
+    while (i < len) : (i += 1) {
+        o[i] = logaddexpScalar_f32(a[i], b[i]);
+    }
+}
 export fn logical_and_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, logicalAndOp_f32); }
 export fn logical_xor_f32(a: [*]const f32, b: [*]const f32, o: [*]f32, n: u32) void { binaryV4_f32(a, b, o, n, logicalXorOp_f32); }
 

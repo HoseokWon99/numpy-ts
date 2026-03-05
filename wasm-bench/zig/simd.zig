@@ -57,3 +57,19 @@ pub inline fn load16_i8(ptr: [*]const i8, i: usize) V16i8 {
 pub inline fn store16_i8(ptr: [*]i8, i: usize, v: V16i8) void {
     @as(*align(1) V16i8, @ptrCast(ptr + i)).* = v;
 }
+
+// ─── WASM SIMD intrinsics (bypass Zig's strict @max/@min semantics) ─────
+// Zig's @max/@min follow IEEE 754-2019 (llvm.maximum/llvm.minimum) which LLVM
+// scalarizes on WASM because f64x2.max has different NaN payload semantics.
+// These call the WASM-specific LLVM intrinsics that emit native f64x2.max etc.
+
+// Use @select with vector comparison to avoid @max/@min scalarization.
+// @max/@min use IEEE 754-2019 semantics (llvm.maximum) which gets scalarized
+// on WASM because f64x2.max has different NaN behavior. @select compiles to
+// f64x2.gt + v128.bitselect (2 SIMD ops) instead of per-lane scalar calls.
+// NaN behavior doesn't matter here since callers wrap with their own NaN guards.
+
+pub inline fn max_f64x2(a: V2f64, b: V2f64) V2f64 { return @select(f64, a > b, a, b); }
+pub inline fn min_f64x2(a: V2f64, b: V2f64) V2f64 { return @select(f64, a < b, a, b); }
+pub inline fn max_f32x4(a: V4f32, b: V4f32) V4f32 { return @select(f32, a > b, a, b); }
+pub inline fn min_f32x4(a: V4f32, b: V4f32) V4f32 { return @select(f32, a < b, a, b); }

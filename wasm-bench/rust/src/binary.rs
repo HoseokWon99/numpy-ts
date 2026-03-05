@@ -203,10 +203,28 @@ binary_simd_f32!(logical_xor_f32, logical_xor_v128_f32);
 // ─── power: a^b (scalar, uses libm) ────────────────────────────────────────
 
 fn power_f64_inner(sa: &[f64], sb: &[f64], so: &mut [f64]) {
-    for i in 0..sa.len() { so[i] = libm::pow(sa[i], sb[i]); }
+    let len = sa.len();
+    let mut i = 0;
+    while i + 4 <= len {
+        so[i] = libm::pow(sa[i], sb[i]);
+        so[i + 1] = libm::pow(sa[i + 1], sb[i + 1]);
+        so[i + 2] = libm::pow(sa[i + 2], sb[i + 2]);
+        so[i + 3] = libm::pow(sa[i + 3], sb[i + 3]);
+        i += 4;
+    }
+    while i < len { so[i] = libm::pow(sa[i], sb[i]); i += 1; }
 }
 fn power_f32_inner(sa: &[f32], sb: &[f32], so: &mut [f32]) {
-    for i in 0..sa.len() { so[i] = libm::powf(sa[i], sb[i]); }
+    let len = sa.len();
+    let mut i = 0;
+    while i + 4 <= len {
+        so[i] = libm::powf(sa[i], sb[i]);
+        so[i + 1] = libm::powf(sa[i + 1], sb[i + 1]);
+        so[i + 2] = libm::powf(sa[i + 2], sb[i + 2]);
+        so[i + 3] = libm::powf(sa[i + 3], sb[i + 3]);
+        i += 4;
+    }
+    while i < len { so[i] = libm::powf(sa[i], sb[i]); i += 1; }
 }
 
 #[no_mangle]

@@ -34,6 +34,9 @@ const TILE_F32: usize = 64;
 
 #[cfg(feature = "kern-matmul")]
 fn matmul_f64_inner(a: &[f64], b: &[f64], c: &mut [f64], m: usize, n: usize, k: usize) {
+    use core::arch::wasm32::*;
+    use crate::simd::{load_f64x2, store_f64x2};
+
     for v in c.iter_mut() { *v = 0.0; }
 
     let mut ii = 0;
@@ -50,10 +53,21 @@ fn matmul_f64_inner(a: &[f64], b: &[f64], c: &mut [f64], m: usize, n: usize, k: 
                 while i < i_end {
                     let mut ki = kk;
                     while ki < k_end {
-                        let a_ik = a[i * k + ki];
+                        let a_ik = f64x2_splat(a[i * k + ki]);
+                        let c_off = i * n;
+                        let b_off = ki * n;
                         let mut j = jj;
+                        // SIMD inner loop: 2 f64s at a time
+                        while j + 2 <= j_end {
+                            let cv = load_f64x2(c, c_off + j);
+                            let bv = load_f64x2(b, b_off + j);
+                            store_f64x2(c, c_off + j, f64x2_add(cv, f64x2_mul(a_ik, bv)));
+                            j += 2;
+                        }
+                        // Scalar remainder
+                        let a_ik_s = a[i * k + ki];
                         while j < j_end {
-                            c[i * n + j] += a_ik * b[ki * n + j];
+                            c[i * n + j] += a_ik_s * b[ki * n + j];
                             j += 1;
                         }
                         ki += 1;
@@ -87,6 +101,9 @@ pub unsafe extern "C" fn matmul_f64(
 
 #[cfg(feature = "kern-matmul")]
 fn matmul_f32_inner(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
+    use core::arch::wasm32::*;
+    use crate::simd::{load_f32x4, store_f32x4};
+
     for v in c.iter_mut() { *v = 0.0; }
 
     let mut ii = 0;
@@ -103,10 +120,21 @@ fn matmul_f32_inner(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: 
                 while i < i_end {
                     let mut ki = kk;
                     while ki < k_end {
-                        let a_ik = a[i * k + ki];
+                        let a_ik = f32x4_splat(a[i * k + ki]);
+                        let c_off = i * n;
+                        let b_off = ki * n;
                         let mut j = jj;
+                        // SIMD inner loop: 4 f32s at a time
+                        while j + 4 <= j_end {
+                            let cv = load_f32x4(c, c_off + j);
+                            let bv = load_f32x4(b, b_off + j);
+                            store_f32x4(c, c_off + j, f32x4_add(cv, f32x4_mul(a_ik, bv)));
+                            j += 4;
+                        }
+                        // Scalar remainder
+                        let a_ik_s = a[i * k + ki];
                         while j < j_end {
-                            c[i * n + j] += a_ik * b[ki * n + j];
+                            c[i * n + j] += a_ik_s * b[ki * n + j];
                             j += 1;
                         }
                         ki += 1;

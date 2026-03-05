@@ -4182,6 +4182,13 @@ function generateHTML(report: BenchmarkReport, modeLabel: string, basename: stri
   .size-legend-item { display: flex; align-items: center; gap: 5px; }
   .size-legend-swatch { width: 12px; height: 12px; border-radius: 2px; }
   .size-legend-swatch.raw { opacity: 0.35; }
+  .dtype-details { margin-bottom: 32px; }
+  .dtype-toggle { cursor: pointer; color: #58a6ff; font-size: 14px; padding: 8px 0; user-select: none; }
+  .dtype-toggle:hover { text-decoration: underline; }
+  .dtype-summary { margin-top: 16px; }
+  .cat-avg { font-size: 13px; font-weight: 400; margin-left: 12px; }
+  .cat-avg-zig { color: #58a6ff; margin-right: 10px; }
+  .cat-avg-rust { color: #f0883e; }
 </style>
 </head>
 <body>
@@ -4218,99 +4225,141 @@ const container = document.getElementById('charts');
 
 // ── Summary Section ──
 {
-  // Collect all speedup values (f64 only for apples-to-apples comparison)
-  const zigVals = [];
-  const rustVals = [];
-  const h2hVals = []; // zig/rust ratio (>1 = zig faster)
-  const details = []; // {cat, label, zig64, rust64}
-
-  for (const cat of DATA) {
-    for (const e of cat.entries) {
-      const zigF64 = e.bars.find(b => b.impl === 'Zig (f64)');
-      const rustF64 = e.bars.find(b => b.impl === 'Rust (f64)');
-      if (zigF64 && rustF64 && zigF64.val > 0 && rustF64.val > 0) {
-        zigVals.push({ val: zigF64.val, cat: cat.cat, label: e.label });
-        rustVals.push({ val: rustF64.val, cat: cat.cat, label: e.label });
-        h2hVals.push({ val: zigF64.val / rustF64.val, cat: cat.cat, label: e.label });
-        details.push({ cat: cat.cat, label: e.label, zig64: zigF64.val, rust64: rustF64.val });
-      }
-    }
-  }
-
-  const avg = arr => arr.reduce((s, x) => s + x.val, 0) / arr.length;
-  const geoMean = arr => Math.pow(arr.reduce((p, x) => p * x.val, 1), 1 / arr.length);
+  const fmt = v => v.toFixed(2) + '\\u00d7';
+  const fmtDetail = d => d.cat + ' ' + d.label;
+  const geoMean = arr => arr.length ? Math.exp(arr.reduce((s, x) => s + Math.log(x.val), 0) / arr.length) : 1;
   const best = arr => arr.reduce((a, b) => a.val > b.val ? a : b);
   const worst = arr => arr.reduce((a, b) => a.val < b.val ? a : b);
 
-  const zigGeo = geoMean(zigVals);
-  const rustGeo = geoMean(rustVals);
-  const zigBest = best(zigVals);
-  const zigWorst = worst(zigVals);
-  const rustBest = best(rustVals);
-  const rustWorst = worst(rustVals);
-
-  const h2hGeo = geoMean(h2hVals);
-  const h2hBest = best(h2hVals); // most zig-favoring
-  const h2hWorst = worst(h2hVals); // most rust-favoring
-
-  // Count wins
-  let zigWins = 0, rustWins = 0, ties = 0;
-  for (const d of details) {
-    if (d.zig64 > d.rust64 * 1.01) zigWins++;
-    else if (d.rust64 > d.zig64 * 1.01) rustWins++;
-    else ties++;
+  // ── Collect per-dtype stats ──
+  // Discover all dtypes present in bars
+  const allDtypes = new Set();
+  for (const cat of DATA) for (const e of cat.entries) for (const b of e.bars) {
+    const m = b.impl.match(/\\(([^)]+)\\)/);
+    if (m) allDtypes.add(m[1]);
   }
-  const total = zigWins + rustWins + ties;
+  const dtypeOrder = ['f64','f32','i32','i16','i8','c128','c64'];
+  const dtypes = dtypeOrder.filter(d => allDtypes.has(d));
 
-  const fmt = v => v.toFixed(2) + '\\u00d7';
-  const fmtDetail = d => d.cat + ' ' + d.label;
+  // Collect global (all dtypes) and per-dtype zig/rust/h2h values
+  function collectForDtype(dtype) {
+    const zigVals = [], rustVals = [], h2hVals = [];
+    for (const cat of DATA) {
+      for (const e of cat.entries) {
+        const zigBar = e.bars.find(b => b.impl === 'Zig (' + dtype + ')');
+        const rustBar = e.bars.find(b => b.impl === 'Rust (' + dtype + ')');
+        if (zigBar && rustBar && zigBar.val > 0 && rustBar.val > 0) {
+          zigVals.push({ val: zigBar.val, cat: cat.cat, label: e.label });
+          rustVals.push({ val: rustBar.val, cat: cat.cat, label: e.label });
+          h2hVals.push({ val: zigBar.val / rustBar.val, cat: cat.cat, label: e.label });
+        }
+      }
+    }
+    return { zigVals, rustVals, h2hVals };
+  }
 
-  let summaryHtml = '<div class="summary"><h2>Summary (f64 vs JS baseline)</h2>';
-  summaryHtml += '<div class="summary-grid">';
+  // Global (all dtypes combined)
+  const globalZig = [], globalRust = [], globalH2h = [];
+  for (const d of dtypes) {
+    const { zigVals, rustVals, h2hVals } = collectForDtype(d);
+    globalZig.push(...zigVals);
+    globalRust.push(...rustVals);
+    globalH2h.push(...h2hVals);
+  }
 
-  // Zig card
-  summaryHtml += '<div class="summary-card"><h3 style="color:#58a6ff">Zig vs JS</h3>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Geo mean speedup</span><span class="summary-value zig">' + fmt(zigGeo) + '</span></div>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Best case</span><span class="summary-value zig">' + fmt(zigBest.val) + '</span></div>';
-  summaryHtml += '<div class="summary-detail">' + fmtDetail(zigBest) + '</div>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Worst case</span><span class="summary-value zig">' + fmt(zigWorst.val) + '</span></div>';
-  summaryHtml += '<div class="summary-detail">' + fmtDetail(zigWorst) + '</div>';
-  summaryHtml += '</div>';
+  function buildSummaryCard(title, zigVals, rustVals, h2hVals, isGlobal) {
+    if (!zigVals.length) return '';
+    const zigGeo = geoMean(zigVals), rustGeo = geoMean(rustVals), h2hGeo = geoMean(h2hVals);
+    const zigBest = best(zigVals), zigWorst = worst(zigVals);
+    const rustBest = best(rustVals), rustWorst = worst(rustVals);
+    const h2hBest = best(h2hVals), h2hWorst = worst(h2hVals);
 
-  // Rust card
-  summaryHtml += '<div class="summary-card"><h3 style="color:#f0883e">Rust vs JS</h3>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Geo mean speedup</span><span class="summary-value rust">' + fmt(rustGeo) + '</span></div>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Best case</span><span class="summary-value rust">' + fmt(rustBest.val) + '</span></div>';
-  summaryHtml += '<div class="summary-detail">' + fmtDetail(rustBest) + '</div>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Worst case</span><span class="summary-value rust">' + fmt(rustWorst.val) + '</span></div>';
-  summaryHtml += '<div class="summary-detail">' + fmtDetail(rustWorst) + '</div>';
-  summaryHtml += '</div>';
+    let zigWins = 0, rustWins = 0, ties = 0;
+    for (const h of h2hVals) {
+      if (h.val > 1.01) zigWins++;
+      else if (h.val < 0.99) rustWins++;
+      else ties++;
+    }
+    const total = zigWins + rustWins + ties;
 
-  // Head-to-head card
-  const h2hWinner = h2hGeo > 1.01 ? 'zig' : h2hGeo < 0.99 ? 'rust' : 'neutral';
-  const h2hLabel = h2hGeo >= 1 ? 'Zig ' + fmt(h2hGeo) + ' faster' : 'Rust ' + fmt(1/h2hGeo) + ' faster';
-  summaryHtml += '<div class="summary-card"><h3>Zig vs Rust (head-to-head)</h3>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Geo mean</span><span class="summary-value ' + h2hWinner + '">' + h2hLabel + '</span></div>';
+    let html = '<div class="summary' + (isGlobal ? '' : ' dtype-summary') + '">';
+    html += '<h2>' + title + '</h2>';
+    html += '<div class="summary-grid">';
 
-  // Win/loss bar
-  const zigPct = (zigWins / total * 100).toFixed(0);
-  const rustPct = (rustWins / total * 100).toFixed(0);
-  const tiePct = (ties / total * 100).toFixed(0);
-  summaryHtml += '<div class="h2h-row" style="margin-top:12px"><div class="h2h-bar-track">';
-  if (zigWins > 0) summaryHtml += '<div class="h2h-segment" style="width:' + zigPct + '%;background:#58a6ff">Zig ' + zigWins + '</div>';
-  if (ties > 0) summaryHtml += '<div class="h2h-segment" style="width:' + tiePct + '%;background:#30363d">Tie ' + ties + '</div>';
-  if (rustWins > 0) summaryHtml += '<div class="h2h-segment" style="width:' + rustPct + '%;background:#f0883e">Rust ' + rustWins + '</div>';
-  summaryHtml += '</div></div>';
+    // Zig card
+    html += '<div class="summary-card"><h3 style="color:#58a6ff">Zig vs JS</h3>';
+    html += '<div class="summary-stat"><span class="summary-label">Geo mean speedup</span><span class="summary-value zig">' + fmt(zigGeo) + '</span></div>';
+    html += '<div class="summary-stat"><span class="summary-label">Best</span><span class="summary-value zig">' + fmt(zigBest.val) + '</span></div>';
+    html += '<div class="summary-detail">' + fmtDetail(zigBest) + '</div>';
+    html += '<div class="summary-stat"><span class="summary-label">Worst</span><span class="summary-value zig">' + fmt(zigWorst.val) + '</span></div>';
+    html += '<div class="summary-detail">' + fmtDetail(zigWorst) + '</div>';
+    html += '</div>';
 
-  // Best/worst h2h
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Zig best margin</span><span class="summary-value zig">' + fmt(h2hBest.val) + '</span></div>';
-  summaryHtml += '<div class="summary-detail">' + fmtDetail(h2hBest) + '</div>';
-  summaryHtml += '<div class="summary-stat"><span class="summary-label">Rust best margin</span><span class="summary-value rust">' + fmt(1/h2hWorst.val) + '</span></div>';
-  summaryHtml += '<div class="summary-detail">' + fmtDetail(h2hWorst) + '</div>';
-  summaryHtml += '</div>';
+    // Rust card
+    html += '<div class="summary-card"><h3 style="color:#f0883e">Rust vs JS</h3>';
+    html += '<div class="summary-stat"><span class="summary-label">Geo mean speedup</span><span class="summary-value rust">' + fmt(rustGeo) + '</span></div>';
+    html += '<div class="summary-stat"><span class="summary-label">Best</span><span class="summary-value rust">' + fmt(rustBest.val) + '</span></div>';
+    html += '<div class="summary-detail">' + fmtDetail(rustBest) + '</div>';
+    html += '<div class="summary-stat"><span class="summary-label">Worst</span><span class="summary-value rust">' + fmt(rustWorst.val) + '</span></div>';
+    html += '<div class="summary-detail">' + fmtDetail(rustWorst) + '</div>';
+    html += '</div>';
 
-  summaryHtml += '</div></div>';
+    // Head-to-head card
+    const h2hWinner = h2hGeo > 1.01 ? 'zig' : h2hGeo < 0.99 ? 'rust' : 'neutral';
+    const h2hLabel = h2hGeo >= 1 ? 'Zig ' + fmt(h2hGeo) + ' faster' : 'Rust ' + fmt(1/h2hGeo) + ' faster';
+    html += '<div class="summary-card"><h3>Head-to-head</h3>';
+    html += '<div class="summary-stat"><span class="summary-label">Geo mean</span><span class="summary-value ' + h2hWinner + '">' + h2hLabel + '</span></div>';
+
+    // Win/loss bar
+    if (total > 0) {
+      const zp = (zigWins / total * 100).toFixed(0);
+      const rp = (rustWins / total * 100).toFixed(0);
+      const tp = (ties / total * 100).toFixed(0);
+      html += '<div class="h2h-row" style="margin-top:12px"><div class="h2h-bar-track">';
+      if (zigWins > 0) html += '<div class="h2h-segment" style="width:' + zp + '%;background:#58a6ff">Zig ' + zigWins + '</div>';
+      if (ties > 0) html += '<div class="h2h-segment" style="width:' + tp + '%;background:#30363d">Tie ' + ties + '</div>';
+      if (rustWins > 0) html += '<div class="h2h-segment" style="width:' + rp + '%;background:#f0883e">Rust ' + rustWins + '</div>';
+      html += '</div></div>';
+    }
+
+    html += '<div class="summary-stat"><span class="summary-label">Zig best margin</span><span class="summary-value zig">' + fmt(h2hBest.val) + '</span></div>';
+    html += '<div class="summary-detail">' + fmtDetail(h2hBest) + '</div>';
+    html += '<div class="summary-stat"><span class="summary-label">Rust best margin</span><span class="summary-value rust">' + fmt(1/h2hWorst.val) + '</span></div>';
+    html += '<div class="summary-detail">' + fmtDetail(h2hWorst) + '</div>';
+    html += '</div>';
+
+    html += '</div></div>';
+    return html;
+  }
+
+  // ── Render global summary ──
+  let summaryHtml = buildSummaryCard('Summary — All dtypes (' + globalZig.length + ' benchmarks)', globalZig, globalRust, globalH2h, true);
+
+  // ── Render per-dtype summaries (collapsed by default) ──
+  summaryHtml += '<details class="dtype-details"><summary class="dtype-toggle">Per-dtype breakdown (' + dtypes.join(', ') + ')</summary>';
+  for (const d of dtypes) {
+    const { zigVals, rustVals, h2hVals } = collectForDtype(d);
+    if (zigVals.length > 0) {
+      summaryHtml += buildSummaryCard(d + ' (' + zigVals.length + ' benchmarks)', zigVals, rustVals, h2hVals, false);
+    }
+  }
+  summaryHtml += '</details>';
+
   container.insertAdjacentHTML('beforeend', summaryHtml);
+}
+
+// ── Compute per-category average speedups for chart headings ──
+function catAvgSpeedups(cat) {
+  // Gather all Zig and Rust speedup values across all sizes/dtypes
+  const zigAll = [], rustAll = [];
+  for (const e of cat.entries) {
+    for (const b of e.bars) {
+      if (b.val > 0 && b.impl.startsWith('Zig')) zigAll.push(b.val);
+      if (b.val > 0 && b.impl.startsWith('Rust')) rustAll.push(b.val);
+    }
+  }
+  const geo = arr => arr.length ? Math.exp(arr.reduce((s, v) => s + Math.log(v), 0) / arr.length) : 0;
+  return { zigGeo: geo(zigAll), rustGeo: geo(rustAll) };
 }
 
 for (const cat of DATA) {
@@ -4321,7 +4370,16 @@ for (const cat of DATA) {
   const scale = maxVal * 1.25;
   const section = document.createElement('div');
   section.className = 'category';
-  let html = \`<h2>\${cat.cat}</h2>\`;
+  const avgSp = catAvgSpeedups(cat);
+  const zigAvgStr = avgSp.zigGeo > 0 ? avgSp.zigGeo.toFixed(1) + '\\u00d7' : '';
+  const rustAvgStr = avgSp.rustGeo > 0 ? avgSp.rustGeo.toFixed(1) + '\\u00d7' : '';
+  const avgBadge = (zigAvgStr || rustAvgStr)
+    ? ' <span class="cat-avg">'
+      + (zigAvgStr ? '<span class="cat-avg-zig">Zig ' + zigAvgStr + '</span>' : '')
+      + (rustAvgStr ? '<span class="cat-avg-rust">Rust ' + rustAvgStr + '</span>' : '')
+      + '</span>'
+    : '';
+  let html = \`<h2>\${cat.cat}\${avgBadge}</h2>\`;
   for (const e of cat.entries) {
     html += \`<div class="chart-row"><div class="chart-label">\${e.label}</div><div class="chart-area">\`;
     const baselinePct = (1 / scale) * 100;
@@ -4436,6 +4494,27 @@ async function loadCategoryWasms(): Promise<Record<string, WasmKernels[]>> {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // Parse --only / --cat flag: comma-separated category names, supports prefix matching
+  // Usage: tsx harness/bench.ts --only sort,matmul
+  const onlyIdx = process.argv.findIndex(a => a === '--only' || a === '--cat');
+  const onlyFilter = onlyIdx >= 0 && process.argv[onlyIdx + 1]
+    ? process.argv[onlyIdx + 1].split(',').map(s => s.trim().toLowerCase())
+    : null;
+  const allCatNames = CATEGORIES.map(c => c.name);
+  const filteredCategories = onlyFilter
+    ? CATEGORIES.filter(c => onlyFilter.some(f => c.name === f || c.name.startsWith(f)))
+    : CATEGORIES;
+  if (onlyFilter) {
+    const matched = filteredCategories.map(c => c.name);
+    const unmatched = onlyFilter.filter(f => !matched.some(m => m === f || m.startsWith(f)));
+    if (unmatched.length) {
+      console.error(`Unknown categories: ${unmatched.join(', ')}`);
+      console.error(`Available: ${allCatNames.join(', ')}`);
+      process.exit(1);
+    }
+    console.log(`\nFiltered to: ${matched.join(', ')}\n`);
+  }
+
   console.log('\nWASM Multi-Category Benchmark');
   console.log('=============================\n');
 
@@ -4471,7 +4550,7 @@ async function main() {
   const e2eReport: BenchmarkReport = { timestamp: new Date().toISOString(), environment: env, categories: {}, binarySizes: [] };
 
   // Run benchmarks per category
-  for (const cat of CATEGORIES) {
+  for (const cat of filteredCategories) {
     const wasmModules = wasmByCategory[cat.name] ?? [];
     console.log(`\nBenchmarking: ${cat.name}...`);
     const kernelResults: TimingResult[] = [];

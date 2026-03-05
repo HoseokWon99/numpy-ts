@@ -612,6 +612,7 @@ export fn matmul_c128(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, K: u3
 }
 
 // matmul_c64: C[M×N] = A[M×K] × B[K×N], complex f32
+// SIMD: process 2 complex output elements at a time using f32x4
 export fn matmul_c64(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, K: u32, N: u32) void {
     const m = @as(usize, M);
     const k = @as(usize, K);
@@ -631,17 +632,36 @@ export fn matmul_c64(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, K: u32
                 const je = if (jj + T < nn) jj + T else nn;
                 var ri: usize = ii;
                 while (ri < ie) : (ri += 1) {
+                    const c_row = c + ri * nn * 2;
                     var rk: usize = kk;
                     while (rk < ke) : (rk += 1) {
-                        const a_re = a[(ri * k + rk) * 2];
-                        const a_im = a[(ri * k + rk) * 2 + 1];
+                        const a_base = (ri * k + rk) * 2;
+                        const a_re = a[a_base];
+                        const a_im = a[a_base + 1];
+                        const b_row = b + rk * nn * 2;
+                        // Splat a_re and a_im across f32x4 for SIMD complex mul
+                        const are_v: simd.V4f32 = @splat(a_re);
+                        const aim_v: simd.V4f32 = @splat(a_im);
+                        const sign: simd.V4f32 = .{ -1.0, 1.0, -1.0, 1.0 };
+                        // Process 2 complex outputs at a time (4 f32s)
                         var j: usize = jj;
+                        while (j + 2 <= je) : (j += 2) {
+                            const bv = simd.load4_f32(b_row, j * 2); // [br0,bi0,br1,bi1]
+                            const cv = simd.load4_f32(c_row, j * 2);
+                            // a_swap: [ai, ar, ai, ar] pattern for cross-multiply
+                            const b_swap: simd.V4f32 = .{ bv[1], bv[0], bv[3], bv[2] };
+                            // are * [br0,bi0,br1,bi1] = [are*br0, are*bi0, are*br1, are*bi1]
+                            // aim * [bi0,br0,bi1,br1] * [-1,1,-1,1] = [-aim*bi0, aim*br0, -aim*bi1, aim*br1]
+                            simd.store4_f32(c_row, j * 2, cv + are_v * bv + aim_v * b_swap * sign);
+                        }
+                        // Scalar remainder
                         while (j < je) : (j += 1) {
-                            const b_re = b[(rk * nn + j) * 2];
-                            const b_im = b[(rk * nn + j) * 2 + 1];
-                            const ci = (ri * nn + j) * 2;
-                            c[ci] += a_re * b_re - a_im * b_im;
-                            c[ci + 1] += a_re * b_im + a_im * b_re;
+                            const bj = j * 2;
+                            const b_re = b_row[bj];
+                            const b_im = b_row[bj + 1];
+                            const cj = j * 2;
+                            c_row[cj] += a_re * b_re - a_im * b_im;
+                            c_row[cj + 1] += a_re * b_im + a_im * b_re;
                         }
                     }
                 }

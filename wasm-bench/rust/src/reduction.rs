@@ -11,7 +11,18 @@ fn sum_f64_inner(data: &[f64]) -> f64 {
     let len = data.len();
     let mut acc0 = f64x2_splat(0.0);
     let mut acc1 = f64x2_splat(0.0);
+    let mut acc2 = f64x2_splat(0.0);
+    let mut acc3 = f64x2_splat(0.0);
     let mut i = 0;
+    while i + 8 <= len {
+        acc0 = f64x2_add(acc0, load_f64x2(data, i));
+        acc1 = f64x2_add(acc1, load_f64x2(data, i + 2));
+        acc2 = f64x2_add(acc2, load_f64x2(data, i + 4));
+        acc3 = f64x2_add(acc3, load_f64x2(data, i + 6));
+        i += 8;
+    }
+    acc0 = f64x2_add(acc0, acc2);
+    acc1 = f64x2_add(acc1, acc3);
     while i + 4 <= len {
         acc0 = f64x2_add(acc0, load_f64x2(data, i));
         acc1 = f64x2_add(acc1, load_f64x2(data, i + 2));
@@ -30,14 +41,28 @@ fn sum_f64_inner(data: &[f64]) -> f64 {
 fn max_f64_inner(data: &[f64]) -> f64 {
     let len = data.len();
     if len == 0 { return f64::NEG_INFINITY; }
-    let mut acc = f64x2_splat(data[0]);
+    let init = f64x2_splat(data[0]);
+    let mut acc0 = init;
+    let mut acc1 = init;
+    let mut acc2 = init;
+    let mut acc3 = init;
     let mut i = 0;
+    while i + 8 <= len {
+        acc0 = f64x2_max(acc0, load_f64x2(data, i));
+        acc1 = f64x2_max(acc1, load_f64x2(data, i + 2));
+        acc2 = f64x2_max(acc2, load_f64x2(data, i + 4));
+        acc3 = f64x2_max(acc3, load_f64x2(data, i + 6));
+        i += 8;
+    }
+    acc0 = f64x2_max(acc0, acc2);
+    acc1 = f64x2_max(acc1, acc3);
     while i + 2 <= len {
-        acc = f64x2_max(acc, load_f64x2(data, i));
+        acc0 = f64x2_max(acc0, load_f64x2(data, i));
         i += 2;
     }
-    let a = f64x2_extract_lane::<0>(acc);
-    let b = f64x2_extract_lane::<1>(acc);
+    acc0 = f64x2_max(acc0, acc1);
+    let a = f64x2_extract_lane::<0>(acc0);
+    let b = f64x2_extract_lane::<1>(acc0);
     let mut result = if a > b { a } else { b };
     while i < len { let v = data[i]; if v > result { result = v; } i += 1; }
     result
@@ -46,14 +71,28 @@ fn max_f64_inner(data: &[f64]) -> f64 {
 fn min_f64_inner(data: &[f64]) -> f64 {
     let len = data.len();
     if len == 0 { return f64::INFINITY; }
-    let mut acc = f64x2_splat(data[0]);
+    let init = f64x2_splat(data[0]);
+    let mut acc0 = init;
+    let mut acc1 = init;
+    let mut acc2 = init;
+    let mut acc3 = init;
     let mut i = 0;
+    while i + 8 <= len {
+        acc0 = f64x2_min(acc0, load_f64x2(data, i));
+        acc1 = f64x2_min(acc1, load_f64x2(data, i + 2));
+        acc2 = f64x2_min(acc2, load_f64x2(data, i + 4));
+        acc3 = f64x2_min(acc3, load_f64x2(data, i + 6));
+        i += 8;
+    }
+    acc0 = f64x2_min(acc0, acc2);
+    acc1 = f64x2_min(acc1, acc3);
     while i + 2 <= len {
-        acc = f64x2_min(acc, load_f64x2(data, i));
+        acc0 = f64x2_min(acc0, load_f64x2(data, i));
         i += 2;
     }
-    let a = f64x2_extract_lane::<0>(acc);
-    let b = f64x2_extract_lane::<1>(acc);
+    acc0 = f64x2_min(acc0, acc1);
+    let a = f64x2_extract_lane::<0>(acc0);
+    let b = f64x2_extract_lane::<1>(acc0);
     let mut result = if a < b { a } else { b };
     while i < len { let v = data[i]; if v < result { result = v; } i += 1; }
     result
@@ -112,7 +151,18 @@ fn sum_f32_inner(data: &[f32]) -> f32 {
     let len = data.len();
     let mut acc0 = f32x4_splat(0.0);
     let mut acc1 = f32x4_splat(0.0);
+    let mut acc2 = f32x4_splat(0.0);
+    let mut acc3 = f32x4_splat(0.0);
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = f32x4_add(acc0, load_f32x4(data, i));
+        acc1 = f32x4_add(acc1, load_f32x4(data, i + 4));
+        acc2 = f32x4_add(acc2, load_f32x4(data, i + 8));
+        acc3 = f32x4_add(acc3, load_f32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = f32x4_add(acc0, acc2);
+    acc1 = f32x4_add(acc1, acc3);
     while i + 8 <= len {
         acc0 = f32x4_add(acc0, load_f32x4(data, i));
         acc1 = f32x4_add(acc1, load_f32x4(data, i + 4));
@@ -134,16 +184,30 @@ fn sum_f32_inner(data: &[f32]) -> f32 {
 fn max_f32_inner(data: &[f32]) -> f32 {
     let len = data.len();
     if len == 0 { return f32::NEG_INFINITY; }
-    let mut acc = f32x4_splat(data[0]);
+    let init = f32x4_splat(data[0]);
+    let mut acc0 = init;
+    let mut acc1 = init;
+    let mut acc2 = init;
+    let mut acc3 = init;
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = f32x4_max(acc0, load_f32x4(data, i));
+        acc1 = f32x4_max(acc1, load_f32x4(data, i + 4));
+        acc2 = f32x4_max(acc2, load_f32x4(data, i + 8));
+        acc3 = f32x4_max(acc3, load_f32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = f32x4_max(acc0, acc2);
+    acc1 = f32x4_max(acc1, acc3);
     while i + 4 <= len {
-        acc = f32x4_max(acc, load_f32x4(data, i));
+        acc0 = f32x4_max(acc0, load_f32x4(data, i));
         i += 4;
     }
-    let mut result = f32x4_extract_lane::<0>(acc);
-    let v1 = f32x4_extract_lane::<1>(acc);
-    let v2 = f32x4_extract_lane::<2>(acc);
-    let v3 = f32x4_extract_lane::<3>(acc);
+    acc0 = f32x4_max(acc0, acc1);
+    let mut result = f32x4_extract_lane::<0>(acc0);
+    let v1 = f32x4_extract_lane::<1>(acc0);
+    let v2 = f32x4_extract_lane::<2>(acc0);
+    let v3 = f32x4_extract_lane::<3>(acc0);
     if v1 > result { result = v1; }
     if v2 > result { result = v2; }
     if v3 > result { result = v3; }
@@ -154,16 +218,30 @@ fn max_f32_inner(data: &[f32]) -> f32 {
 fn min_f32_inner(data: &[f32]) -> f32 {
     let len = data.len();
     if len == 0 { return f32::INFINITY; }
-    let mut acc = f32x4_splat(data[0]);
+    let init = f32x4_splat(data[0]);
+    let mut acc0 = init;
+    let mut acc1 = init;
+    let mut acc2 = init;
+    let mut acc3 = init;
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = f32x4_min(acc0, load_f32x4(data, i));
+        acc1 = f32x4_min(acc1, load_f32x4(data, i + 4));
+        acc2 = f32x4_min(acc2, load_f32x4(data, i + 8));
+        acc3 = f32x4_min(acc3, load_f32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = f32x4_min(acc0, acc2);
+    acc1 = f32x4_min(acc1, acc3);
     while i + 4 <= len {
-        acc = f32x4_min(acc, load_f32x4(data, i));
+        acc0 = f32x4_min(acc0, load_f32x4(data, i));
         i += 4;
     }
-    let mut result = f32x4_extract_lane::<0>(acc);
-    let v1 = f32x4_extract_lane::<1>(acc);
-    let v2 = f32x4_extract_lane::<2>(acc);
-    let v3 = f32x4_extract_lane::<3>(acc);
+    acc0 = f32x4_min(acc0, acc1);
+    let mut result = f32x4_extract_lane::<0>(acc0);
+    let v1 = f32x4_extract_lane::<1>(acc0);
+    let v2 = f32x4_extract_lane::<2>(acc0);
+    let v3 = f32x4_extract_lane::<3>(acc0);
     if v1 < result { result = v1; }
     if v2 < result { result = v2; }
     if v3 < result { result = v3; }
@@ -175,7 +253,18 @@ fn prod_f32_inner(data: &[f32]) -> f32 {
     let len = data.len();
     let mut acc0 = f32x4_splat(1.0);
     let mut acc1 = f32x4_splat(1.0);
+    let mut acc2 = f32x4_splat(1.0);
+    let mut acc3 = f32x4_splat(1.0);
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = f32x4_mul(acc0, load_f32x4(data, i));
+        acc1 = f32x4_mul(acc1, load_f32x4(data, i + 4));
+        acc2 = f32x4_mul(acc2, load_f32x4(data, i + 8));
+        acc3 = f32x4_mul(acc3, load_f32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = f32x4_mul(acc0, acc2);
+    acc1 = f32x4_mul(acc1, acc3);
     while i + 8 <= len {
         acc0 = f32x4_mul(acc0, load_f32x4(data, i));
         acc1 = f32x4_mul(acc1, load_f32x4(data, i + 4));
@@ -361,7 +450,18 @@ fn sum_i32_inner(data: &[i32]) -> i32 {
     let len = data.len();
     let mut acc0 = i32x4_splat(0);
     let mut acc1 = i32x4_splat(0);
+    let mut acc2 = i32x4_splat(0);
+    let mut acc3 = i32x4_splat(0);
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = i32x4_add(acc0, load_i32x4(data, i));
+        acc1 = i32x4_add(acc1, load_i32x4(data, i + 4));
+        acc2 = i32x4_add(acc2, load_i32x4(data, i + 8));
+        acc3 = i32x4_add(acc3, load_i32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = i32x4_add(acc0, acc2);
+    acc1 = i32x4_add(acc1, acc3);
     while i + 8 <= len {
         acc0 = i32x4_add(acc0, load_i32x4(data, i));
         acc1 = i32x4_add(acc1, load_i32x4(data, i + 4));
@@ -383,16 +483,30 @@ fn sum_i32_inner(data: &[i32]) -> i32 {
 fn max_i32_inner(data: &[i32]) -> i32 {
     let len = data.len();
     if len == 0 { return i32::MIN; }
-    let mut acc = i32x4_splat(data[0]);
+    let init = i32x4_splat(data[0]);
+    let mut acc0 = init;
+    let mut acc1 = init;
+    let mut acc2 = init;
+    let mut acc3 = init;
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = i32x4_max(acc0, load_i32x4(data, i));
+        acc1 = i32x4_max(acc1, load_i32x4(data, i + 4));
+        acc2 = i32x4_max(acc2, load_i32x4(data, i + 8));
+        acc3 = i32x4_max(acc3, load_i32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = i32x4_max(acc0, acc2);
+    acc1 = i32x4_max(acc1, acc3);
     while i + 4 <= len {
-        acc = i32x4_max(acc, load_i32x4(data, i));
+        acc0 = i32x4_max(acc0, load_i32x4(data, i));
         i += 4;
     }
-    let mut result = i32x4_extract_lane::<0>(acc);
-    let v1 = i32x4_extract_lane::<1>(acc);
-    let v2 = i32x4_extract_lane::<2>(acc);
-    let v3 = i32x4_extract_lane::<3>(acc);
+    acc0 = i32x4_max(acc0, acc1);
+    let mut result = i32x4_extract_lane::<0>(acc0);
+    let v1 = i32x4_extract_lane::<1>(acc0);
+    let v2 = i32x4_extract_lane::<2>(acc0);
+    let v3 = i32x4_extract_lane::<3>(acc0);
     if v1 > result { result = v1; }
     if v2 > result { result = v2; }
     if v3 > result { result = v3; }
@@ -403,16 +517,30 @@ fn max_i32_inner(data: &[i32]) -> i32 {
 fn min_i32_inner(data: &[i32]) -> i32 {
     let len = data.len();
     if len == 0 { return i32::MAX; }
-    let mut acc = i32x4_splat(data[0]);
+    let init = i32x4_splat(data[0]);
+    let mut acc0 = init;
+    let mut acc1 = init;
+    let mut acc2 = init;
+    let mut acc3 = init;
     let mut i = 0;
+    while i + 16 <= len {
+        acc0 = i32x4_min(acc0, load_i32x4(data, i));
+        acc1 = i32x4_min(acc1, load_i32x4(data, i + 4));
+        acc2 = i32x4_min(acc2, load_i32x4(data, i + 8));
+        acc3 = i32x4_min(acc3, load_i32x4(data, i + 12));
+        i += 16;
+    }
+    acc0 = i32x4_min(acc0, acc2);
+    acc1 = i32x4_min(acc1, acc3);
     while i + 4 <= len {
-        acc = i32x4_min(acc, load_i32x4(data, i));
+        acc0 = i32x4_min(acc0, load_i32x4(data, i));
         i += 4;
     }
-    let mut result = i32x4_extract_lane::<0>(acc);
-    let v1 = i32x4_extract_lane::<1>(acc);
-    let v2 = i32x4_extract_lane::<2>(acc);
-    let v3 = i32x4_extract_lane::<3>(acc);
+    acc0 = i32x4_min(acc0, acc1);
+    let mut result = i32x4_extract_lane::<0>(acc0);
+    let v1 = i32x4_extract_lane::<1>(acc0);
+    let v2 = i32x4_extract_lane::<2>(acc0);
+    let v3 = i32x4_extract_lane::<3>(acc0);
     if v1 < result { result = v1; }
     if v2 < result { result = v2; }
     if v3 < result { result = v3; }

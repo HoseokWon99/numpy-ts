@@ -43,21 +43,12 @@ fn matvec_f32_inner(a: &[f32], x: &[f32], out: &mut [f32], rows: usize, cols: us
         let mut acc1 = f32x4_splat(0.0);
         let mut j = 0;
         while j + 8 <= cols {
-            acc0 = f32x4_add(acc0, f32x4_mul(
-                load_f32x4(a, row_off + j),
-                load_f32x4(x, j),
-            ));
-            acc1 = f32x4_add(acc1, f32x4_mul(
-                load_f32x4(a, row_off + j + 4),
-                load_f32x4(x, j + 4),
-            ));
+            acc0 = f32x4_add(acc0, f32x4_mul(load_f32x4(a, row_off + j), load_f32x4(x, j)));
+            acc1 = f32x4_add(acc1, f32x4_mul(load_f32x4(a, row_off + j + 4), load_f32x4(x, j + 4)));
             j += 8;
         }
         while j + 4 <= cols {
-            acc0 = f32x4_add(acc0, f32x4_mul(
-                load_f32x4(a, row_off + j),
-                load_f32x4(x, j),
-            ));
+            acc0 = f32x4_add(acc0, f32x4_mul(load_f32x4(a, row_off + j), load_f32x4(x, j)));
             j += 4;
         }
         acc0 = f32x4_add(acc0, acc1);
@@ -207,24 +198,65 @@ fn vecdot_f64_inner(a: &[f64], b: &[f64], out: &mut [f64], batch: usize, len: us
 }
 
 fn vecdot_f32_inner(a: &[f32], b: &[f32], out: &mut [f32], batch: usize, len: usize) {
+    let ap = a.as_ptr();
+    let bp = b.as_ptr();
     for bi in 0..batch {
-        let off = bi * len;
+        let a_ptr = unsafe { ap.add(bi * len) };
+        let b_ptr = unsafe { bp.add(bi * len) };
         let mut acc0 = f32x4_splat(0.0);
         let mut acc1 = f32x4_splat(0.0);
+        let mut acc2 = f32x4_splat(0.0);
+        let mut acc3 = f32x4_splat(0.0);
         let mut j = 0;
+        while j + 16 <= len {
+            unsafe {
+                acc0 = f32x4_add(acc0, f32x4_mul(
+                    v128_load(a_ptr.add(j) as *const v128),
+                    v128_load(b_ptr.add(j) as *const v128),
+                ));
+                acc1 = f32x4_add(acc1, f32x4_mul(
+                    v128_load(a_ptr.add(j + 4) as *const v128),
+                    v128_load(b_ptr.add(j + 4) as *const v128),
+                ));
+                acc2 = f32x4_add(acc2, f32x4_mul(
+                    v128_load(a_ptr.add(j + 8) as *const v128),
+                    v128_load(b_ptr.add(j + 8) as *const v128),
+                ));
+                acc3 = f32x4_add(acc3, f32x4_mul(
+                    v128_load(a_ptr.add(j + 12) as *const v128),
+                    v128_load(b_ptr.add(j + 12) as *const v128),
+                ));
+            }
+            j += 16;
+        }
+        acc0 = f32x4_add(acc0, acc2);
+        acc1 = f32x4_add(acc1, acc3);
         while j + 8 <= len {
-            acc0 = f32x4_add(acc0, f32x4_mul(load_f32x4(a, off + j), load_f32x4(b, off + j)));
-            acc1 = f32x4_add(acc1, f32x4_mul(load_f32x4(a, off + j + 4), load_f32x4(b, off + j + 4)));
+            unsafe {
+                acc0 = f32x4_add(acc0, f32x4_mul(
+                    v128_load(a_ptr.add(j) as *const v128),
+                    v128_load(b_ptr.add(j) as *const v128),
+                ));
+                acc1 = f32x4_add(acc1, f32x4_mul(
+                    v128_load(a_ptr.add(j + 4) as *const v128),
+                    v128_load(b_ptr.add(j + 4) as *const v128),
+                ));
+            }
             j += 8;
         }
         while j + 4 <= len {
-            acc0 = f32x4_add(acc0, f32x4_mul(load_f32x4(a, off + j), load_f32x4(b, off + j)));
+            unsafe {
+                acc0 = f32x4_add(acc0, f32x4_mul(
+                    v128_load(a_ptr.add(j) as *const v128),
+                    v128_load(b_ptr.add(j) as *const v128),
+                ));
+            }
             j += 4;
         }
         acc0 = f32x4_add(acc0, acc1);
         let mut sum = f32x4_extract_lane::<0>(acc0) + f32x4_extract_lane::<1>(acc0)
             + f32x4_extract_lane::<2>(acc0) + f32x4_extract_lane::<3>(acc0);
-        while j < len { sum += a[off + j] * b[off + j]; j += 1; }
+        while j < len { sum += unsafe { *a_ptr.add(j) * *b_ptr.add(j) }; j += 1; }
         out[bi] = sum;
     }
 }
@@ -429,7 +461,22 @@ fn norm_f64_inner(data: &[f64]) -> f64 {
     let len = data.len();
     let mut acc0 = f64x2_splat(0.0);
     let mut acc1 = f64x2_splat(0.0);
+    let mut acc2 = f64x2_splat(0.0);
+    let mut acc3 = f64x2_splat(0.0);
     let mut i = 0;
+    while i + 8 <= len {
+        let v0 = load_f64x2(data, i);
+        let v1 = load_f64x2(data, i + 2);
+        let v2 = load_f64x2(data, i + 4);
+        let v3 = load_f64x2(data, i + 6);
+        acc0 = f64x2_add(acc0, f64x2_mul(v0, v0));
+        acc1 = f64x2_add(acc1, f64x2_mul(v1, v1));
+        acc2 = f64x2_add(acc2, f64x2_mul(v2, v2));
+        acc3 = f64x2_add(acc3, f64x2_mul(v3, v3));
+        i += 8;
+    }
+    acc0 = f64x2_add(acc0, acc2);
+    acc1 = f64x2_add(acc1, acc3);
     while i + 4 <= len {
         let v0 = load_f64x2(data, i);
         let v1 = load_f64x2(data, i + 2);
@@ -733,6 +780,9 @@ fn matmul_complex_f64_inner(a: &[f64], b: &[f64], c: &mut [f64], m: usize, k: us
 
 fn matmul_complex_f32_inner(a: &[f32], b: &[f32], c: &mut [f32], m: usize, k: usize, n: usize) {
     for v in c.iter_mut() { *v = 0.0; }
+    let ap = a.as_ptr();
+    let bp = b.as_ptr();
+    let cp = c.as_mut_ptr();
     const T: usize = 32;
     let mut ii = 0;
     while ii < m {
@@ -745,17 +795,23 @@ fn matmul_complex_f32_inner(a: &[f32], b: &[f32], c: &mut [f32], m: usize, k: us
                 let je = if jj + T < n { jj + T } else { n };
                 let mut ri = ii;
                 while ri < ie {
+                    let c_row = unsafe { cp.add(ri * n * 2) };
                     let mut rk = kk;
                     while rk < ke {
-                        let a_re = a[(ri * k + rk) * 2];
-                        let a_im = a[(ri * k + rk) * 2 + 1];
+                        let a_base = unsafe { ap.add((ri * k + rk) * 2) };
+                        let a_re = unsafe { *a_base };
+                        let a_im = unsafe { *a_base.add(1) };
+                        let b_row = unsafe { bp.add(rk * n * 2) };
                         let mut j = jj;
                         while j < je {
-                            let b_re = b[(rk * n + j) * 2];
-                            let b_im = b[(rk * n + j) * 2 + 1];
-                            let ci = (ri * n + j) * 2;
-                            c[ci] += a_re * b_re - a_im * b_im;
-                            c[ci + 1] += a_re * b_im + a_im * b_re;
+                            let b_ptr = unsafe { b_row.add(j * 2) };
+                            let b_re = unsafe { *b_ptr };
+                            let b_im = unsafe { *b_ptr.add(1) };
+                            let c_ptr = unsafe { c_row.add(j * 2) };
+                            unsafe {
+                                *c_ptr += a_re * b_re - a_im * b_im;
+                                *c_ptr.add(1) += a_re * b_im + a_im * b_re;
+                            }
                             j += 1;
                         }
                         rk += 1;

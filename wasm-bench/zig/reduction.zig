@@ -12,7 +12,17 @@ export fn sum_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
     var acc0: simd.V2f64 = @splat(0.0);
     var acc1: simd.V2f64 = @splat(0.0);
+    var acc2: simd.V2f64 = @splat(0.0);
+    var acc3: simd.V2f64 = @splat(0.0);
     var i: usize = 0;
+    while (i + 8 <= len) : (i += 8) {
+        acc0 += simd.load2_f64(ptr, i);
+        acc1 += simd.load2_f64(ptr, i + 2);
+        acc2 += simd.load2_f64(ptr, i + 4);
+        acc3 += simd.load2_f64(ptr, i + 6);
+    }
+    acc0 += acc2;
+    acc1 += acc3;
     while (i + 4 <= len) : (i += 4) {
         acc0 += simd.load2_f64(ptr, i);
         acc1 += simd.load2_f64(ptr, i + 2);
@@ -31,13 +41,24 @@ export fn sum_f64(ptr: [*]const f64, n: u32) f64 {
 export fn max_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
     if (len == 0) return -@as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
-    var acc: simd.V2f64 = @splat(ptr[0]);
+    var acc0: simd.V2f64 = @splat(ptr[0]);
+    var acc1 = acc0;
+    var acc2 = acc0;
+    var acc3 = acc0;
     var i: usize = 0;
-    while (i + 2 <= len) : (i += 2) {
-        const v = simd.load2_f64(ptr, i);
-        acc = @select(f64, v > acc, v, acc);
+    while (i + 8 <= len) : (i += 8) {
+        acc0 = simd.max_f64x2(acc0, simd.load2_f64(ptr, i));
+        acc1 = simd.max_f64x2(acc1, simd.load2_f64(ptr, i + 2));
+        acc2 = simd.max_f64x2(acc2, simd.load2_f64(ptr, i + 4));
+        acc3 = simd.max_f64x2(acc3, simd.load2_f64(ptr, i + 6));
     }
-    var result: f64 = if (acc[0] > acc[1]) acc[0] else acc[1];
+    acc0 = simd.max_f64x2(acc0, acc1);
+    acc2 = simd.max_f64x2(acc2, acc3);
+    acc0 = simd.max_f64x2(acc0, acc2);
+    while (i + 2 <= len) : (i += 2) {
+        acc0 = simd.max_f64x2(acc0, simd.load2_f64(ptr, i));
+    }
+    var result: f64 = if (acc0[0] > acc0[1]) acc0[0] else acc0[1];
     while (i < len) : (i += 1) {
         if (ptr[i] > result) result = ptr[i];
     }
@@ -47,13 +68,24 @@ export fn max_f64(ptr: [*]const f64, n: u32) f64 {
 export fn min_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
     if (len == 0) return @as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
-    var acc: simd.V2f64 = @splat(ptr[0]);
+    var acc0: simd.V2f64 = @splat(ptr[0]);
+    var acc1 = acc0;
+    var acc2 = acc0;
+    var acc3 = acc0;
     var i: usize = 0;
-    while (i + 2 <= len) : (i += 2) {
-        const v = simd.load2_f64(ptr, i);
-        acc = @select(f64, v < acc, v, acc);
+    while (i + 8 <= len) : (i += 8) {
+        acc0 = simd.min_f64x2(acc0, simd.load2_f64(ptr, i));
+        acc1 = simd.min_f64x2(acc1, simd.load2_f64(ptr, i + 2));
+        acc2 = simd.min_f64x2(acc2, simd.load2_f64(ptr, i + 4));
+        acc3 = simd.min_f64x2(acc3, simd.load2_f64(ptr, i + 6));
     }
-    var result: f64 = if (acc[0] < acc[1]) acc[0] else acc[1];
+    acc0 = simd.min_f64x2(acc0, acc1);
+    acc2 = simd.min_f64x2(acc2, acc3);
+    acc0 = simd.min_f64x2(acc0, acc2);
+    while (i + 2 <= len) : (i += 2) {
+        acc0 = simd.min_f64x2(acc0, simd.load2_f64(ptr, i));
+    }
+    var result: f64 = if (acc0[0] < acc0[1]) acc0[0] else acc0[1];
     while (i < len) : (i += 1) {
         if (ptr[i] < result) result = ptr[i];
     }
@@ -90,7 +122,17 @@ export fn sum_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
     var acc0: simd.V4f32 = @splat(0.0);
     var acc1: simd.V4f32 = @splat(0.0);
+    var acc2: simd.V4f32 = @splat(0.0);
+    var acc3: simd.V4f32 = @splat(0.0);
     var i: usize = 0;
+    while (i + 16 <= len) : (i += 16) {
+        acc0 += simd.load4_f32(ptr, i);
+        acc1 += simd.load4_f32(ptr, i + 4);
+        acc2 += simd.load4_f32(ptr, i + 8);
+        acc3 += simd.load4_f32(ptr, i + 12);
+    }
+    acc0 += acc2;
+    acc1 += acc3;
     while (i + 8 <= len) : (i += 8) {
         acc0 += simd.load4_f32(ptr, i);
         acc1 += simd.load4_f32(ptr, i + 4);
@@ -109,16 +151,27 @@ export fn sum_f32(ptr: [*]const f32, n: u32) f32 {
 export fn max_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
     if (len == 0) return -@as(f32, @bitCast(@as(u32, 0x7F800000)));
-    var acc: simd.V4f32 = @splat(ptr[0]);
+    var acc0: simd.V4f32 = @splat(ptr[0]);
+    var acc1 = acc0;
+    var acc2 = acc0;
+    var acc3 = acc0;
     var i: usize = 0;
-    while (i + 4 <= len) : (i += 4) {
-        const v = simd.load4_f32(ptr, i);
-        acc = @select(f32, v > acc, v, acc);
+    while (i + 16 <= len) : (i += 16) {
+        acc0 = simd.max_f32x4(acc0, simd.load4_f32(ptr, i));
+        acc1 = simd.max_f32x4(acc1, simd.load4_f32(ptr, i + 4));
+        acc2 = simd.max_f32x4(acc2, simd.load4_f32(ptr, i + 8));
+        acc3 = simd.max_f32x4(acc3, simd.load4_f32(ptr, i + 12));
     }
-    var result: f32 = acc[0];
-    if (acc[1] > result) result = acc[1];
-    if (acc[2] > result) result = acc[2];
-    if (acc[3] > result) result = acc[3];
+    acc0 = simd.max_f32x4(acc0, acc1);
+    acc2 = simd.max_f32x4(acc2, acc3);
+    acc0 = simd.max_f32x4(acc0, acc2);
+    while (i + 4 <= len) : (i += 4) {
+        acc0 = simd.max_f32x4(acc0, simd.load4_f32(ptr, i));
+    }
+    var result: f32 = acc0[0];
+    if (acc0[1] > result) result = acc0[1];
+    if (acc0[2] > result) result = acc0[2];
+    if (acc0[3] > result) result = acc0[3];
     while (i < len) : (i += 1) {
         if (ptr[i] > result) result = ptr[i];
     }
@@ -128,16 +181,27 @@ export fn max_f32(ptr: [*]const f32, n: u32) f32 {
 export fn min_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
     if (len == 0) return @as(f32, @bitCast(@as(u32, 0x7F800000)));
-    var acc: simd.V4f32 = @splat(ptr[0]);
+    var acc0: simd.V4f32 = @splat(ptr[0]);
+    var acc1 = acc0;
+    var acc2 = acc0;
+    var acc3 = acc0;
     var i: usize = 0;
-    while (i + 4 <= len) : (i += 4) {
-        const v = simd.load4_f32(ptr, i);
-        acc = @select(f32, v < acc, v, acc);
+    while (i + 16 <= len) : (i += 16) {
+        acc0 = simd.min_f32x4(acc0, simd.load4_f32(ptr, i));
+        acc1 = simd.min_f32x4(acc1, simd.load4_f32(ptr, i + 4));
+        acc2 = simd.min_f32x4(acc2, simd.load4_f32(ptr, i + 8));
+        acc3 = simd.min_f32x4(acc3, simd.load4_f32(ptr, i + 12));
     }
-    var result: f32 = acc[0];
-    if (acc[1] < result) result = acc[1];
-    if (acc[2] < result) result = acc[2];
-    if (acc[3] < result) result = acc[3];
+    acc0 = simd.min_f32x4(acc0, acc1);
+    acc2 = simd.min_f32x4(acc2, acc3);
+    acc0 = simd.min_f32x4(acc0, acc2);
+    while (i + 4 <= len) : (i += 4) {
+        acc0 = simd.min_f32x4(acc0, simd.load4_f32(ptr, i));
+    }
+    var result: f32 = acc0[0];
+    if (acc0[1] < result) result = acc0[1];
+    if (acc0[2] < result) result = acc0[2];
+    if (acc0[3] < result) result = acc0[3];
     while (i < len) : (i += 1) {
         if (ptr[i] < result) result = ptr[i];
     }
@@ -277,7 +341,17 @@ export fn sum_i32(ptr: [*]const i32, n: u32) i32 {
     const len = @as(usize, n);
     var acc0: simd.V4i32 = @splat(0);
     var acc1: simd.V4i32 = @splat(0);
+    var acc2: simd.V4i32 = @splat(0);
+    var acc3: simd.V4i32 = @splat(0);
     var i: usize = 0;
+    while (i + 16 <= len) : (i += 16) {
+        acc0 +%= simd.load4_i32(ptr, i);
+        acc1 +%= simd.load4_i32(ptr, i + 4);
+        acc2 +%= simd.load4_i32(ptr, i + 8);
+        acc3 +%= simd.load4_i32(ptr, i + 12);
+    }
+    acc0 +%= acc2;
+    acc1 +%= acc3;
     while (i + 8 <= len) : (i += 8) {
         acc0 +%= simd.load4_i32(ptr, i);
         acc1 +%= simd.load4_i32(ptr, i + 4);
@@ -296,12 +370,24 @@ export fn sum_i32(ptr: [*]const i32, n: u32) i32 {
 export fn max_i32(ptr: [*]const i32, n: u32) i32 {
     const len = @as(usize, n);
     if (len == 0) return -2147483648; // i32 min
-    var acc: simd.V4i32 = @splat(ptr[0]);
+    var acc0: simd.V4i32 = @splat(ptr[0]);
+    var acc1 = acc0;
+    var acc2 = acc0;
+    var acc3 = acc0;
     var i: usize = 0;
-    while (i + 4 <= len) : (i += 4) {
-        acc = @max(acc, simd.load4_i32(ptr, i));
+    while (i + 16 <= len) : (i += 16) {
+        acc0 = @max(acc0, simd.load4_i32(ptr, i));
+        acc1 = @max(acc1, simd.load4_i32(ptr, i + 4));
+        acc2 = @max(acc2, simd.load4_i32(ptr, i + 8));
+        acc3 = @max(acc3, simd.load4_i32(ptr, i + 12));
     }
-    var result: i32 = @max(acc[0], @max(acc[1], @max(acc[2], acc[3])));
+    acc0 = @max(acc0, acc2);
+    acc1 = @max(acc1, acc3);
+    while (i + 4 <= len) : (i += 4) {
+        acc0 = @max(acc0, simd.load4_i32(ptr, i));
+    }
+    acc0 = @max(acc0, acc1);
+    var result: i32 = @max(acc0[0], @max(acc0[1], @max(acc0[2], acc0[3])));
     while (i < len) : (i += 1) {
         if (ptr[i] > result) result = ptr[i];
     }
@@ -311,12 +397,24 @@ export fn max_i32(ptr: [*]const i32, n: u32) i32 {
 export fn min_i32(ptr: [*]const i32, n: u32) i32 {
     const len = @as(usize, n);
     if (len == 0) return 2147483647; // i32 max
-    var acc: simd.V4i32 = @splat(ptr[0]);
+    var acc0: simd.V4i32 = @splat(ptr[0]);
+    var acc1 = acc0;
+    var acc2 = acc0;
+    var acc3 = acc0;
     var i: usize = 0;
-    while (i + 4 <= len) : (i += 4) {
-        acc = @min(acc, simd.load4_i32(ptr, i));
+    while (i + 16 <= len) : (i += 16) {
+        acc0 = @min(acc0, simd.load4_i32(ptr, i));
+        acc1 = @min(acc1, simd.load4_i32(ptr, i + 4));
+        acc2 = @min(acc2, simd.load4_i32(ptr, i + 8));
+        acc3 = @min(acc3, simd.load4_i32(ptr, i + 12));
     }
-    var result: i32 = @min(acc[0], @min(acc[1], @min(acc[2], acc[3])));
+    acc0 = @min(acc0, acc2);
+    acc1 = @min(acc1, acc3);
+    while (i + 4 <= len) : (i += 4) {
+        acc0 = @min(acc0, simd.load4_i32(ptr, i));
+    }
+    acc0 = @min(acc0, acc1);
+    var result: i32 = @min(acc0[0], @min(acc0[1], @min(acc0[2], acc0[3])));
     while (i < len) : (i += 1) {
         if (ptr[i] < result) result = ptr[i];
     }

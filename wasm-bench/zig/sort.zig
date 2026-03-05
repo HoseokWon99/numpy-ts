@@ -267,40 +267,227 @@ export fn quantile_f32(ptr: [*]f32, n: u32, q: f64) f32 {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// INTEGER SORT (i32, i16, i8) — trivial thanks to comptime T
+// INTEGER SORT — radix/counting sort for O(n) performance
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Counting sort for i8 (256 buckets, stack-only) ─────────────────────
+
+fn countingSortI8(data: [*]i8, len: usize) void {
+    var counts: [256]u32 = [_]u32{0} ** 256;
+    for (0..len) |i| {
+        const key = @as(u8, @bitCast(data[i])) +% 128; // signed → unsigned offset
+        counts[key] += 1;
+    }
+    var pos: usize = 0;
+    for (0..256) |bucket| {
+        var c = counts[bucket];
+        while (c > 0) : (c -= 1) {
+            data[pos] = @bitCast(@as(u8, @intCast(bucket)) -% 128);
+            pos += 1;
+        }
+    }
+}
+
+fn countingArgsortI8(vals: [*]const i8, idx: [*]u32, len: usize) void {
+    // Count occurrences
+    var counts: [256]u32 = [_]u32{0} ** 256;
+    for (0..len) |i| {
+        const key = @as(u8, @bitCast(vals[i])) +% 128;
+        counts[key] += 1;
+    }
+    // Prefix sum → starting positions
+    var offsets: [256]u32 = [_]u32{0} ** 256;
+    var total: u32 = 0;
+    for (0..256) |bucket| {
+        offsets[bucket] = total;
+        total += counts[bucket];
+    }
+    // Place indices in sorted order
+    for (0..len) |i| {
+        const key = @as(u8, @bitCast(vals[i])) +% 128;
+        idx[offsets[key]] = @as(u32, @intCast(i));
+        offsets[key] += 1;
+    }
+}
+
+// ─── Counting sort for i16 (65536 buckets, stack-only ~256KB) ───────────
+
+fn countingSortI16(data: [*]i16, len: usize) void {
+    var counts: [65536]u32 = [_]u32{0} ** 65536;
+    for (0..len) |i| {
+        const key = @as(u16, @bitCast(data[i])) +% 32768;
+        counts[key] += 1;
+    }
+    var pos: usize = 0;
+    for (0..65536) |bucket| {
+        var c = counts[bucket];
+        while (c > 0) : (c -= 1) {
+            data[pos] = @bitCast(@as(u16, @intCast(bucket)) -% 32768);
+            pos += 1;
+        }
+    }
+}
+
+fn countingArgsortI16(vals: [*]const i16, idx: [*]u32, len: usize) void {
+    var counts: [65536]u32 = [_]u32{0} ** 65536;
+    for (0..len) |i| {
+        const key = @as(u16, @bitCast(vals[i])) +% 32768;
+        counts[key] += 1;
+    }
+    var offsets: [65536]u32 = [_]u32{0} ** 65536;
+    var total: u32 = 0;
+    for (0..65536) |bucket| {
+        offsets[bucket] = total;
+        total += counts[bucket];
+    }
+    for (0..len) |i| {
+        const key = @as(u16, @bitCast(vals[i])) +% 32768;
+        idx[offsets[key]] = @as(u32, @intCast(i));
+        offsets[key] += 1;
+    }
+}
+
+// ─── LSD Radix sort for i32 (4 passes × 256 buckets) ───────────────────
+// Needs a scratch buffer — allocated via WASM memory.grow
+
+fn wasmAllocScratch(bytes: usize) ?[*]u8 {
+    const pages_needed = (bytes + 65535) / 65536; // round up to page boundary
+    const old_pages = @wasmMemoryGrow(0, pages_needed);
+    if (old_pages < 0) return null;
+    return @ptrFromInt(@as(usize, @intCast(old_pages)) * 65536);
+}
+
+fn radixSortI32(data: [*]i32, len: usize) void {
+    // Allocate scratch buffer
+    const scratch_ptr = wasmAllocScratch(len * 4) orelse {
+        // Fallback to quicksort if memory.grow fails
+        quicksort(i32, data, 0, len - 1);
+        return;
+    };
+    const tmp: [*]i32 = @ptrCast(@alignCast(scratch_ptr));
+
+    // Flip sign bit so signed sort becomes unsigned sort
+    for (0..len) |i| {
+        data[i] = @bitCast(@as(u32, @bitCast(data[i])) ^ 0x80000000);
+    }
+
+    // 4-pass LSD radix sort (byte 0, 1, 2, 3)
+    var src = data;
+    var dst = tmp;
+    for (0..4) |pass| {
+        const shift: u5 = @intCast(pass * 8);
+        var counts: [256]u32 = [_]u32{0} ** 256;
+
+        // Count
+        for (0..len) |i| {
+            const key = (@as(u32, @bitCast(src[i])) >> shift) & 0xFF;
+            counts[key] += 1;
+        }
+
+        // Prefix sum
+        var offsets: [256]u32 = [_]u32{0} ** 256;
+        var total: u32 = 0;
+        for (0..256) |bucket| {
+            offsets[bucket] = total;
+            total += counts[bucket];
+        }
+
+        // Scatter
+        for (0..len) |i| {
+            const key = (@as(u32, @bitCast(src[i])) >> shift) & 0xFF;
+            dst[offsets[key]] = src[i];
+            offsets[key] += 1;
+        }
+
+        // Swap src/dst
+        const t = src;
+        src = dst;
+        dst = t;
+    }
+
+    // After 4 passes (even), src == data, dst == tmp → result is in data
+    // Flip sign bit back
+    for (0..len) |i| {
+        data[i] = @bitCast(@as(u32, @bitCast(data[i])) ^ 0x80000000);
+    }
+}
+
+fn radixArgsortI32(vals: [*]const i32, idx: [*]u32, len: usize) void {
+    // Allocate scratch buffer for temp indices
+    const scratch_ptr = wasmAllocScratch(len * 4) orelse {
+        quicksortIdx(i32, vals, idx, 0, len - 1);
+        return;
+    };
+    const tmp: [*]u32 = @ptrCast(@alignCast(scratch_ptr));
+
+    // 4-pass LSD radix sort on indices, keyed by (vals[idx[i]] ^ sign_flip)
+    var src = idx;
+    var dst = tmp;
+    for (0..4) |pass| {
+        const shift: u5 = @intCast(pass * 8);
+        var counts: [256]u32 = [_]u32{0} ** 256;
+
+        for (0..len) |i| {
+            const v = @as(u32, @bitCast(vals[src[i]])) ^ 0x80000000;
+            const key = (v >> shift) & 0xFF;
+            counts[key] += 1;
+        }
+
+        var offsets: [256]u32 = [_]u32{0} ** 256;
+        var total: u32 = 0;
+        for (0..256) |bucket| {
+            offsets[bucket] = total;
+            total += counts[bucket];
+        }
+
+        for (0..len) |i| {
+            const v = @as(u32, @bitCast(vals[src[i]])) ^ 0x80000000;
+            const key = (v >> shift) & 0xFF;
+            dst[offsets[key]] = src[i];
+            offsets[key] += 1;
+        }
+
+        const t = src;
+        src = dst;
+        dst = t;
+    }
+
+    // After 4 passes (even), src == idx → result is in idx. Done.
+}
+
+// ─── Integer sort exports ───────────────────────────────────────────────
 
 export fn sort_i32(ptr: [*]i32, n: u32) void {
     const len = @as(usize, n);
     if (len <= 1) return;
-    quicksort(i32, ptr, 0, len - 1);
+    radixSortI32(ptr, len);
 }
 export fn sort_i16(ptr: [*]i16, n: u32) void {
     const len = @as(usize, n);
     if (len <= 1) return;
-    quicksort(i16, ptr, 0, len - 1);
+    countingSortI16(ptr, len);
 }
 export fn sort_i8(ptr: [*]i8, n: u32) void {
     const len = @as(usize, n);
     if (len <= 1) return;
-    quicksort(i8, ptr, 0, len - 1);
+    countingSortI8(ptr, len);
 }
 
 export fn argsort_i32(vals: [*]const i32, idx: [*]u32, n: u32) void {
     const len = @as(usize, n);
     for (0..len) |i| idx[i] = @as(u32, @intCast(i));
     if (len <= 1) return;
-    quicksortIdx(i32, vals, idx, 0, len - 1);
+    radixArgsortI32(vals, idx, len);
 }
 export fn argsort_i16(vals: [*]const i16, idx: [*]u32, n: u32) void {
     const len = @as(usize, n);
     for (0..len) |i| idx[i] = @as(u32, @intCast(i));
     if (len <= 1) return;
-    quicksortIdx(i16, vals, idx, 0, len - 1);
+    countingArgsortI16(vals, idx, len);
 }
 export fn argsort_i8(vals: [*]const i8, idx: [*]u32, n: u32) void {
     const len = @as(usize, n);
     for (0..len) |i| idx[i] = @as(u32, @intCast(i));
     if (len <= 1) return;
-    quicksortIdx(i8, vals, idx, 0, len - 1);
+    countingArgsortI8(vals, idx, len);
 }
