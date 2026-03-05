@@ -3,32 +3,18 @@
 // These are memory-movement-heavy operations that benefit from WASM
 // primarily by avoiding JS interpreter overhead on element access.
 
-const V2f64 = @Vector(2, f64);
-const V4f32 = @Vector(4, f32);
-
-inline fn load2_f64(ptr: [*]const f64, i: usize) V2f64 {
-    return @as(*align(1) const V2f64, @ptrCast(ptr + i)).*;
-}
-inline fn store2_f64(ptr: [*]f64, i: usize, v: V2f64) void {
-    @as(*align(1) V2f64, @ptrCast(ptr + i)).* = v;
-}
-inline fn load4_f32(ptr: [*]const f32, i: usize) V4f32 {
-    return @as(*align(1) const V4f32, @ptrCast(ptr + i)).*;
-}
-inline fn store4_f32(ptr: [*]f32, i: usize, v: V4f32) void {
-    @as(*align(1) V4f32, @ptrCast(ptr + i)).* = v;
-}
+const simd = @import("simd.zig");
 
 // ─── SIMD memcpy helpers ────────────────────────────────────────────────────
 
 fn simd_copy_f64(dst: [*]f64, src: [*]const f64, n: usize) void {
     var i: usize = 0;
     while (i + 4 <= n) : (i += 4) {
-        store2_f64(dst, i, load2_f64(src, i));
-        store2_f64(dst, i + 2, load2_f64(src, i + 2));
+        simd.store2_f64(dst, i, simd.load2_f64(src, i));
+        simd.store2_f64(dst, i + 2, simd.load2_f64(src, i + 2));
     }
     while (i + 2 <= n) : (i += 2) {
-        store2_f64(dst, i, load2_f64(src, i));
+        simd.store2_f64(dst, i, simd.load2_f64(src, i));
     }
     while (i < n) : (i += 1) {
         dst[i] = src[i];
@@ -38,11 +24,11 @@ fn simd_copy_f64(dst: [*]f64, src: [*]const f64, n: usize) void {
 fn simd_copy_f32(dst: [*]f32, src: [*]const f32, n: usize) void {
     var i: usize = 0;
     while (i + 8 <= n) : (i += 8) {
-        store4_f32(dst, i, load4_f32(src, i));
-        store4_f32(dst, i + 4, load4_f32(src, i + 4));
+        simd.store4_f32(dst, i, simd.load4_f32(src, i));
+        simd.store4_f32(dst, i + 4, simd.load4_f32(src, i + 4));
     }
     while (i + 4 <= n) : (i += 4) {
-        store4_f32(dst, i, load4_f32(src, i));
+        simd.store4_f32(dst, i, simd.load4_f32(src, i));
     }
     while (i < n) : (i += 1) {
         dst[i] = src[i];
@@ -50,10 +36,10 @@ fn simd_copy_f32(dst: [*]f32, src: [*]const f32, n: usize) void {
 }
 
 fn simd_zero_f64(dst: [*]f64, n: usize) void {
-    const zero: V2f64 = @splat(0.0);
+    const zero: simd.V2f64 = @splat(0.0);
     var i: usize = 0;
     while (i + 2 <= n) : (i += 2) {
-        store2_f64(dst, i, zero);
+        simd.store2_f64(dst, i, zero);
     }
     while (i < n) : (i += 1) {
         dst[i] = 0.0;
@@ -61,10 +47,10 @@ fn simd_zero_f64(dst: [*]f64, n: usize) void {
 }
 
 fn simd_zero_f32(dst: [*]f32, n: usize) void {
-    const zero: V4f32 = @splat(0.0);
+    const zero: simd.V4f32 = @splat(0.0);
     var i: usize = 0;
     while (i + 4 <= n) : (i += 4) {
-        store4_f32(dst, i, zero);
+        simd.store4_f32(dst, i, zero);
     }
     while (i < n) : (i += 1) {
         dst[i] = 0.0;
@@ -201,12 +187,12 @@ export fn gradient_f64(inp: [*]const f64, out: [*]f64, n: u32) void {
     out[len - 1] = inp[len - 1] - inp[len - 2];
     // Interior: central differences with SIMD
     if (len <= 2) return;
-    const half: V2f64 = @splat(0.5);
+    const half: simd.V2f64 = @splat(0.5);
     var i: usize = 1;
     while (i + 2 < len) : (i += 2) {
-        const fwd = load2_f64(inp, i + 1);
-        const bwd = load2_f64(inp, i - 1);
-        store2_f64(out, i, (fwd - bwd) * half);
+        const fwd = simd.load2_f64(inp, i + 1);
+        const bwd = simd.load2_f64(inp, i - 1);
+        simd.store2_f64(out, i, (fwd - bwd) * half);
     }
     while (i < len - 1) : (i += 1) {
         out[i] = (inp[i + 1] - inp[i - 1]) * 0.5;
@@ -219,12 +205,12 @@ export fn gradient_f32(inp: [*]const f32, out: [*]f32, n: u32) void {
     out[0] = inp[1] - inp[0];
     out[len - 1] = inp[len - 1] - inp[len - 2];
     if (len <= 2) return;
-    const half: V4f32 = @splat(0.5);
+    const half: simd.V4f32 = @splat(0.5);
     var i: usize = 1;
     while (i + 4 < len) : (i += 4) {
-        const fwd = load4_f32(inp, i + 1);
-        const bwd = load4_f32(inp, i - 1);
-        store4_f32(out, i, (fwd - bwd) * half);
+        const fwd = simd.load4_f32(inp, i + 1);
+        const bwd = simd.load4_f32(inp, i - 1);
+        simd.store4_f32(out, i, (fwd - bwd) * half);
     }
     while (i < len - 1) : (i += 1) {
         out[i] = (inp[i + 1] - inp[i - 1]) * 0.5;

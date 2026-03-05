@@ -4,35 +4,21 @@
 // Two accumulators for sum/prod to saturate memory bandwidth.
 // Pointer-cast loads to guarantee v128.load opcodes.
 
-const V2f64 = @Vector(2, f64);
-const V4f32 = @Vector(4, f32);
-
-inline fn load2_f64(ptr: [*]const f64, i: usize) V2f64 {
-    return @as(*align(1) const V2f64, @ptrCast(ptr + i)).*;
-}
-inline fn load4_f32(ptr: [*]const f32, i: usize) V4f32 {
-    return @as(*align(1) const V4f32, @ptrCast(ptr + i)).*;
-}
-inline fn store2_f64(ptr: [*]f64, i: usize, v: V2f64) void {
-    @as(*align(1) V2f64, @ptrCast(ptr + i)).* = v;
-}
-inline fn store4_f32(ptr: [*]f32, i: usize, v: V4f32) void {
-    @as(*align(1) V4f32, @ptrCast(ptr + i)).* = v;
-}
+const simd = @import("simd.zig");
 
 // ─── f64 reductions ─────────────────────────────────────────────────────────
 
 export fn sum_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
-    var acc0: V2f64 = @splat(0.0);
-    var acc1: V2f64 = @splat(0.0);
+    var acc0: simd.V2f64 = @splat(0.0);
+    var acc1: simd.V2f64 = @splat(0.0);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        acc0 += load2_f64(ptr, i);
-        acc1 += load2_f64(ptr, i + 2);
+        acc0 += simd.load2_f64(ptr, i);
+        acc1 += simd.load2_f64(ptr, i + 2);
     }
     while (i + 2 <= len) : (i += 2) {
-        acc0 += load2_f64(ptr, i);
+        acc0 += simd.load2_f64(ptr, i);
     }
     acc0 += acc1;
     var result: f64 = acc0[0] + acc0[1];
@@ -45,10 +31,10 @@ export fn sum_f64(ptr: [*]const f64, n: u32) f64 {
 export fn max_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
     if (len == 0) return -@as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
-    var acc: V2f64 = @splat(ptr[0]);
+    var acc: simd.V2f64 = @splat(ptr[0]);
     var i: usize = 0;
     while (i + 2 <= len) : (i += 2) {
-        const v = load2_f64(ptr, i);
+        const v = simd.load2_f64(ptr, i);
         acc = @select(f64, v > acc, v, acc);
     }
     var result: f64 = if (acc[0] > acc[1]) acc[0] else acc[1];
@@ -61,10 +47,10 @@ export fn max_f64(ptr: [*]const f64, n: u32) f64 {
 export fn min_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
     if (len == 0) return @as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
-    var acc: V2f64 = @splat(ptr[0]);
+    var acc: simd.V2f64 = @splat(ptr[0]);
     var i: usize = 0;
     while (i + 2 <= len) : (i += 2) {
-        const v = load2_f64(ptr, i);
+        const v = simd.load2_f64(ptr, i);
         acc = @select(f64, v < acc, v, acc);
     }
     var result: f64 = if (acc[0] < acc[1]) acc[0] else acc[1];
@@ -76,15 +62,15 @@ export fn min_f64(ptr: [*]const f64, n: u32) f64 {
 
 export fn prod_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
-    var acc0: V2f64 = @splat(1.0);
-    var acc1: V2f64 = @splat(1.0);
+    var acc0: simd.V2f64 = @splat(1.0);
+    var acc1: simd.V2f64 = @splat(1.0);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        acc0 *= load2_f64(ptr, i);
-        acc1 *= load2_f64(ptr, i + 2);
+        acc0 *= simd.load2_f64(ptr, i);
+        acc1 *= simd.load2_f64(ptr, i + 2);
     }
     while (i + 2 <= len) : (i += 2) {
-        acc0 *= load2_f64(ptr, i);
+        acc0 *= simd.load2_f64(ptr, i);
     }
     acc0 *= acc1;
     var result: f64 = acc0[0] * acc0[1];
@@ -102,15 +88,15 @@ export fn mean_f64(ptr: [*]const f64, n: u32) f64 {
 
 export fn sum_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
-    var acc0: V4f32 = @splat(0.0);
-    var acc1: V4f32 = @splat(0.0);
+    var acc0: simd.V4f32 = @splat(0.0);
+    var acc1: simd.V4f32 = @splat(0.0);
     var i: usize = 0;
     while (i + 8 <= len) : (i += 8) {
-        acc0 += load4_f32(ptr, i);
-        acc1 += load4_f32(ptr, i + 4);
+        acc0 += simd.load4_f32(ptr, i);
+        acc1 += simd.load4_f32(ptr, i + 4);
     }
     while (i + 4 <= len) : (i += 4) {
-        acc0 += load4_f32(ptr, i);
+        acc0 += simd.load4_f32(ptr, i);
     }
     acc0 += acc1;
     var result: f32 = acc0[0] + acc0[1] + acc0[2] + acc0[3];
@@ -123,10 +109,10 @@ export fn sum_f32(ptr: [*]const f32, n: u32) f32 {
 export fn max_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
     if (len == 0) return -@as(f32, @bitCast(@as(u32, 0x7F800000)));
-    var acc: V4f32 = @splat(ptr[0]);
+    var acc: simd.V4f32 = @splat(ptr[0]);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        const v = load4_f32(ptr, i);
+        const v = simd.load4_f32(ptr, i);
         acc = @select(f32, v > acc, v, acc);
     }
     var result: f32 = acc[0];
@@ -142,10 +128,10 @@ export fn max_f32(ptr: [*]const f32, n: u32) f32 {
 export fn min_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
     if (len == 0) return @as(f32, @bitCast(@as(u32, 0x7F800000)));
-    var acc: V4f32 = @splat(ptr[0]);
+    var acc: simd.V4f32 = @splat(ptr[0]);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        const v = load4_f32(ptr, i);
+        const v = simd.load4_f32(ptr, i);
         acc = @select(f32, v < acc, v, acc);
     }
     var result: f32 = acc[0];
@@ -160,15 +146,15 @@ export fn min_f32(ptr: [*]const f32, n: u32) f32 {
 
 export fn prod_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
-    var acc0: V4f32 = @splat(1.0);
-    var acc1: V4f32 = @splat(1.0);
+    var acc0: simd.V4f32 = @splat(1.0);
+    var acc1: simd.V4f32 = @splat(1.0);
     var i: usize = 0;
     while (i + 8 <= len) : (i += 8) {
-        acc0 *= load4_f32(ptr, i);
-        acc1 *= load4_f32(ptr, i + 4);
+        acc0 *= simd.load4_f32(ptr, i);
+        acc1 *= simd.load4_f32(ptr, i + 4);
     }
     while (i + 4 <= len) : (i += 4) {
-        acc0 *= load4_f32(ptr, i);
+        acc0 *= simd.load4_f32(ptr, i);
     }
     acc0 *= acc1;
     var result: f32 = acc0[0] * acc0[1] * acc0[2] * acc0[3];
@@ -256,10 +242,10 @@ export fn diff_f64(in_ptr: [*]const f64, out_ptr: [*]f64, n: u32) void {
     const out_len = len - 1;
     var i: usize = 0;
     while (i + 2 <= out_len) : (i += 2) {
-        const v0 = load2_f64(in_ptr, i);
-        const v1 = load2_f64(in_ptr, i + 1);
+        const v0 = simd.load2_f64(in_ptr, i);
+        const v1 = simd.load2_f64(in_ptr, i + 1);
         // v1 - v0 gives [in[i+1]-in[i], in[i+2]-in[i+1]]
-        store2_f64(out_ptr, i, v1 - v0);
+        simd.store2_f64(out_ptr, i, v1 - v0);
     }
     while (i < out_len) : (i += 1) {
         out_ptr[i] = in_ptr[i + 1] - in_ptr[i];
@@ -272,9 +258,9 @@ export fn diff_f32(in_ptr: [*]const f32, out_ptr: [*]f32, n: u32) void {
     const out_len = len - 1;
     var i: usize = 0;
     while (i + 4 <= out_len) : (i += 4) {
-        const v0 = load4_f32(in_ptr, i);
-        const v1 = load4_f32(in_ptr, i + 1);
-        store4_f32(out_ptr, i, v1 - v0);
+        const v0 = simd.load4_f32(in_ptr, i);
+        const v1 = simd.load4_f32(in_ptr, i + 1);
+        simd.store4_f32(out_ptr, i, v1 - v0);
     }
     while (i < out_len) : (i += 1) {
         out_ptr[i] = in_ptr[i + 1] - in_ptr[i];
@@ -285,25 +271,19 @@ export fn diff_f32(in_ptr: [*]const f32, out_ptr: [*]f32, n: u32) void {
 // INTEGER REDUCTIONS (i32, i16, i8) — widened accumulators for i16/i8
 // ═══════════════════════════════════════════════════════════════════════════
 
-const V4i32 = @Vector(4, i32);
-
-inline fn load4_i32(ptr: [*]const i32, i: usize) V4i32 {
-    return @as(*align(1) const V4i32, @ptrCast(ptr + i)).*;
-}
-
 // ─── i32 reductions ──────────────────────────────────────────────────────
 
 export fn sum_i32(ptr: [*]const i32, n: u32) i32 {
     const len = @as(usize, n);
-    var acc0: V4i32 = @splat(0);
-    var acc1: V4i32 = @splat(0);
+    var acc0: simd.V4i32 = @splat(0);
+    var acc1: simd.V4i32 = @splat(0);
     var i: usize = 0;
     while (i + 8 <= len) : (i += 8) {
-        acc0 +%= load4_i32(ptr, i);
-        acc1 +%= load4_i32(ptr, i + 4);
+        acc0 +%= simd.load4_i32(ptr, i);
+        acc1 +%= simd.load4_i32(ptr, i + 4);
     }
     while (i + 4 <= len) : (i += 4) {
-        acc0 +%= load4_i32(ptr, i);
+        acc0 +%= simd.load4_i32(ptr, i);
     }
     acc0 +%= acc1;
     var result: i32 = acc0[0] +% acc0[1] +% acc0[2] +% acc0[3];
@@ -316,10 +296,10 @@ export fn sum_i32(ptr: [*]const i32, n: u32) i32 {
 export fn max_i32(ptr: [*]const i32, n: u32) i32 {
     const len = @as(usize, n);
     if (len == 0) return -2147483648; // i32 min
-    var acc: V4i32 = @splat(ptr[0]);
+    var acc: simd.V4i32 = @splat(ptr[0]);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        acc = @max(acc, load4_i32(ptr, i));
+        acc = @max(acc, simd.load4_i32(ptr, i));
     }
     var result: i32 = @max(acc[0], @max(acc[1], @max(acc[2], acc[3])));
     while (i < len) : (i += 1) {
@@ -331,10 +311,10 @@ export fn max_i32(ptr: [*]const i32, n: u32) i32 {
 export fn min_i32(ptr: [*]const i32, n: u32) i32 {
     const len = @as(usize, n);
     if (len == 0) return 2147483647; // i32 max
-    var acc: V4i32 = @splat(ptr[0]);
+    var acc: simd.V4i32 = @splat(ptr[0]);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        acc = @min(acc, load4_i32(ptr, i));
+        acc = @min(acc, simd.load4_i32(ptr, i));
     }
     var result: i32 = @min(acc[0], @min(acc[1], @min(acc[2], acc[3])));
     while (i < len) : (i += 1) {
@@ -419,17 +399,17 @@ export fn min_i8(ptr: [*]const i8, n: u32) i8 {
 export fn sum_c128(ptr: [*]const f64, out: [*]f64, n: u32) void {
     // Treat as f64 sum on 2*n elements, accumulate re and im in V2f64
     const len = @as(usize, n);
-    var acc0: V2f64 = @splat(0.0);
-    var acc1: V2f64 = @splat(0.0);
+    var acc0: simd.V2f64 = @splat(0.0);
+    var acc1: simd.V2f64 = @splat(0.0);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        acc0 += load2_f64(ptr, i * 2);
-        acc0 += load2_f64(ptr, (i + 1) * 2);
-        acc1 += load2_f64(ptr, (i + 2) * 2);
-        acc1 += load2_f64(ptr, (i + 3) * 2);
+        acc0 += simd.load2_f64(ptr, i * 2);
+        acc0 += simd.load2_f64(ptr, (i + 1) * 2);
+        acc1 += simd.load2_f64(ptr, (i + 2) * 2);
+        acc1 += simd.load2_f64(ptr, (i + 3) * 2);
     }
     while (i < len) : (i += 1) {
-        acc0 += load2_f64(ptr, i * 2);
+        acc0 += simd.load2_f64(ptr, i * 2);
     }
     acc0 += acc1;
     out[0] = acc0[0];

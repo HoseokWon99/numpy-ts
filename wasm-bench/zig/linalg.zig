@@ -3,21 +3,7 @@
 // Uses native v128 widths: @Vector(2,f64) / @Vector(4,f32)
 // Pointer-cast loads/stores for guaranteed v128.load/v128.store opcodes.
 
-const V2f64 = @Vector(2, f64);
-const V4f32 = @Vector(4, f32);
-
-inline fn load2_f64(ptr: [*]const f64, i: usize) V2f64 {
-    return @as(*align(1) const V2f64, @ptrCast(ptr + i)).*;
-}
-inline fn store2_f64(ptr: [*]f64, i: usize, v: V2f64) void {
-    @as(*align(1) V2f64, @ptrCast(ptr + i)).* = v;
-}
-inline fn load4_f32(ptr: [*]const f32, i: usize) V4f32 {
-    return @as(*align(1) const V4f32, @ptrCast(ptr + i)).*;
-}
-inline fn store4_f32(ptr: [*]f32, i: usize, v: V4f32) void {
-    @as(*align(1) V4f32, @ptrCast(ptr + i)).* = v;
-}
+const simd = @import("simd.zig");
 
 // ─── matvec: A[m×n] · x[n] → out[m] ────────────────────────────────────────
 
@@ -25,16 +11,16 @@ export fn matvec_f64(a: [*]const f64, x: [*]const f64, out: [*]f64, m: u32, n: u
     const rows = @as(usize, m);
     const cols = @as(usize, n);
     for (0..rows) |i| {
-        var acc0: V2f64 = @splat(0.0);
-        var acc1: V2f64 = @splat(0.0);
+        var acc0: simd.V2f64 = @splat(0.0);
+        var acc1: simd.V2f64 = @splat(0.0);
         const row = a + i * cols;
         var j: usize = 0;
         while (j + 4 <= cols) : (j += 4) {
-            acc0 += load2_f64(row, j) * load2_f64(x, j);
-            acc1 += load2_f64(row, j + 2) * load2_f64(x, j + 2);
+            acc0 += simd.load2_f64(row, j) * simd.load2_f64(x, j);
+            acc1 += simd.load2_f64(row, j + 2) * simd.load2_f64(x, j + 2);
         }
         while (j + 2 <= cols) : (j += 2) {
-            acc0 += load2_f64(row, j) * load2_f64(x, j);
+            acc0 += simd.load2_f64(row, j) * simd.load2_f64(x, j);
         }
         acc0 += acc1;
         var sum: f64 = acc0[0] + acc0[1];
@@ -49,16 +35,16 @@ export fn matvec_f32(a: [*]const f32, x: [*]const f32, out: [*]f32, m: u32, n: u
     const rows = @as(usize, m);
     const cols = @as(usize, n);
     for (0..rows) |i| {
-        var acc0: V4f32 = @splat(0.0);
-        var acc1: V4f32 = @splat(0.0);
+        var acc0: simd.V4f32 = @splat(0.0);
+        var acc1: simd.V4f32 = @splat(0.0);
         const row = a + i * cols;
         var j: usize = 0;
         while (j + 8 <= cols) : (j += 8) {
-            acc0 += load4_f32(row, j) * load4_f32(x, j);
-            acc1 += load4_f32(row, j + 4) * load4_f32(x, j + 4);
+            acc0 += simd.load4_f32(row, j) * simd.load4_f32(x, j);
+            acc1 += simd.load4_f32(row, j + 4) * simd.load4_f32(x, j + 4);
         }
         while (j + 4 <= cols) : (j += 4) {
-            acc0 += load4_f32(row, j) * load4_f32(x, j);
+            acc0 += simd.load4_f32(row, j) * simd.load4_f32(x, j);
         }
         acc0 += acc1;
         var sum: f32 = acc0[0] + acc0[1] + acc0[2] + acc0[3];
@@ -77,22 +63,22 @@ export fn vecmat_f64(x: [*]const f64, a: [*]const f64, out: [*]f64, m: u32, n: u
     // Zero output
     var j: usize = 0;
     while (j + 2 <= cols) : (j += 2) {
-        store2_f64(out, j, @splat(0.0));
+        simd.store2_f64(out, j, @splat(0.0));
     }
     while (j < cols) : (j += 1) {
         out[j] = 0.0;
     }
     // Accumulate: out[j] += x[i] * A[i,j]
     for (0..rows) |i| {
-        const xi: V2f64 = @splat(x[i]);
+        const xi: simd.V2f64 = @splat(x[i]);
         const row = a + i * cols;
         j = 0;
         while (j + 4 <= cols) : (j += 4) {
-            store2_f64(out, j, load2_f64(out, j) + xi * load2_f64(row, j));
-            store2_f64(out, j + 2, load2_f64(out, j + 2) + xi * load2_f64(row, j + 2));
+            simd.store2_f64(out, j, simd.load2_f64(out, j) + xi * simd.load2_f64(row, j));
+            simd.store2_f64(out, j + 2, simd.load2_f64(out, j + 2) + xi * simd.load2_f64(row, j + 2));
         }
         while (j + 2 <= cols) : (j += 2) {
-            store2_f64(out, j, load2_f64(out, j) + xi * load2_f64(row, j));
+            simd.store2_f64(out, j, simd.load2_f64(out, j) + xi * simd.load2_f64(row, j));
         }
         while (j < cols) : (j += 1) {
             out[j] += x[i] * row[j];
@@ -105,21 +91,21 @@ export fn vecmat_f32(x: [*]const f32, a: [*]const f32, out: [*]f32, m: u32, n: u
     const cols = @as(usize, n);
     var j: usize = 0;
     while (j + 4 <= cols) : (j += 4) {
-        store4_f32(out, j, @splat(0.0));
+        simd.store4_f32(out, j, @splat(0.0));
     }
     while (j < cols) : (j += 1) {
         out[j] = 0.0;
     }
     for (0..rows) |i| {
-        const xi: V4f32 = @splat(x[i]);
+        const xi: simd.V4f32 = @splat(x[i]);
         const row = a + i * cols;
         j = 0;
         while (j + 8 <= cols) : (j += 8) {
-            store4_f32(out, j, load4_f32(out, j) + xi * load4_f32(row, j));
-            store4_f32(out, j + 4, load4_f32(out, j + 4) + xi * load4_f32(row, j + 4));
+            simd.store4_f32(out, j, simd.load4_f32(out, j) + xi * simd.load4_f32(row, j));
+            simd.store4_f32(out, j + 4, simd.load4_f32(out, j + 4) + xi * simd.load4_f32(row, j + 4));
         }
         while (j + 4 <= cols) : (j += 4) {
-            store4_f32(out, j, load4_f32(out, j) + xi * load4_f32(row, j));
+            simd.store4_f32(out, j, simd.load4_f32(out, j) + xi * simd.load4_f32(row, j));
         }
         while (j < cols) : (j += 1) {
             out[j] += x[i] * row[j];
@@ -134,15 +120,15 @@ export fn vecdot_f64(a: [*]const f64, b: [*]const f64, out: [*]f64, nbatch: u32,
     const len = @as(usize, veclen);
     for (0..batch) |bi| {
         const off = bi * len;
-        var acc0: V2f64 = @splat(0.0);
-        var acc1: V2f64 = @splat(0.0);
+        var acc0: simd.V2f64 = @splat(0.0);
+        var acc1: simd.V2f64 = @splat(0.0);
         var j: usize = 0;
         while (j + 4 <= len) : (j += 4) {
-            acc0 += load2_f64(a, off + j) * load2_f64(b, off + j);
-            acc1 += load2_f64(a, off + j + 2) * load2_f64(b, off + j + 2);
+            acc0 += simd.load2_f64(a, off + j) * simd.load2_f64(b, off + j);
+            acc1 += simd.load2_f64(a, off + j + 2) * simd.load2_f64(b, off + j + 2);
         }
         while (j + 2 <= len) : (j += 2) {
-            acc0 += load2_f64(a, off + j) * load2_f64(b, off + j);
+            acc0 += simd.load2_f64(a, off + j) * simd.load2_f64(b, off + j);
         }
         acc0 += acc1;
         var sum: f64 = acc0[0] + acc0[1];
@@ -158,15 +144,15 @@ export fn vecdot_f32(a: [*]const f32, b: [*]const f32, out: [*]f32, nbatch: u32,
     const len = @as(usize, veclen);
     for (0..batch) |bi| {
         const off = bi * len;
-        var acc0: V4f32 = @splat(0.0);
-        var acc1: V4f32 = @splat(0.0);
+        var acc0: simd.V4f32 = @splat(0.0);
+        var acc1: simd.V4f32 = @splat(0.0);
         var j: usize = 0;
         while (j + 8 <= len) : (j += 8) {
-            acc0 += load4_f32(a, off + j) * load4_f32(b, off + j);
-            acc1 += load4_f32(a, off + j + 4) * load4_f32(b, off + j + 4);
+            acc0 += simd.load4_f32(a, off + j) * simd.load4_f32(b, off + j);
+            acc1 += simd.load4_f32(a, off + j + 4) * simd.load4_f32(b, off + j + 4);
         }
         while (j + 4 <= len) : (j += 4) {
-            acc0 += load4_f32(a, off + j) * load4_f32(b, off + j);
+            acc0 += simd.load4_f32(a, off + j) * simd.load4_f32(b, off + j);
         }
         acc0 += acc1;
         var sum: f32 = acc0[0] + acc0[1] + acc0[2] + acc0[3];
@@ -183,15 +169,15 @@ export fn outer_f64(a: [*]const f64, b: [*]const f64, out: [*]f64, m: u32, n: u3
     const rows = @as(usize, m);
     const cols = @as(usize, n);
     for (0..rows) |i| {
-        const ai: V2f64 = @splat(a[i]);
+        const ai: simd.V2f64 = @splat(a[i]);
         const row_out = out + i * cols;
         var j: usize = 0;
         while (j + 4 <= cols) : (j += 4) {
-            store2_f64(row_out, j, ai * load2_f64(b, j));
-            store2_f64(row_out, j + 2, ai * load2_f64(b, j + 2));
+            simd.store2_f64(row_out, j, ai * simd.load2_f64(b, j));
+            simd.store2_f64(row_out, j + 2, ai * simd.load2_f64(b, j + 2));
         }
         while (j + 2 <= cols) : (j += 2) {
-            store2_f64(row_out, j, ai * load2_f64(b, j));
+            simd.store2_f64(row_out, j, ai * simd.load2_f64(b, j));
         }
         while (j < cols) : (j += 1) {
             row_out[j] = a[i] * b[j];
@@ -203,15 +189,15 @@ export fn outer_f32(a: [*]const f32, b: [*]const f32, out: [*]f32, m: u32, n: u3
     const rows = @as(usize, m);
     const cols = @as(usize, n);
     for (0..rows) |i| {
-        const ai: V4f32 = @splat(a[i]);
+        const ai: simd.V4f32 = @splat(a[i]);
         const row_out = out + i * cols;
         var j: usize = 0;
         while (j + 8 <= cols) : (j += 8) {
-            store4_f32(row_out, j, ai * load4_f32(b, j));
-            store4_f32(row_out, j + 4, ai * load4_f32(b, j + 4));
+            simd.store4_f32(row_out, j, ai * simd.load4_f32(b, j));
+            simd.store4_f32(row_out, j + 4, ai * simd.load4_f32(b, j + 4));
         }
         while (j + 4 <= cols) : (j += 4) {
-            store4_f32(row_out, j, ai * load4_f32(b, j));
+            simd.store4_f32(row_out, j, ai * simd.load4_f32(b, j));
         }
         while (j < cols) : (j += 1) {
             row_out[j] = a[i] * b[j];
@@ -233,13 +219,13 @@ export fn kron_f64(
 
     for (0..a_rows) |ia| {
         for (0..a_cols) |ja| {
-            const aij: V2f64 = @splat(a[ia * a_cols + ja]);
+            const aij: simd.V2f64 = @splat(a[ia * a_cols + ja]);
             for (0..b_rows) |ib| {
                 const out_row = out + (ia * b_rows + ib) * out_cols + ja * b_cols;
                 const b_row = b + ib * b_cols;
                 var jb: usize = 0;
                 while (jb + 2 <= b_cols) : (jb += 2) {
-                    store2_f64(out_row, jb, aij * load2_f64(b_row, jb));
+                    simd.store2_f64(out_row, jb, aij * simd.load2_f64(b_row, jb));
                 }
                 while (jb < b_cols) : (jb += 1) {
                     out_row[jb] = a[ia * a_cols + ja] * b_row[jb];
@@ -261,13 +247,13 @@ export fn kron_f32(
 
     for (0..a_rows) |ia| {
         for (0..a_cols) |ja| {
-            const aij: V4f32 = @splat(a[ia * a_cols + ja]);
+            const aij: simd.V4f32 = @splat(a[ia * a_cols + ja]);
             for (0..b_rows) |ib| {
                 const out_row = out + (ia * b_rows + ib) * out_cols + ja * b_cols;
                 const b_row = b + ib * b_cols;
                 var jb: usize = 0;
                 while (jb + 4 <= b_cols) : (jb += 4) {
-                    store4_f32(out_row, jb, aij * load4_f32(b_row, jb));
+                    simd.store4_f32(out_row, jb, aij * simd.load4_f32(b_row, jb));
                 }
                 while (jb < b_cols) : (jb += 1) {
                     out_row[jb] = a[ia * a_cols + ja] * b_row[jb];
@@ -307,17 +293,17 @@ export fn cross_f32(a: [*]const f32, b: [*]const f32, out: [*]f32, n: u32) void 
 
 export fn norm_f64(ptr: [*]const f64, n: u32) f64 {
     const len = @as(usize, n);
-    var acc0: V2f64 = @splat(0.0);
-    var acc1: V2f64 = @splat(0.0);
+    var acc0: simd.V2f64 = @splat(0.0);
+    var acc1: simd.V2f64 = @splat(0.0);
     var i: usize = 0;
     while (i + 4 <= len) : (i += 4) {
-        const v0 = load2_f64(ptr, i);
-        const v1 = load2_f64(ptr, i + 2);
+        const v0 = simd.load2_f64(ptr, i);
+        const v1 = simd.load2_f64(ptr, i + 2);
         acc0 += v0 * v0;
         acc1 += v1 * v1;
     }
     while (i + 2 <= len) : (i += 2) {
-        const v = load2_f64(ptr, i);
+        const v = simd.load2_f64(ptr, i);
         acc0 += v * v;
     }
     acc0 += acc1;
@@ -330,17 +316,17 @@ export fn norm_f64(ptr: [*]const f64, n: u32) f64 {
 
 export fn norm_f32(ptr: [*]const f32, n: u32) f32 {
     const len = @as(usize, n);
-    var acc0: V4f32 = @splat(0.0);
-    var acc1: V4f32 = @splat(0.0);
+    var acc0: simd.V4f32 = @splat(0.0);
+    var acc1: simd.V4f32 = @splat(0.0);
     var i: usize = 0;
     while (i + 8 <= len) : (i += 8) {
-        const v0 = load4_f32(ptr, i);
-        const v1 = load4_f32(ptr, i + 4);
+        const v0 = simd.load4_f32(ptr, i);
+        const v1 = simd.load4_f32(ptr, i + 4);
         acc0 += v0 * v0;
         acc1 += v1 * v1;
     }
     while (i + 4 <= len) : (i += 4) {
-        const v = load4_f32(ptr, i);
+        const v = simd.load4_f32(ptr, i);
         acc0 += v * v;
     }
     acc0 += acc1;
@@ -371,16 +357,16 @@ fn matmulF64(a: [*]const f64, b: [*]const f64, c: [*]f64, M: usize, N: usize, K:
                     var rk: usize = kk;
                     while (rk < ke) : (rk += 1) {
                         const aik = a[ri * K + rk];
-                        const av: V2f64 = @splat(aik);
+                        const av: simd.V2f64 = @splat(aik);
                         const br = rk * N;
                         const cr = ri * N;
                         var j: usize = jj;
                         while (j + 4 <= je) : (j += 4) {
-                            store2_f64(c, cr + j, load2_f64(c, cr + j) + av * load2_f64(b, br + j));
-                            store2_f64(c, cr + j + 2, load2_f64(c, cr + j + 2) + av * load2_f64(b, br + j + 2));
+                            simd.store2_f64(c, cr + j, simd.load2_f64(c, cr + j) + av * simd.load2_f64(b, br + j));
+                            simd.store2_f64(c, cr + j + 2, simd.load2_f64(c, cr + j + 2) + av * simd.load2_f64(b, br + j + 2));
                         }
                         while (j + 2 <= je) : (j += 2) {
-                            store2_f64(c, cr + j, load2_f64(c, cr + j) + av * load2_f64(b, br + j));
+                            simd.store2_f64(c, cr + j, simd.load2_f64(c, cr + j) + av * simd.load2_f64(b, br + j));
                         }
                         while (j < je) : (j += 1) {
                             c[cr + j] += aik * b[br + j];
