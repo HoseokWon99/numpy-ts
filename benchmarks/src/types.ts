@@ -20,6 +20,7 @@ export interface BenchmarkCase {
   setup: BenchmarkSetup;
   iterations: number;
   warmup: number;
+  includeInQuick?: boolean;
 }
 
 export interface BenchmarkTiming {
@@ -57,12 +58,13 @@ export interface BenchmarkReport {
     python_version?: string;
     numpy_version?: string;
     numpyjs_version: string;
+    machine?: string;
   };
   results: BenchmarkComparison[];
   summary: BenchmarkSummary;
 }
 
-export type BenchmarkMode = 'quick' | 'standard' | 'large';
+export type BenchmarkMode = 'quick' | 'standard' | 'full';
 
 export type RuntimeName = 'node' | 'deno' | 'bun';
 
@@ -85,6 +87,7 @@ export interface MultiRuntimeReport {
     numpy_version?: string;
     numpyjs_version: string;
     runtimes: Record<string, string>;
+    machine?: string;
   };
   results: RuntimeComparison[];
   summaries: Record<string, BenchmarkSummary>;

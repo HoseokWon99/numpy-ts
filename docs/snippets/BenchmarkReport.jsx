@@ -69,6 +69,40 @@ export const BenchmarkReport = ({ data }) => {
 
   const colors = THEME_COLORS[isDarkMode ? 'dark' : 'light'];
 
+  const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+  const DTYPE_COLORS = {
+    float64:    { bg: '#dbeafe', text: '#1e40af' },
+    float32:    { bg: '#e0f2fe', text: '#0369a1' },
+    complex128: { bg: '#ede9fe', text: '#6d28d9' },
+    complex64:  { bg: '#f3e8ff', text: '#7e22ce' },
+    int64:      { bg: '#d1fae5', text: '#065f46' },
+    int32:      { bg: '#dcfce7', text: '#166534' },
+    int16:      { bg: '#ecfdf5', text: '#15803d' },
+    int8:       { bg: '#f0fdf4', text: '#16a34a' },
+    uint64:     { bg: '#fff7ed', text: '#9a3412' },
+    uint32:     { bg: '#ffedd5', text: '#c2410c' },
+    uint16:     { bg: '#fef3c7', text: '#b45309' },
+    uint8:      { bg: '#fef9c3', text: '#ca8a04' },
+    bool:       { bg: '#fce7f3', text: '#9d174d' },
+  };
+
+  const BenchmarkName = ({ name }) => {
+    const s = String(name);
+    const m = s.match(DTYPE_RE);
+    const dtype = m ? m[1] : 'float64';
+    const base = m ? s.slice(0, -m[0].length) : s;
+    const dc = DTYPE_COLORS[dtype] || DTYPE_COLORS.float64;
+    const opacity = m ? 1 : 0.55;
+    return (
+      <>
+        {base}{' '}
+        <span style={{ display: 'inline-block', fontSize: '0.72em', fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: dc.bg, color: dc.text, opacity, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+          {dtype}
+        </span>
+      </>
+    );
+  };
+
   const formatOps = (ops) => {
     if (!Number.isFinite(ops) || ops <= 0) return '-';
     if (ops >= 1_000_000_000) return `${(ops / 1_000_000_000).toFixed(2)}B/s`;
@@ -114,10 +148,13 @@ export const BenchmarkReport = ({ data }) => {
       <div style={{ border: `1px solid ${colors.border}`, borderRadius: 10, padding: 14, background: colors.mutedCardBg, marginBottom: 20 }}>
         <div><strong>Generated:</strong> {meta.generatedAt || '-'}</div>
         <div><strong>Source:</strong> <code>{meta.sourceJson || '-'}</code></div>
-        <div><strong>Node:</strong> <code>{meta.nodeVersion || '-'}</code></div>
+        {meta.runtimes && Object.entries(meta.runtimes).map(([rt, ver]) => (
+          <div key={rt}><strong>{rt.charAt(0).toUpperCase() + rt.slice(1)}:</strong> <code>{ver}</code></div>
+        ))}
         {meta.pythonVersion ? <div><strong>Python:</strong> <code>{meta.pythonVersion}</code></div> : null}
         {meta.numpyVersion ? <div><strong>NumPy:</strong> <code>{meta.numpyVersion}</code></div> : null}
         <div><strong>numpy-ts:</strong> <code>{meta.numpyTsVersion || '-'}</code></div>
+        {meta.machine ? <div><strong>Machine:</strong> <code>{meta.machine}</code></div> : null}
       </div>
 
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 20 }}>
@@ -187,7 +224,7 @@ export const BenchmarkReport = ({ data }) => {
                     <tbody>
                       {benchmarks.map((b, idx) => (
                         <tr key={`${String(b.name)}-${idx}`} style={{ background: idx % 2 === 0 ? 'transparent' : colors.tableRowAlt }}>
-                          <td style={{ fontFamily: 'monospace', fontSize: 12, padding: '8px 10px', borderBottom: `1px solid ${colors.tableRowBorder}`, color: colors.text }}>{String(b.name)}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: 12, padding: '8px 10px', borderBottom: `1px solid ${colors.tableRowBorder}`, color: colors.text }}><BenchmarkName name={b.name} /></td>
                           <td style={{ padding: '8px 10px', borderBottom: `1px solid ${colors.tableRowBorder}` }}>
                             <span style={{ background: ratioBg(b.ratio), color: ratioColor(b.ratio), padding: '2px 8px', borderRadius: 999, fontWeight: 700, fontSize: 12 }}>
                               {formatRatio(b.ratio)}

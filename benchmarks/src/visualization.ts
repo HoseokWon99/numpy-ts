@@ -14,6 +14,33 @@ import {
   groupMultiRuntimeByCategory,
 } from './analysis';
 
+const DTYPE_COLORS: Record<string, { bg: string; text: string }> = {
+  float64:    { bg: '#dbeafe', text: '#1e40af' },
+  float32:    { bg: '#e0f2fe', text: '#0369a1' },
+  complex128: { bg: '#ede9fe', text: '#6d28d9' },
+  complex64:  { bg: '#f3e8ff', text: '#7e22ce' },
+  int64:      { bg: '#fef3c7', text: '#92400e' },
+  int32:      { bg: '#fff7ed', text: '#9a3412' },
+  int16:      { bg: '#ffedd5', text: '#9a3412' },
+  int8:       { bg: '#fee2e2', text: '#991b1b' },
+  uint64:     { bg: '#d1fae5', text: '#065f46' },
+  uint32:     { bg: '#dcfce7', text: '#166534' },
+  uint16:     { bg: '#f0fdf4', text: '#166534' },
+  uint8:      { bg: '#ecfdf5', text: '#065f46' },
+  bool:       { bg: '#f1f5f9', text: '#475569' },
+};
+
+const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+
+function formatBenchmarkName(name: string): string {
+  const m = name.match(DTYPE_RE);
+  const dtype = m ? m[1]! : 'float64';
+  const baseName = m ? name.slice(0, -m[0].length) : name;
+  const colors = DTYPE_COLORS[dtype] ?? DTYPE_COLORS['float64']!;
+  const opacity = m ? '1' : '0.55'; // implicit float64 is dimmer
+  return `${baseName} <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:${colors.bg};color:${colors.text};opacity:${opacity};vertical-align:middle">${dtype}</span>`;
+}
+
 export function generateHTMLReport(report: BenchmarkReport, outputPath: string): void {
   const html = createHTML(report);
   fs.writeFileSync(outputPath, html, 'utf-8');
@@ -209,6 +236,7 @@ function createHTML(report: BenchmarkReport): string {
 
     <div class="meta">
       <div><strong>Timestamp:</strong> ${new Date(timestamp).toLocaleString()}</div>
+      ${environment.machine ? `<div><strong>Machine:</strong> ${environment.machine}</div>` : ''}
       <div><strong>Node:</strong> ${environment.node_version}</div>
       ${environment.python_version ? `<div><strong>Python:</strong> ${environment.python_version}</div>` : ''}
       ${environment.numpy_version ? `<div><strong>NumPy:</strong> ${environment.numpy_version}</div>` : ''}
@@ -412,6 +440,7 @@ function createMultiRuntimeHTML(report: MultiRuntimeReport): string {
 
     <div class="meta">
       <div><strong>Timestamp:</strong> ${new Date(timestamp).toLocaleString()}</div>
+      ${environment.machine ? `<div><strong>Machine:</strong> ${environment.machine}</div>` : ''}
       ${environment.python_version ? `<div><strong>Python:</strong> ${environment.python_version}</div>` : ''}
       ${environment.numpy_version ? `<div><strong>NumPy:</strong> ${environment.numpy_version}</div>` : ''}
       <div><strong>numpy-ts:</strong> ${environment.numpyjs_version}</div>
@@ -516,7 +545,7 @@ function generateMultiRuntimeCategoryTables(
 
       html += `
           <tr>
-            <td>${item.name}</td>
+            <td>${formatBenchmarkName(item.name)}</td>
             <td>${formatDuration(item.numpy.mean_ms)}</td>`;
 
       for (const rt of runtimeNames) {
@@ -567,7 +596,7 @@ function generateCategoryTables(groups: Map<string, BenchmarkComparison[]>): str
       const ratioClass = item.ratio < 2 ? 'good' : item.ratio < 5 ? 'ok' : 'bad';
       html += `
           <tr>
-            <td>${item.name}</td>
+            <td>${formatBenchmarkName(item.name)}</td>
             <td>${formatOpsPerSec(item.numpy.ops_per_sec)}</td>
             <td>${formatOpsPerSec(item.numpyjs.ops_per_sec)}</td>
             <td>${formatDuration(item.numpyjs.mean_ms)}</td>
