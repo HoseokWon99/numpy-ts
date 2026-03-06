@@ -1306,8 +1306,8 @@ describe('Array Manipulation', () => {
     it('squeeze all size-1 dimensions from all-1 shape', () => {
       const arr = zeros([1, 1, 1]);
       const result = squeeze(arr);
-      // Should keep at least one dimension per implementation
-      expect(result.shape).toEqual([1]);
+      // All size-1 dims squeezed -> 0D array
+      expect(result.shape).toEqual([]);
     });
   });
 
