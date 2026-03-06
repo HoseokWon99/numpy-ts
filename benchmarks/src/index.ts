@@ -83,8 +83,8 @@ async function main() {
     targetSamples = 1;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else if (options.mode === 'full') {
-    minSampleTimeMs = 200;
-    targetSamples = 10;
+    minSampleTimeMs = 100;
+    targetSamples = 5;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else {
     minSampleTimeMs = 100;

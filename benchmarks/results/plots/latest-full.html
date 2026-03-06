@@ -1,0 +1,2838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NumPy vs numpy-ts Benchmark Results</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+    }
+
+    .subtitle {
+      color: #7f8c8d;
+      margin-bottom: 30px;
+      font-size: 1.1em;
+    }
+
+    .meta {
+      background: #ecf0f1;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 30px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .summary-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .summary-card.best {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    .summary-card.worst {
+      background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+    }
+
+    .summary-card h3 {
+      font-size: 0.9em;
+      opacity: 0.9;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .summary-card .value {
+      font-size: 2.5em;
+      font-weight: bold;
+    }
+
+    .chart-container {
+      margin: 40px 0;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .chart-container h2 {
+      margin-bottom: 20px;
+      color: #2c3e50;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    th {
+      background: #34495e;
+      color: white;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.85em;
+      letter-spacing: 0.5px;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .ratio {
+      font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .ratio.good {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .ratio.ok {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .ratio.bad {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .category-section {
+      margin: 40px 0;
+    }
+
+    .category-section h2 {
+      color: #2c3e50;
+      border-bottom: 3px solid #3498db;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e0e0e0;
+      text-align: center;
+      color: #7f8c8d;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 NumPy vs numpy-ts Benchmark Results</h1>
+    <p class="subtitle">Performance comparison of numpy-ts against Python NumPy</p>
+
+    <div class="meta">
+      <div><strong>Timestamp:</strong> 3/6/2026, 4:01:41 PM</div>
+      <div><strong>Machine:</strong> Apple M4 Max (16 cores, 128 GB, arm64)</div>
+      <div><strong>Node:</strong> 321</div>
+      <div><strong>Python:</strong> 3.13.0</div>
+      <div><strong>NumPy:</strong> 2.3.3</div>
+      <div><strong>numpy-ts:</strong> 1.0.0</div>
+      <div><strong>Total Benchmarks:</strong> 321</div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <h3>Average Slowdown</h3>
+        <div class="value">14.52x</div>
+      </div>
+      <div class="summary-card">
+        <h3>Median Slowdown</h3>
+        <div class="value">3.90x</div>
+      </div>
+      <div class="summary-card best">
+        <h3>Best Case</h3>
+        <div class="value">0.03x</div>
+      </div>
+      <div class="summary-card worst">
+        <h3>Worst Case</h3>
+        <div class="value">773.04x</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <h2>📊 Average Slowdown by Category</h2>
+      <canvas id="categoryChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+      <h2>📈 Detailed Results (All Benchmarks)</h2>
+      <canvas id="detailedChart"></canvas>
+    </div>
+
+    
+    <div class="category-section">
+      <h2>CREATION</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>zeros [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>4.04M</td>
+            <td>1.43M</td>
+            <td>0.70μs</td>
+            <td><span class="ratio ok">2.83x</span></td>
+          </tr>
+          <tr>
+            <td>zeros [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.47M</td>
+            <td>695.0K</td>
+            <td>1.44μs</td>
+            <td><span class="ratio ok">2.12x</span></td>
+          </tr>
+          <tr>
+            <td>ones [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>885.5K</td>
+            <td>360.6K</td>
+            <td>2.77μs</td>
+            <td><span class="ratio ok">2.46x</span></td>
+          </tr>
+          <tr>
+            <td>arange(1000) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>2.97M</td>
+            <td>757.3K</td>
+            <td>1.32μs</td>
+            <td><span class="ratio ok">3.92x</span></td>
+          </tr>
+          <tr>
+            <td>linspace(0, 100, 1000) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>398.2K</td>
+            <td>931.6K</td>
+            <td>1.07μs</td>
+            <td><span class="ratio good">0.43x</span></td>
+          </tr>
+          <tr>
+            <td>logspace(0, 3, 1000) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>130.2K</td>
+            <td>159.9K</td>
+            <td>6.25μs</td>
+            <td><span class="ratio good">0.81x</span></td>
+          </tr>
+          <tr>
+            <td>geomspace(1, 1000, 1000) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>75.7K</td>
+            <td>268.6K</td>
+            <td>3.72μs</td>
+            <td><span class="ratio good">0.28x</span></td>
+          </tr>
+          <tr>
+            <td>eye(100) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>555.7K</td>
+            <td>441.4K</td>
+            <td>2.27μs</td>
+            <td><span class="ratio good">1.26x</span></td>
+          </tr>
+          <tr>
+            <td>identity(100) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>486.8K</td>
+            <td>404.6K</td>
+            <td>2.47μs</td>
+            <td><span class="ratio good">1.20x</span></td>
+          </tr>
+          <tr>
+            <td>empty [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>7.18M</td>
+            <td>506.1K</td>
+            <td>1.98μs</td>
+            <td><span class="ratio bad">14.19x</span></td>
+          </tr>
+          <tr>
+            <td>full [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>867.5K</td>
+            <td>476.7K</td>
+            <td>2.10μs</td>
+            <td><span class="ratio good">1.82x</span></td>
+          </tr>
+          <tr>
+            <td>copy [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>971.2K</td>
+            <td>363.9K</td>
+            <td>2.75μs</td>
+            <td><span class="ratio ok">2.67x</span></td>
+          </tr>
+          <tr>
+            <td>zeros_like [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>780.8K</td>
+            <td>458.9K</td>
+            <td>2.18μs</td>
+            <td><span class="ratio good">1.70x</span></td>
+          </tr>
+          <tr>
+            <td>asarray_chkfinite [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>473.6K</td>
+            <td>40.4K</td>
+            <td>24.76μs</td>
+            <td><span class="ratio bad">11.72x</span></td>
+          </tr>
+          <tr>
+            <td>require [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.21M</td>
+            <td>13.27M</td>
+            <td>0.08μs</td>
+            <td><span class="ratio good">0.09x</span></td>
+          </tr>
+          <tr>
+            <td>zeros [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>1.49M</td>
+            <td>499.5K</td>
+            <td>2.00μs</td>
+            <td><span class="ratio ok">2.98x</span></td>
+          </tr>
+          <tr>
+            <td>ones [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>830.3K</td>
+            <td>367.4K</td>
+            <td>2.72μs</td>
+            <td><span class="ratio ok">2.26x</span></td>
+          </tr>
+          <tr>
+            <td>zeros [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>1.50M</td>
+            <td>447.7K</td>
+            <td>2.23μs</td>
+            <td><span class="ratio ok">3.36x</span></td>
+          </tr>
+          <tr>
+            <td>ones [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>889.6K</td>
+            <td>372.5K</td>
+            <td>2.68μs</td>
+            <td><span class="ratio ok">2.39x</span></td>
+          </tr>
+          <tr>
+            <td>diag [100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>423.2K</td>
+            <td>314.6K</td>
+            <td>3.18μs</td>
+            <td><span class="ratio good">1.35x</span></td>
+          </tr>
+          <tr>
+            <td>tri [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>178.8K</td>
+            <td>173.1K</td>
+            <td>5.78μs</td>
+            <td><span class="ratio good">1.03x</span></td>
+          </tr>
+          <tr>
+            <td>tril [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>146.4K</td>
+            <td>143.8K</td>
+            <td>6.96μs</td>
+            <td><span class="ratio good">1.02x</span></td>
+          </tr>
+          <tr>
+            <td>triu [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>145.5K</td>
+            <td>171.5K</td>
+            <td>5.83μs</td>
+            <td><span class="ratio good">0.85x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>ARITHMETIC</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>add [100x100] + scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>740.6K</td>
+            <td>140.5K</td>
+            <td>7.12μs</td>
+            <td><span class="ratio bad">5.27x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>556.4K</td>
+            <td>73.3K</td>
+            <td>13.65μs</td>
+            <td><span class="ratio bad">7.59x</span></td>
+          </tr>
+          <tr>
+            <td>multiply [100x100] * scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>739.3K</td>
+            <td>143.0K</td>
+            <td>6.99μs</td>
+            <td><span class="ratio bad">5.17x</span></td>
+          </tr>
+          <tr>
+            <td>multiply [100x100] * [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>551.0K</td>
+            <td>74.5K</td>
+            <td>13.43μs</td>
+            <td><span class="ratio bad">7.40x</span></td>
+          </tr>
+          <tr>
+            <td>mod [100x100] % scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>13.6K</td>
+            <td>3.7K</td>
+            <td>271.28μs</td>
+            <td><span class="ratio ok">3.68x</span></td>
+          </tr>
+          <tr>
+            <td>floor_divide [100x100] // scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>13.1K</td>
+            <td>5.2K</td>
+            <td>190.53μs</td>
+            <td><span class="ratio ok">2.50x</span></td>
+          </tr>
+          <tr>
+            <td>reciprocal [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>653.3K</td>
+            <td>144.7K</td>
+            <td>6.91μs</td>
+            <td><span class="ratio ok">4.51x</span></td>
+          </tr>
+          <tr>
+            <td>cbrt [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>56.2K</td>
+            <td>30.9K</td>
+            <td>32.39μs</td>
+            <td><span class="ratio good">1.82x</span></td>
+          </tr>
+          <tr>
+            <td>fabs [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>137.0K</td>
+            <td>142.3K</td>
+            <td>7.03μs</td>
+            <td><span class="ratio good">0.96x</span></td>
+          </tr>
+          <tr>
+            <td>divmod [100x100] % scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>13.9K</td>
+            <td>1.7K</td>
+            <td>580.40μs</td>
+            <td><span class="ratio bad">8.08x</span></td>
+          </tr>
+          <tr>
+            <td>gcd [100x100] scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>161.8K</td>
+            <td>33.1K</td>
+            <td>30.23μs</td>
+            <td><span class="ratio ok">4.89x</span></td>
+          </tr>
+          <tr>
+            <td>lcm [100x100] scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>94.6K</td>
+            <td>25.8K</td>
+            <td>38.81μs</td>
+            <td><span class="ratio ok">3.67x</span></td>
+          </tr>
+          <tr>
+            <td>float_power [100x100] ** scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>66.4K</td>
+            <td>52.2K</td>
+            <td>19.17μs</td>
+            <td><span class="ratio good">1.27x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>1.15M</td>
+            <td>57.5K</td>
+            <td>17.38μs</td>
+            <td><span class="ratio bad">19.95x</span></td>
+          </tr>
+          <tr>
+            <td>multiply [100x100] * [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>1.09M</td>
+            <td>57.0K</td>
+            <td>17.53μs</td>
+            <td><span class="ratio bad">19.12x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fee2e2;color:#991b1b;opacity:1;vertical-align:middle">int8</span></td>
+            <td>2.24M</td>
+            <td>47.2K</td>
+            <td>21.17μs</td>
+            <td><span class="ratio bad">47.35x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#f0fdf4;color:#166534;opacity:1;vertical-align:middle">uint16</span></td>
+            <td>1.71M</td>
+            <td>46.4K</td>
+            <td>21.56μs</td>
+            <td><span class="ratio bad">36.97x</span></td>
+          </tr>
+          <tr>
+            <td>zeros [100x100] (int64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.46M</td>
+            <td>396.6K</td>
+            <td>2.52μs</td>
+            <td><span class="ratio ok">3.69x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] (int64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>467.8K</td>
+            <td>90.5K</td>
+            <td>11.05μs</td>
+            <td><span class="ratio bad">5.17x</span></td>
+          </tr>
+          <tr>
+            <td>multiply [100x100] * scalar (int64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>326.1K</td>
+            <td>122.1K</td>
+            <td>8.19μs</td>
+            <td><span class="ratio ok">2.67x</span></td>
+          </tr>
+          <tr>
+            <td>absolute [100x100] (int64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>825.6K</td>
+            <td>21.6K</td>
+            <td>46.37μs</td>
+            <td><span class="ratio bad">38.28x</span></td>
+          </tr>
+          <tr>
+            <td>sum [100x100] (int64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>635.2K</td>
+            <td>64.4K</td>
+            <td>15.53μs</td>
+            <td><span class="ratio bad">9.86x</span></td>
+          </tr>
+          <tr>
+            <td>max [100x100] (int64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>581.5K</td>
+            <td>17.3K</td>
+            <td>57.88μs</td>
+            <td><span class="ratio bad">33.66x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] (uint64) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>513.2K</td>
+            <td>26.5K</td>
+            <td>37.74μs</td>
+            <td><span class="ratio bad">19.37x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>MATH</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>sqrt [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>367.7K</td>
+            <td>139.2K</td>
+            <td>7.18μs</td>
+            <td><span class="ratio ok">2.64x</span></td>
+          </tr>
+          <tr>
+            <td>power [100x100] ** 2 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>144.3K</td>
+            <td>5.0K</td>
+            <td>199.24μs</td>
+            <td><span class="ratio bad">28.75x</span></td>
+          </tr>
+          <tr>
+            <td>absolute [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>873.1K</td>
+            <td>142.7K</td>
+            <td>7.01μs</td>
+            <td><span class="ratio bad">6.12x</span></td>
+          </tr>
+          <tr>
+            <td>negative [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>847.9K</td>
+            <td>145.1K</td>
+            <td>6.89μs</td>
+            <td><span class="ratio bad">5.85x</span></td>
+          </tr>
+          <tr>
+            <td>sign [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>210.7K</td>
+            <td>68.3K</td>
+            <td>14.65μs</td>
+            <td><span class="ratio ok">3.09x</span></td>
+          </tr>
+          <tr>
+            <td>sin [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>42.0K</td>
+            <td>7.9K</td>
+            <td>127.10μs</td>
+            <td><span class="ratio bad">5.34x</span></td>
+          </tr>
+          <tr>
+            <td>cos [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>41.9K</td>
+            <td>7.6K</td>
+            <td>130.93μs</td>
+            <td><span class="ratio bad">5.48x</span></td>
+          </tr>
+          <tr>
+            <td>tan [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>35.7K</td>
+            <td>6.5K</td>
+            <td>154.60μs</td>
+            <td><span class="ratio bad">5.52x</span></td>
+          </tr>
+          <tr>
+            <td>arctan2 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>66.9K</td>
+            <td>18.7K</td>
+            <td>53.60μs</td>
+            <td><span class="ratio ok">3.58x</span></td>
+          </tr>
+          <tr>
+            <td>hypot [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>66.1K</td>
+            <td>14.8K</td>
+            <td>67.79μs</td>
+            <td><span class="ratio ok">4.48x</span></td>
+          </tr>
+          <tr>
+            <td>sinh [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>36.8K</td>
+            <td>10.6K</td>
+            <td>94.39μs</td>
+            <td><span class="ratio ok">3.48x</span></td>
+          </tr>
+          <tr>
+            <td>cosh [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>39.5K</td>
+            <td>17.5K</td>
+            <td>57.01μs</td>
+            <td><span class="ratio ok">2.25x</span></td>
+          </tr>
+          <tr>
+            <td>tanh [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>47.5K</td>
+            <td>19.0K</td>
+            <td>52.66μs</td>
+            <td><span class="ratio ok">2.50x</span></td>
+          </tr>
+          <tr>
+            <td>exp [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>64.7K</td>
+            <td>20.6K</td>
+            <td>48.44μs</td>
+            <td><span class="ratio ok">3.13x</span></td>
+          </tr>
+          <tr>
+            <td>exp2 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>62.8K</td>
+            <td>14.1K</td>
+            <td>71.13μs</td>
+            <td><span class="ratio ok">4.47x</span></td>
+          </tr>
+          <tr>
+            <td>log [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>55.0K</td>
+            <td>18.6K</td>
+            <td>53.66μs</td>
+            <td><span class="ratio ok">2.95x</span></td>
+          </tr>
+          <tr>
+            <td>log2 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>43.9K</td>
+            <td>20.0K</td>
+            <td>49.88μs</td>
+            <td><span class="ratio ok">2.19x</span></td>
+          </tr>
+          <tr>
+            <td>log10 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>43.9K</td>
+            <td>20.4K</td>
+            <td>48.92μs</td>
+            <td><span class="ratio ok">2.15x</span></td>
+          </tr>
+          <tr>
+            <td>logaddexp [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>50.9K</td>
+            <td>4.6K</td>
+            <td>218.10μs</td>
+            <td><span class="ratio bad">11.10x</span></td>
+          </tr>
+          <tr>
+            <td>sqrt [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>645.1K</td>
+            <td>22.0K</td>
+            <td>45.46μs</td>
+            <td><span class="ratio bad">29.32x</span></td>
+          </tr>
+          <tr>
+            <td>exp [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>77.8K</td>
+            <td>18.1K</td>
+            <td>55.18μs</td>
+            <td><span class="ratio ok">4.29x</span></td>
+          </tr>
+          <tr>
+            <td>sin [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>93.3K</td>
+            <td>7.4K</td>
+            <td>135.60μs</td>
+            <td><span class="ratio bad">12.66x</span></td>
+          </tr>
+          <tr>
+            <td>log [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>65.4K</td>
+            <td>17.2K</td>
+            <td>58.07μs</td>
+            <td><span class="ratio ok">3.80x</span></td>
+          </tr>
+          <tr>
+            <td>absolute [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>1.20M</td>
+            <td>70.4K</td>
+            <td>14.20μs</td>
+            <td><span class="ratio bad">17.11x</span></td>
+          </tr>
+          <tr>
+            <td>absolute [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>1.28M</td>
+            <td>59.1K</td>
+            <td>16.93μs</td>
+            <td><span class="ratio bad">21.71x</span></td>
+          </tr>
+          <tr>
+            <td>sign [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>1.09M</td>
+            <td>65.9K</td>
+            <td>15.18μs</td>
+            <td><span class="ratio bad">16.53x</span></td>
+          </tr>
+          <tr>
+            <td>clip [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>172.4K</td>
+            <td>48.9K</td>
+            <td>20.44μs</td>
+            <td><span class="ratio ok">3.52x</span></td>
+          </tr>
+          <tr>
+            <td>maximum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>307.8K</td>
+            <td>42.2K</td>
+            <td>23.68μs</td>
+            <td><span class="ratio bad">7.29x</span></td>
+          </tr>
+          <tr>
+            <td>minimum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>314.3K</td>
+            <td>18.1K</td>
+            <td>55.17μs</td>
+            <td><span class="ratio bad">17.34x</span></td>
+          </tr>
+          <tr>
+            <td>fmax [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>305.1K</td>
+            <td>18.3K</td>
+            <td>54.67μs</td>
+            <td><span class="ratio bad">16.68x</span></td>
+          </tr>
+          <tr>
+            <td>fmin [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>305.4K</td>
+            <td>18.3K</td>
+            <td>54.59μs</td>
+            <td><span class="ratio bad">16.67x</span></td>
+          </tr>
+          <tr>
+            <td>nan_to_num [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>56.3K</td>
+            <td>84.8K</td>
+            <td>11.79μs</td>
+            <td><span class="ratio good">0.66x</span></td>
+          </tr>
+          <tr>
+            <td>sinc [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>20.7K</td>
+            <td>15.9K</td>
+            <td>62.80μs</td>
+            <td><span class="ratio good">1.30x</span></td>
+          </tr>
+          <tr>
+            <td>i0 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.5K</td>
+            <td>21.0K</td>
+            <td>47.56μs</td>
+            <td><span class="ratio good">0.07x</span></td>
+          </tr>
+          <tr>
+            <td>interp [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>379.3K</td>
+            <td>203.1K</td>
+            <td>4.92μs</td>
+            <td><span class="ratio good">1.87x</span></td>
+          </tr>
+          <tr>
+            <td>unwrap [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>68.0K</td>
+            <td>220.8K</td>
+            <td>4.53μs</td>
+            <td><span class="ratio good">0.31x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>GRADIENT</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>diff [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>154.6K</td>
+            <td>4.5K</td>
+            <td>220.91μs</td>
+            <td><span class="ratio bad">34.15x</span></td>
+          </tr>
+          <tr>
+            <td>gradient [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>257.6K</td>
+            <td>46.4K</td>
+            <td>21.55μs</td>
+            <td><span class="ratio bad">5.55x</span></td>
+          </tr>
+          <tr>
+            <td>cross [1000x3] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>84.2K</td>
+            <td>3.5K</td>
+            <td>283.67μs</td>
+            <td><span class="ratio bad">23.88x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>LINALG</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>dot 1D · 1D [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.09M</td>
+            <td>262.3K</td>
+            <td>3.81μs</td>
+            <td><span class="ratio ok">4.17x</span></td>
+          </tr>
+          <tr>
+            <td>dot 2D · 1D [100x100] · [100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>745.5K</td>
+            <td>21.7K</td>
+            <td>46.14μs</td>
+            <td><span class="ratio bad">34.40x</span></td>
+          </tr>
+          <tr>
+            <td>dot 2D · 2D [100x100] · [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>121.5K</td>
+            <td>1.3K</td>
+            <td>798.15μs</td>
+            <td><span class="ratio bad">97.01x</span></td>
+          </tr>
+          <tr>
+            <td>matmul [100x100] @ [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>123.2K</td>
+            <td>1.3K</td>
+            <td>759.75μs</td>
+            <td><span class="ratio bad">93.57x</span></td>
+          </tr>
+          <tr>
+            <td>matmul [100x100] @ [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>237.1K</td>
+            <td>1.2K</td>
+            <td>845.90μs</td>
+            <td><span class="ratio bad">200.54x</span></td>
+          </tr>
+          <tr>
+            <td>complex matmul [100x100] @ [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>31.6K</td>
+            <td>41</td>
+            <td>24.501ms</td>
+            <td><span class="ratio bad">773.04x</span></td>
+          </tr>
+          <tr>
+            <td>trace [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>978.8K</td>
+            <td>1.12M</td>
+            <td>0.89μs</td>
+            <td><span class="ratio good">0.88x</span></td>
+          </tr>
+          <tr>
+            <td>inner 1D · 1D [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>986.8K</td>
+            <td>234.3K</td>
+            <td>4.27μs</td>
+            <td><span class="ratio ok">4.21x</span></td>
+          </tr>
+          <tr>
+            <td>inner 2D · 2D [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>108.9K</td>
+            <td>730</td>
+            <td>1.370ms</td>
+            <td><span class="ratio bad">149.27x</span></td>
+          </tr>
+          <tr>
+            <td>outer [1000] x [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.4K</td>
+            <td>79</td>
+            <td>12.679ms</td>
+            <td><span class="ratio bad">18.36x</span></td>
+          </tr>
+          <tr>
+            <td>trace [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>909.6K</td>
+            <td>1.11M</td>
+            <td>0.90μs</td>
+            <td><span class="ratio good">0.82x</span></td>
+          </tr>
+          <tr>
+            <td>transpose [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>2.81M</td>
+            <td>1.18M</td>
+            <td>0.85μs</td>
+            <td><span class="ratio ok">2.38x</span></td>
+          </tr>
+          <tr>
+            <td>matmul [500x500] @ [500x500] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>2.6K</td>
+            <td>11</td>
+            <td>93.467ms</td>
+            <td><span class="ratio bad">242.93x</span></td>
+          </tr>
+          <tr>
+            <td>diagonal [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.59M</td>
+            <td>277.0K</td>
+            <td>3.61μs</td>
+            <td><span class="ratio bad">5.74x</span></td>
+          </tr>
+          <tr>
+            <td>kron [10x10] ⊗ [10x10] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>81.0K</td>
+            <td>1.2K</td>
+            <td>849.79μs</td>
+            <td><span class="ratio bad">68.85x</span></td>
+          </tr>
+          <tr>
+            <td>einsum matmul [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>49.5K</td>
+            <td>8.3K</td>
+            <td>120.34μs</td>
+            <td><span class="ratio bad">5.95x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.det [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>95.2K</td>
+            <td>27.0K</td>
+            <td>37.02μs</td>
+            <td><span class="ratio ok">3.53x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.inv [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>30.5K</td>
+            <td>7.3K</td>
+            <td>137.60μs</td>
+            <td><span class="ratio ok">4.19x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.solve [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>75.1K</td>
+            <td>24.4K</td>
+            <td>41.03μs</td>
+            <td><span class="ratio ok">3.08x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.qr [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>17.7K</td>
+            <td>307</td>
+            <td>3.258ms</td>
+            <td><span class="ratio bad">57.55x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.cholesky [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>69.0K</td>
+            <td>3.8K</td>
+            <td>260.13μs</td>
+            <td><span class="ratio bad">17.95x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.svd [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>10.3K</td>
+            <td>317</td>
+            <td>3.158ms</td>
+            <td><span class="ratio bad">32.42x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.eigh [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>6.8K</td>
+            <td>2.6K</td>
+            <td>388.18μs</td>
+            <td><span class="ratio ok">2.64x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.norm [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>646.6K</td>
+            <td>138.2K</td>
+            <td>7.23μs</td>
+            <td><span class="ratio ok">4.68x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.matrix_rank [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>12.7K</td>
+            <td>326</td>
+            <td>3.072ms</td>
+            <td><span class="ratio bad">38.92x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.pinv [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>8.8K</td>
+            <td>262</td>
+            <td>3.820ms</td>
+            <td><span class="ratio bad">33.73x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.cond [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>12.7K</td>
+            <td>323</td>
+            <td>3.098ms</td>
+            <td><span class="ratio bad">39.48x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.matrix_power [50x50] n=3 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>183.1K</td>
+            <td>1.4K</td>
+            <td>693.29μs</td>
+            <td><span class="ratio bad">126.92x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.lstsq [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>16.4K</td>
+            <td>314</td>
+            <td>3.186ms</td>
+            <td><span class="ratio bad">52.37x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.cross [3] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>126.4K</td>
+            <td>1.97M</td>
+            <td>0.51μs</td>
+            <td><span class="ratio good">0.06x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.slogdet [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>81.2K</td>
+            <td>33.4K</td>
+            <td>29.91μs</td>
+            <td><span class="ratio ok">2.43x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.svdvals [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>13.2K</td>
+            <td>311</td>
+            <td>3.212ms</td>
+            <td><span class="ratio bad">42.26x</span></td>
+          </tr>
+          <tr>
+            <td>linalg.multi_dot [50x50] x3 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>166.7K</td>
+            <td>3.2K</td>
+            <td>310.30μs</td>
+            <td><span class="ratio bad">51.73x</span></td>
+          </tr>
+          <tr>
+            <td>vdot [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>831.8K</td>
+            <td>168.7K</td>
+            <td>5.93μs</td>
+            <td><span class="ratio ok">4.93x</span></td>
+          </tr>
+          <tr>
+            <td>vecdot [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>310.8K</td>
+            <td>4.7K</td>
+            <td>211.24μs</td>
+            <td><span class="ratio bad">65.65x</span></td>
+          </tr>
+          <tr>
+            <td>matrix_transpose [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>2.00M</td>
+            <td>1.10M</td>
+            <td>0.91μs</td>
+            <td><span class="ratio good">1.82x</span></td>
+          </tr>
+          <tr>
+            <td>matvec [50x50] · [50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>577.5K</td>
+            <td>75.1K</td>
+            <td>13.32μs</td>
+            <td><span class="ratio bad">7.69x</span></td>
+          </tr>
+          <tr>
+            <td>vecmat [50] · [50x50] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>708.6K</td>
+            <td>31.4K</td>
+            <td>31.89μs</td>
+            <td><span class="ratio bad">22.60x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>REDUCTIONS</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>sum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>478.7K</td>
+            <td>167.5K</td>
+            <td>5.97μs</td>
+            <td><span class="ratio ok">2.86x</span></td>
+          </tr>
+          <tr>
+            <td>sum [100x100] axis=0 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>360.8K</td>
+            <td>4.5K</td>
+            <td>221.38μs</td>
+            <td><span class="ratio bad">79.87x</span></td>
+          </tr>
+          <tr>
+            <td>mean [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>339.5K</td>
+            <td>159.7K</td>
+            <td>6.26μs</td>
+            <td><span class="ratio ok">2.13x</span></td>
+          </tr>
+          <tr>
+            <td>max [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>662.2K</td>
+            <td>129.8K</td>
+            <td>7.70μs</td>
+            <td><span class="ratio bad">5.10x</span></td>
+          </tr>
+          <tr>
+            <td>min [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>656.0K</td>
+            <td>226.8K</td>
+            <td>4.41μs</td>
+            <td><span class="ratio ok">2.89x</span></td>
+          </tr>
+          <tr>
+            <td>prod [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>112.6K</td>
+            <td>117.9K</td>
+            <td>8.48μs</td>
+            <td><span class="ratio good">0.95x</span></td>
+          </tr>
+          <tr>
+            <td>argmin [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>172.4K</td>
+            <td>261.0K</td>
+            <td>3.83μs</td>
+            <td><span class="ratio good">0.66x</span></td>
+          </tr>
+          <tr>
+            <td>argmax [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>173.3K</td>
+            <td>130.4K</td>
+            <td>7.67μs</td>
+            <td><span class="ratio good">1.33x</span></td>
+          </tr>
+          <tr>
+            <td>var [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>101.6K</td>
+            <td>74.1K</td>
+            <td>13.49μs</td>
+            <td><span class="ratio good">1.37x</span></td>
+          </tr>
+          <tr>
+            <td>std [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>97.8K</td>
+            <td>73.8K</td>
+            <td>13.56μs</td>
+            <td><span class="ratio good">1.33x</span></td>
+          </tr>
+          <tr>
+            <td>all [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>259.7K</td>
+            <td>210.3K</td>
+            <td>4.76μs</td>
+            <td><span class="ratio good">1.23x</span></td>
+          </tr>
+          <tr>
+            <td>any [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>262.9K</td>
+            <td>214.5K</td>
+            <td>4.66μs</td>
+            <td><span class="ratio good">1.23x</span></td>
+          </tr>
+          <tr>
+            <td>cumsum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>47.2K</td>
+            <td>99.8K</td>
+            <td>10.02μs</td>
+            <td><span class="ratio good">0.47x</span></td>
+          </tr>
+          <tr>
+            <td>cumprod [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>44.9K</td>
+            <td>89.6K</td>
+            <td>11.17μs</td>
+            <td><span class="ratio good">0.50x</span></td>
+          </tr>
+          <tr>
+            <td>ptp [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>308.1K</td>
+            <td>87.8K</td>
+            <td>11.39μs</td>
+            <td><span class="ratio ok">3.51x</span></td>
+          </tr>
+          <tr>
+            <td>median [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>79.8K</td>
+            <td>9.3K</td>
+            <td>107.71μs</td>
+            <td><span class="ratio bad">8.60x</span></td>
+          </tr>
+          <tr>
+            <td>percentile [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>35.9K</td>
+            <td>9.3K</td>
+            <td>107.77μs</td>
+            <td><span class="ratio ok">3.87x</span></td>
+          </tr>
+          <tr>
+            <td>quantile [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>36.1K</td>
+            <td>9.1K</td>
+            <td>109.31μs</td>
+            <td><span class="ratio ok">3.95x</span></td>
+          </tr>
+          <tr>
+            <td>average [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>290.8K</td>
+            <td>160.7K</td>
+            <td>6.22μs</td>
+            <td><span class="ratio good">1.81x</span></td>
+          </tr>
+          <tr>
+            <td>nansum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>115.6K</td>
+            <td>55.4K</td>
+            <td>18.06μs</td>
+            <td><span class="ratio ok">2.09x</span></td>
+          </tr>
+          <tr>
+            <td>nanmean [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>51.0K</td>
+            <td>56.0K</td>
+            <td>17.86μs</td>
+            <td><span class="ratio good">0.91x</span></td>
+          </tr>
+          <tr>
+            <td>nanmin [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>337.9K</td>
+            <td>53.8K</td>
+            <td>18.59μs</td>
+            <td><span class="ratio bad">6.28x</span></td>
+          </tr>
+          <tr>
+            <td>nanmax [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>342.7K</td>
+            <td>56.5K</td>
+            <td>17.71μs</td>
+            <td><span class="ratio bad">6.07x</span></td>
+          </tr>
+          <tr>
+            <td>nanquantile [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>32.5K</td>
+            <td>9.3K</td>
+            <td>108.05μs</td>
+            <td><span class="ratio ok">3.51x</span></td>
+          </tr>
+          <tr>
+            <td>nanpercentile [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>32.5K</td>
+            <td>9.1K</td>
+            <td>109.34μs</td>
+            <td><span class="ratio ok">3.55x</span></td>
+          </tr>
+          <tr>
+            <td>sum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>480.6K</td>
+            <td>128.3K</td>
+            <td>7.80μs</td>
+            <td><span class="ratio ok">3.75x</span></td>
+          </tr>
+          <tr>
+            <td>mean [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>284.3K</td>
+            <td>129.1K</td>
+            <td>7.75μs</td>
+            <td><span class="ratio ok">2.20x</span></td>
+          </tr>
+          <tr>
+            <td>sum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fee2e2;color:#991b1b;opacity:1;vertical-align:middle">int8</span></td>
+            <td>423.4K</td>
+            <td>97.4K</td>
+            <td>10.26μs</td>
+            <td><span class="ratio ok">4.35x</span></td>
+          </tr>
+          <tr>
+            <td>sum [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#f0fdf4;color:#166534;opacity:1;vertical-align:middle">uint16</span></td>
+            <td>410.0K</td>
+            <td>98.3K</td>
+            <td>10.18μs</td>
+            <td><span class="ratio ok">4.17x</span></td>
+          </tr>
+          <tr>
+            <td>bincount [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>390.9K</td>
+            <td>423.9K</td>
+            <td>2.36μs</td>
+            <td><span class="ratio good">0.92x</span></td>
+          </tr>
+          <tr>
+            <td>digitize [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>282.5K</td>
+            <td>153.2K</td>
+            <td>6.53μs</td>
+            <td><span class="ratio good">1.84x</span></td>
+          </tr>
+          <tr>
+            <td>histogram [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>40.5K</td>
+            <td>250.7K</td>
+            <td>3.99μs</td>
+            <td><span class="ratio good">0.16x</span></td>
+          </tr>
+          <tr>
+            <td>histogram2d [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>25.5K</td>
+            <td>104.4K</td>
+            <td>9.58μs</td>
+            <td><span class="ratio good">0.24x</span></td>
+          </tr>
+          <tr>
+            <td>correlate [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>76.7K</td>
+            <td>1.6K</td>
+            <td>635.53μs</td>
+            <td><span class="ratio bad">48.72x</span></td>
+          </tr>
+          <tr>
+            <td>convolve [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>74.9K</td>
+            <td>1.6K</td>
+            <td>625.67μs</td>
+            <td><span class="ratio bad">46.87x</span></td>
+          </tr>
+          <tr>
+            <td>cov [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>18.2K</td>
+            <td>1.4K</td>
+            <td>727.67μs</td>
+            <td><span class="ratio bad">13.26x</span></td>
+          </tr>
+          <tr>
+            <td>corrcoef [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>14.6K</td>
+            <td>1.3K</td>
+            <td>754.50μs</td>
+            <td><span class="ratio bad">11.05x</span></td>
+          </tr>
+          <tr>
+            <td>histogram_bin_edges [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>122.7K</td>
+            <td>943.9K</td>
+            <td>1.06μs</td>
+            <td><span class="ratio good">0.13x</span></td>
+          </tr>
+          <tr>
+            <td>trapezoid [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>286.1K</td>
+            <td>513.2K</td>
+            <td>1.95μs</td>
+            <td><span class="ratio good">0.56x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>MANIPULATION</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>reshape [100x100] -> [100x100] (contiguous) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.47M</td>
+            <td>1.68M</td>
+            <td>0.60μs</td>
+            <td><span class="ratio good">0.88x</span></td>
+          </tr>
+          <tr>
+            <td>flatten [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>636.6K</td>
+            <td>301.5K</td>
+            <td>3.32μs</td>
+            <td><span class="ratio ok">2.11x</span></td>
+          </tr>
+          <tr>
+            <td>ravel [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.58M</td>
+            <td>1.69M</td>
+            <td>0.59μs</td>
+            <td><span class="ratio good">0.93x</span></td>
+          </tr>
+          <tr>
+            <td>swapaxes [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.20M</td>
+            <td>1.29M</td>
+            <td>0.77μs</td>
+            <td><span class="ratio good">0.93x</span></td>
+          </tr>
+          <tr>
+            <td>concatenate [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>331.3K</td>
+            <td>171.6K</td>
+            <td>5.83μs</td>
+            <td><span class="ratio good">1.93x</span></td>
+          </tr>
+          <tr>
+            <td>stack [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>257.0K</td>
+            <td>155.4K</td>
+            <td>6.43μs</td>
+            <td><span class="ratio good">1.65x</span></td>
+          </tr>
+          <tr>
+            <td>vstack [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>273.6K</td>
+            <td>153.2K</td>
+            <td>6.53μs</td>
+            <td><span class="ratio good">1.79x</span></td>
+          </tr>
+          <tr>
+            <td>hstack [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>191.2K</td>
+            <td>87.7K</td>
+            <td>11.40μs</td>
+            <td><span class="ratio ok">2.18x</span></td>
+          </tr>
+          <tr>
+            <td>tile [100x100] x [2,2] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>124.8K</td>
+            <td>3.4K</td>
+            <td>292.04μs</td>
+            <td><span class="ratio bad">36.44x</span></td>
+          </tr>
+          <tr>
+            <td>repeat [100x100] x 2 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>161.1K</td>
+            <td>10.0K</td>
+            <td>99.58μs</td>
+            <td><span class="ratio bad">16.04x</span></td>
+          </tr>
+          <tr>
+            <td>broadcast_to [100] -> [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>589.6K</td>
+            <td>1.27M</td>
+            <td>0.79μs</td>
+            <td><span class="ratio good">0.46x</span></td>
+          </tr>
+          <tr>
+            <td>take [100x100] 100 indices <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>349.4K</td>
+            <td>665.1K</td>
+            <td>1.50μs</td>
+            <td><span class="ratio good">0.53x</span></td>
+          </tr>
+          <tr>
+            <td>concat [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>315.2K</td>
+            <td>168.2K</td>
+            <td>5.95μs</td>
+            <td><span class="ratio good">1.87x</span></td>
+          </tr>
+          <tr>
+            <td>unstack [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>137.5K</td>
+            <td>23.1K</td>
+            <td>43.27μs</td>
+            <td><span class="ratio bad">5.95x</span></td>
+          </tr>
+          <tr>
+            <td>block [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>159.1K</td>
+            <td>87.2K</td>
+            <td>11.47μs</td>
+            <td><span class="ratio good">1.82x</span></td>
+          </tr>
+          <tr>
+            <td>item [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.38M</td>
+            <td>4.06M</td>
+            <td>0.25μs</td>
+            <td><span class="ratio good">0.34x</span></td>
+          </tr>
+          <tr>
+            <td>tolist [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>10.3K</td>
+            <td>96.3K</td>
+            <td>10.38μs</td>
+            <td><span class="ratio good">0.11x</span></td>
+          </tr>
+          <tr>
+            <td>reshape [100x100] -> [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>1.41M</td>
+            <td>1.62M</td>
+            <td>0.62μs</td>
+            <td><span class="ratio good">0.87x</span></td>
+          </tr>
+          <tr>
+            <td>concatenate [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>529.6K</td>
+            <td>284.0K</td>
+            <td>3.52μs</td>
+            <td><span class="ratio good">1.86x</span></td>
+          </tr>
+          <tr>
+            <td>reshape [100x100] -> [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>1.44M</td>
+            <td>1.69M</td>
+            <td>0.59μs</td>
+            <td><span class="ratio good">0.85x</span></td>
+          </tr>
+          <tr>
+            <td>concatenate [100x100] + [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>532.6K</td>
+            <td>277.3K</td>
+            <td>3.61μs</td>
+            <td><span class="ratio good">1.92x</span></td>
+          </tr>
+          <tr>
+            <td>flip [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>984.2K</td>
+            <td>74.2K</td>
+            <td>13.47μs</td>
+            <td><span class="ratio bad">13.26x</span></td>
+          </tr>
+          <tr>
+            <td>rot90 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>346.6K</td>
+            <td>88.5K</td>
+            <td>11.30μs</td>
+            <td><span class="ratio ok">3.92x</span></td>
+          </tr>
+          <tr>
+            <td>roll [100x100] shift=10 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>217.5K</td>
+            <td>14.1K</td>
+            <td>70.92μs</td>
+            <td><span class="ratio bad">15.43x</span></td>
+          </tr>
+          <tr>
+            <td>pad [100x100] width=2 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>106.7K</td>
+            <td>1.9K</td>
+            <td>518.60μs</td>
+            <td><span class="ratio bad">55.33x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>IO</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>serializeNpy [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:1;vertical-align:middle">float64</span></td>
+            <td>123.0K</td>
+            <td>259.2K</td>
+            <td>3.86μs</td>
+            <td><span class="ratio good">0.47x</span></td>
+          </tr>
+          <tr>
+            <td>serializeNpy [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>130.5K</td>
+            <td>345.9K</td>
+            <td>2.89μs</td>
+            <td><span class="ratio good">0.38x</span></td>
+          </tr>
+          <tr>
+            <td>parseNpy [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:1;vertical-align:middle">float64</span></td>
+            <td>47.9K</td>
+            <td>238.5K</td>
+            <td>4.19μs</td>
+            <td><span class="ratio good">0.20x</span></td>
+          </tr>
+          <tr>
+            <td>parseNpy [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>42.1K</td>
+            <td>356.5K</td>
+            <td>2.80μs</td>
+            <td><span class="ratio good">0.12x</span></td>
+          </tr>
+          <tr>
+            <td>serializeNpzSync {a, b} [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>27.0K</td>
+            <td>2.6K</td>
+            <td>382.23μs</td>
+            <td><span class="ratio bad">10.33x</span></td>
+          </tr>
+          <tr>
+            <td>parseNpzSync {a, b} [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>145.3K</td>
+            <td>69.6K</td>
+            <td>14.37μs</td>
+            <td><span class="ratio ok">2.09x</span></td>
+          </tr>
+          <tr>
+            <td>serializeNpy [500x500] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:1;vertical-align:middle">float64</span></td>
+            <td>5.1K</td>
+            <td>18.8K</td>
+            <td>53.05μs</td>
+            <td><span class="ratio good">0.27x</span></td>
+          </tr>
+          <tr>
+            <td>parseNpy [500x500] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:1;vertical-align:middle">float64</span></td>
+            <td>7.2K</td>
+            <td>19.4K</td>
+            <td>51.55μs</td>
+            <td><span class="ratio good">0.37x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>TRIG</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>deg2rad [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>812.8K</td>
+            <td>173.2K</td>
+            <td>5.77μs</td>
+            <td><span class="ratio ok">4.69x</span></td>
+          </tr>
+          <tr>
+            <td>deg2rad [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>606.3K</td>
+            <td>175.8K</td>
+            <td>5.69μs</td>
+            <td><span class="ratio ok">3.45x</span></td>
+          </tr>
+          <tr>
+            <td>deg2rad [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>809.5K</td>
+            <td>179.5K</td>
+            <td>5.57μs</td>
+            <td><span class="ratio ok">4.51x</span></td>
+          </tr>
+          <tr>
+            <td>rad2deg [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>802.3K</td>
+            <td>182.1K</td>
+            <td>5.49μs</td>
+            <td><span class="ratio ok">4.41x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>INDEXING</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>take_along_axis [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>26.4K</td>
+            <td>2.6K</td>
+            <td>387.80μs</td>
+            <td><span class="ratio bad">10.25x</span></td>
+          </tr>
+          <tr>
+            <td>compress [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>408.2K</td>
+            <td>75.6K</td>
+            <td>13.24μs</td>
+            <td><span class="ratio bad">5.40x</span></td>
+          </tr>
+          <tr>
+            <td>diag_indices n=100 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>1.10M</td>
+            <td>769.4K</td>
+            <td>1.30μs</td>
+            <td><span class="ratio good">1.43x</span></td>
+          </tr>
+          <tr>
+            <td>tril_indices n=100 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>54.0K</td>
+            <td>41.3K</td>
+            <td>24.22μs</td>
+            <td><span class="ratio good">1.31x</span></td>
+          </tr>
+          <tr>
+            <td>triu_indices n=100 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>46.4K</td>
+            <td>40.1K</td>
+            <td>24.92μs</td>
+            <td><span class="ratio good">1.16x</span></td>
+          </tr>
+          <tr>
+            <td>indices [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>227.9K</td>
+            <td>9.6K</td>
+            <td>103.97μs</td>
+            <td><span class="ratio bad">23.69x</span></td>
+          </tr>
+          <tr>
+            <td>ravel_multi_index [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>230.1K</td>
+            <td>66.3K</td>
+            <td>15.09μs</td>
+            <td><span class="ratio ok">3.47x</span></td>
+          </tr>
+          <tr>
+            <td>unravel_index [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>418.4K</td>
+            <td>40.6K</td>
+            <td>24.62μs</td>
+            <td><span class="ratio bad">10.30x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>BITWISE</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>bitwise_and [100x100] & [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>617.7K</td>
+            <td>103.6K</td>
+            <td>9.66μs</td>
+            <td><span class="ratio bad">5.96x</span></td>
+          </tr>
+          <tr>
+            <td>bitwise_or [100x100] | [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>632.6K</td>
+            <td>106.8K</td>
+            <td>9.37μs</td>
+            <td><span class="ratio bad">5.93x</span></td>
+          </tr>
+          <tr>
+            <td>bitwise_xor [100x100] ^ [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>622.3K</td>
+            <td>105.8K</td>
+            <td>9.45μs</td>
+            <td><span class="ratio bad">5.88x</span></td>
+          </tr>
+          <tr>
+            <td>bitwise_not [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>703.8K</td>
+            <td>140.0K</td>
+            <td>7.14μs</td>
+            <td><span class="ratio bad">5.03x</span></td>
+          </tr>
+          <tr>
+            <td>invert [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>689.8K</td>
+            <td>140.1K</td>
+            <td>7.14μs</td>
+            <td><span class="ratio ok">4.92x</span></td>
+          </tr>
+          <tr>
+            <td>left_shift [100x100] << 2 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>612.9K</td>
+            <td>135.6K</td>
+            <td>7.38μs</td>
+            <td><span class="ratio ok">4.52x</span></td>
+          </tr>
+          <tr>
+            <td>right_shift [100x100] >> 2 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>601.3K</td>
+            <td>133.8K</td>
+            <td>7.48μs</td>
+            <td><span class="ratio ok">4.50x</span></td>
+          </tr>
+          <tr>
+            <td>packbits [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>854.2K</td>
+            <td>481.1K</td>
+            <td>2.08μs</td>
+            <td><span class="ratio good">1.78x</span></td>
+          </tr>
+          <tr>
+            <td>unpackbits [125] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>872.1K</td>
+            <td>544.2K</td>
+            <td>1.84μs</td>
+            <td><span class="ratio good">1.60x</span></td>
+          </tr>
+          <tr>
+            <td>bitwise_count [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>647.1K</td>
+            <td>38.3K</td>
+            <td>26.12μs</td>
+            <td><span class="ratio bad">16.90x</span></td>
+          </tr>
+          <tr>
+            <td>bitwise_and [100x100] & [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#ecfdf5;color:#065f46;opacity:1;vertical-align:middle">uint8</span></td>
+            <td>932.2K</td>
+            <td>58.7K</td>
+            <td>17.03μs</td>
+            <td><span class="ratio bad">15.88x</span></td>
+          </tr>
+          <tr>
+            <td>bitwise_and [100x100] & [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fee2e2;color:#991b1b;opacity:1;vertical-align:middle">int8</span></td>
+            <td>914.2K</td>
+            <td>52.2K</td>
+            <td>19.18μs</td>
+            <td><span class="ratio bad">17.53x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>SORTING</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>sort [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>13.5K</td>
+            <td>1.8K</td>
+            <td>545.09μs</td>
+            <td><span class="ratio bad">7.37x</span></td>
+          </tr>
+          <tr>
+            <td>argsort [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>50.8K</td>
+            <td>1.6K</td>
+            <td>617.87μs</td>
+            <td><span class="ratio bad">31.40x</span></td>
+          </tr>
+          <tr>
+            <td>partition [100x100] kth=50 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>104.8K</td>
+            <td>2.1K</td>
+            <td>472.84μs</td>
+            <td><span class="ratio bad">49.57x</span></td>
+          </tr>
+          <tr>
+            <td>argpartition [100x100] kth=50 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>87.3K</td>
+            <td>1.8K</td>
+            <td>554.81μs</td>
+            <td><span class="ratio bad">48.46x</span></td>
+          </tr>
+          <tr>
+            <td>lexsort [1000] x 2 keys <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>505.6K</td>
+            <td>67.7K</td>
+            <td>14.76μs</td>
+            <td><span class="ratio bad">7.46x</span></td>
+          </tr>
+          <tr>
+            <td>sort_complex [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>72.3K</td>
+            <td>79.0K</td>
+            <td>12.66μs</td>
+            <td><span class="ratio good">0.92x</span></td>
+          </tr>
+          <tr>
+            <td>sort [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>39.9K</td>
+            <td>1.6K</td>
+            <td>634.69μs</td>
+            <td><span class="ratio bad">25.34x</span></td>
+          </tr>
+          <tr>
+            <td>argsort [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>48.8K</td>
+            <td>1.6K</td>
+            <td>636.96μs</td>
+            <td><span class="ratio bad">31.11x</span></td>
+          </tr>
+          <tr>
+            <td>sort [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>47.6K</td>
+            <td>1.6K</td>
+            <td>644.39μs</td>
+            <td><span class="ratio bad">30.69x</span></td>
+          </tr>
+          <tr>
+            <td>argsort [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>58.7K</td>
+            <td>1.6K</td>
+            <td>642.81μs</td>
+            <td><span class="ratio bad">37.71x</span></td>
+          </tr>
+          <tr>
+            <td>nonzero [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>32.9K</td>
+            <td>12.7K</td>
+            <td>78.99μs</td>
+            <td><span class="ratio ok">2.60x</span></td>
+          </tr>
+          <tr>
+            <td>argwhere [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>24.4K</td>
+            <td>7.6K</td>
+            <td>130.94μs</td>
+            <td><span class="ratio ok">3.20x</span></td>
+          </tr>
+          <tr>
+            <td>flatnonzero [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>61.9K</td>
+            <td>36.6K</td>
+            <td>27.34μs</td>
+            <td><span class="ratio good">1.69x</span></td>
+          </tr>
+          <tr>
+            <td>where [100x100] with x,y <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>204.2K</td>
+            <td>48.2K</td>
+            <td>20.73μs</td>
+            <td><span class="ratio ok">4.23x</span></td>
+          </tr>
+          <tr>
+            <td>searchsorted [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>423.5K</td>
+            <td>297.2K</td>
+            <td>3.36μs</td>
+            <td><span class="ratio good">1.43x</span></td>
+          </tr>
+          <tr>
+            <td>extract [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>32.1K</td>
+            <td>25.7K</td>
+            <td>38.89μs</td>
+            <td><span class="ratio good">1.25x</span></td>
+          </tr>
+          <tr>
+            <td>count_nonzero [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>293.5K</td>
+            <td>97.4K</td>
+            <td>10.27μs</td>
+            <td><span class="ratio ok">3.01x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>SETS</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>trim_zeros [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>158.7K</td>
+            <td>530.7K</td>
+            <td>1.88μs</td>
+            <td><span class="ratio good">0.30x</span></td>
+          </tr>
+          <tr>
+            <td>unique_values [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>61.4K</td>
+            <td>27.9K</td>
+            <td>35.90μs</td>
+            <td><span class="ratio ok">2.20x</span></td>
+          </tr>
+          <tr>
+            <td>unique_counts [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>52.1K</td>
+            <td>28.3K</td>
+            <td>35.38μs</td>
+            <td><span class="ratio good">1.84x</span></td>
+          </tr>
+          <tr>
+            <td>unique_values [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>106.7K</td>
+            <td>25.2K</td>
+            <td>39.75μs</td>
+            <td><span class="ratio ok">4.24x</span></td>
+          </tr>
+          <tr>
+            <td>unique_values [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>24.4K</td>
+            <td>25.1K</td>
+            <td>39.79μs</td>
+            <td><span class="ratio good">0.97x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>LOGIC</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>logical_and [100x100] & scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>224.4K</td>
+            <td>4.6K</td>
+            <td>218.18μs</td>
+            <td><span class="ratio bad">48.95x</span></td>
+          </tr>
+          <tr>
+            <td>logical_and [100x100] & [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>224.2K</td>
+            <td>82.5K</td>
+            <td>12.12μs</td>
+            <td><span class="ratio ok">2.72x</span></td>
+          </tr>
+          <tr>
+            <td>logical_or [100x100] | scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>254.2K</td>
+            <td>127.5K</td>
+            <td>7.84μs</td>
+            <td><span class="ratio good">1.99x</span></td>
+          </tr>
+          <tr>
+            <td>logical_not [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>276.3K</td>
+            <td>131.9K</td>
+            <td>7.58μs</td>
+            <td><span class="ratio ok">2.10x</span></td>
+          </tr>
+          <tr>
+            <td>logical_xor [100x100] ^ scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>209.5K</td>
+            <td>3.9K</td>
+            <td>257.04μs</td>
+            <td><span class="ratio bad">53.86x</span></td>
+          </tr>
+          <tr>
+            <td>isfinite [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>550.8K</td>
+            <td>141.2K</td>
+            <td>7.08μs</td>
+            <td><span class="ratio ok">3.90x</span></td>
+          </tr>
+          <tr>
+            <td>isnan [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>530.2K</td>
+            <td>131.6K</td>
+            <td>7.60μs</td>
+            <td><span class="ratio ok">4.03x</span></td>
+          </tr>
+          <tr>
+            <td>signbit [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>517.9K</td>
+            <td>46.0K</td>
+            <td>21.72μs</td>
+            <td><span class="ratio bad">11.25x</span></td>
+          </tr>
+          <tr>
+            <td>copysign [100x100] scalar <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>246.2K</td>
+            <td>4.5K</td>
+            <td>219.84μs</td>
+            <td><span class="ratio bad">54.12x</span></td>
+          </tr>
+          <tr>
+            <td>isneginf [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>297.5K</td>
+            <td>117.9K</td>
+            <td>8.48μs</td>
+            <td><span class="ratio ok">2.52x</span></td>
+          </tr>
+          <tr>
+            <td>isposinf [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>267.2K</td>
+            <td>115.1K</td>
+            <td>8.69μs</td>
+            <td><span class="ratio ok">2.32x</span></td>
+          </tr>
+          <tr>
+            <td>isreal [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>214.8K</td>
+            <td>728.6K</td>
+            <td>1.37μs</td>
+            <td><span class="ratio good">0.29x</span></td>
+          </tr>
+          <tr>
+            <td>isnan [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>651.4K</td>
+            <td>93.5K</td>
+            <td>10.70μs</td>
+            <td><span class="ratio bad">6.97x</span></td>
+          </tr>
+          <tr>
+            <td>logical_and [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#fff7ed;color:#9a3412;opacity:1;vertical-align:middle">int32</span></td>
+            <td>520.4K</td>
+            <td>60.2K</td>
+            <td>16.63μs</td>
+            <td><span class="ratio bad">8.65x</span></td>
+          </tr>
+          <tr>
+            <td>logical_and [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#e0f2fe;color:#0369a1;opacity:1;vertical-align:middle">float32</span></td>
+            <td>232.3K</td>
+            <td>55.5K</td>
+            <td>18.00μs</td>
+            <td><span class="ratio ok">4.18x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>RANDOM</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>random.random [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>53.1K</td>
+            <td>6.7K</td>
+            <td>149.66μs</td>
+            <td><span class="ratio bad">7.95x</span></td>
+          </tr>
+          <tr>
+            <td>random.rand [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>52.6K</td>
+            <td>6.7K</td>
+            <td>149.33μs</td>
+            <td><span class="ratio bad">7.86x</span></td>
+          </tr>
+          <tr>
+            <td>random.randn [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>10.3K</td>
+            <td>3.2K</td>
+            <td>310.35μs</td>
+            <td><span class="ratio ok">3.20x</span></td>
+          </tr>
+          <tr>
+            <td>random.randint [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>26.0K</td>
+            <td>4.0K</td>
+            <td>247.88μs</td>
+            <td><span class="ratio bad">6.44x</span></td>
+          </tr>
+          <tr>
+            <td>random.uniform [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>39.7K</td>
+            <td>6.5K</td>
+            <td>154.63μs</td>
+            <td><span class="ratio bad">6.13x</span></td>
+          </tr>
+          <tr>
+            <td>random.normal [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>10.3K</td>
+            <td>3.2K</td>
+            <td>310.47μs</td>
+            <td><span class="ratio ok">3.20x</span></td>
+          </tr>
+          <tr>
+            <td>random.standard_normal [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>10.6K</td>
+            <td>3.2K</td>
+            <td>311.28μs</td>
+            <td><span class="ratio ok">3.29x</span></td>
+          </tr>
+          <tr>
+            <td>random.exponential [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>12.8K</td>
+            <td>4.5K</td>
+            <td>222.93μs</td>
+            <td><span class="ratio ok">2.85x</span></td>
+          </tr>
+          <tr>
+            <td>random.poisson [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>3.2K</td>
+            <td>900</td>
+            <td>1.111ms</td>
+            <td><span class="ratio ok">3.50x</span></td>
+          </tr>
+          <tr>
+            <td>random.binomial [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>3.6K</td>
+            <td>638</td>
+            <td>1.568ms</td>
+            <td><span class="ratio bad">5.68x</span></td>
+          </tr>
+          <tr>
+            <td>random.choice [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>227.3K</td>
+            <td>41.2K</td>
+            <td>24.27μs</td>
+            <td><span class="ratio bad">5.52x</span></td>
+          </tr>
+          <tr>
+            <td>random.permutation [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>129.3K</td>
+            <td>13.6K</td>
+            <td>73.71μs</td>
+            <td><span class="ratio bad">9.53x</span></td>
+          </tr>
+          <tr>
+            <td>random.gamma [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>5.7K</td>
+            <td>1.4K</td>
+            <td>738.90μs</td>
+            <td><span class="ratio ok">4.23x</span></td>
+          </tr>
+          <tr>
+            <td>random.beta [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>2.9K</td>
+            <td>680</td>
+            <td>1.470ms</td>
+            <td><span class="ratio ok">4.30x</span></td>
+          </tr>
+          <tr>
+            <td>random.chisquare [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>11.6K</td>
+            <td>1.3K</td>
+            <td>741.28μs</td>
+            <td><span class="ratio bad">8.59x</span></td>
+          </tr>
+          <tr>
+            <td>random.laplace [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>6.7K</td>
+            <td>3.9K</td>
+            <td>256.98μs</td>
+            <td><span class="ratio good">1.72x</span></td>
+          </tr>
+          <tr>
+            <td>random.geometric [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>6.5K</td>
+            <td>2.8K</td>
+            <td>352.23μs</td>
+            <td><span class="ratio ok">2.28x</span></td>
+          </tr>
+          <tr>
+            <td>random.dirichlet [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>11.1K</td>
+            <td>3.5K</td>
+            <td>283.89μs</td>
+            <td><span class="ratio ok">3.14x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>COMPLEX</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>zeros [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>506.1K</td>
+            <td>264.0K</td>
+            <td>3.79μs</td>
+            <td><span class="ratio good">1.92x</span></td>
+          </tr>
+          <tr>
+            <td>ones [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>248.0K</td>
+            <td>52.1K</td>
+            <td>19.21μs</td>
+            <td><span class="ratio ok">4.76x</span></td>
+          </tr>
+          <tr>
+            <td>add [100x100] + [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>184.5K</td>
+            <td>5.9K</td>
+            <td>170.48μs</td>
+            <td><span class="ratio bad">31.45x</span></td>
+          </tr>
+          <tr>
+            <td>multiply [100x100] * [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>211.5K</td>
+            <td>16.2K</td>
+            <td>61.59μs</td>
+            <td><span class="ratio bad">13.03x</span></td>
+          </tr>
+          <tr>
+            <td>divide [100x100] / [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>85.9K</td>
+            <td>16.2K</td>
+            <td>61.76μs</td>
+            <td><span class="ratio bad">5.30x</span></td>
+          </tr>
+          <tr>
+            <td>real [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>831.4K</td>
+            <td>118.2K</td>
+            <td>8.46μs</td>
+            <td><span class="ratio bad">7.03x</span></td>
+          </tr>
+          <tr>
+            <td>imag [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>831.8K</td>
+            <td>109.3K</td>
+            <td>9.15μs</td>
+            <td><span class="ratio bad">7.61x</span></td>
+          </tr>
+          <tr>
+            <td>conj [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>254.2K</td>
+            <td>84.2K</td>
+            <td>11.87μs</td>
+            <td><span class="ratio ok">3.02x</span></td>
+          </tr>
+          <tr>
+            <td>angle [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>59.5K</td>
+            <td>15.1K</td>
+            <td>66.41μs</td>
+            <td><span class="ratio ok">3.95x</span></td>
+          </tr>
+          <tr>
+            <td>abs [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>57.0K</td>
+            <td>86.2K</td>
+            <td>11.60μs</td>
+            <td><span class="ratio good">0.66x</span></td>
+          </tr>
+          <tr>
+            <td>sqrt [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>42.0K</td>
+            <td>45.0K</td>
+            <td>22.20μs</td>
+            <td><span class="ratio good">0.93x</span></td>
+          </tr>
+          <tr>
+            <td>sum [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>200.5K</td>
+            <td>129.0K</td>
+            <td>7.75μs</td>
+            <td><span class="ratio good">1.55x</span></td>
+          </tr>
+          <tr>
+            <td>mean [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>175.7K</td>
+            <td>128.6K</td>
+            <td>7.78μs</td>
+            <td><span class="ratio good">1.37x</span></td>
+          </tr>
+          <tr>
+            <td>prod [100x100] (complex128) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>23.1K</td>
+            <td>59.6K</td>
+            <td>16.77μs</td>
+            <td><span class="ratio good">0.39x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>POLYNOMIALS</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>poly [10 roots] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>94.6K</td>
+            <td>546.6K</td>
+            <td>1.83μs</td>
+            <td><span class="ratio good">0.17x</span></td>
+          </tr>
+          <tr>
+            <td>polyadd [10] + [10] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>558.0K</td>
+            <td>193.6K</td>
+            <td>5.16μs</td>
+            <td><span class="ratio ok">2.88x</span></td>
+          </tr>
+          <tr>
+            <td>polyder [10] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>361.9K</td>
+            <td>882.7K</td>
+            <td>1.13μs</td>
+            <td><span class="ratio good">0.41x</span></td>
+          </tr>
+          <tr>
+            <td>polydiv [10] / [5] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>15.5K</td>
+            <td>542.8K</td>
+            <td>1.84μs</td>
+            <td><span class="ratio good">0.03x</span></td>
+          </tr>
+          <tr>
+            <td>polyfit [100] deg=5 <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>64.0K</td>
+            <td>229.8K</td>
+            <td>4.35μs</td>
+            <td><span class="ratio good">0.28x</span></td>
+          </tr>
+          <tr>
+            <td>polyint [10] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>317.7K</td>
+            <td>834.6K</td>
+            <td>1.20μs</td>
+            <td><span class="ratio good">0.38x</span></td>
+          </tr>
+          <tr>
+            <td>polymul [10] * [10] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>97.8K</td>
+            <td>79.7K</td>
+            <td>12.55μs</td>
+            <td><span class="ratio good">1.23x</span></td>
+          </tr>
+          <tr>
+            <td>polysub [10] - [10] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>549.1K</td>
+            <td>196.2K</td>
+            <td>5.10μs</td>
+            <td><span class="ratio ok">2.80x</span></td>
+          </tr>
+          <tr>
+            <td>polyval [10] at [100 points] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>145.2K</td>
+            <td>9.8K</td>
+            <td>101.86μs</td>
+            <td><span class="ratio bad">14.79x</span></td>
+          </tr>
+          <tr>
+            <td>roots [5] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>73.1K</td>
+            <td>143.0K</td>
+            <td>6.99μs</td>
+            <td><span class="ratio good">0.51x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>UTILITIES</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>can_cast <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>697.0K</td>
+            <td>7.65M</td>
+            <td>0.13μs</td>
+            <td><span class="ratio good">0.09x</span></td>
+          </tr>
+          <tr>
+            <td>result_type <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>692.7K</td>
+            <td>6.49M</td>
+            <td>0.15μs</td>
+            <td><span class="ratio good">0.11x</span></td>
+          </tr>
+          <tr>
+            <td>min_scalar_type <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>782.2K</td>
+            <td>10.16M</td>
+            <td>0.10μs</td>
+            <td><span class="ratio good">0.08x</span></td>
+          </tr>
+          <tr>
+            <td>issubdtype <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>763.7K</td>
+            <td>8.50M</td>
+            <td>0.12μs</td>
+            <td><span class="ratio good">0.09x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="category-section">
+      <h2>FFT</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>NumPy (ops/sec)</th>
+            <th>numpy-ts (ops/sec)</th>
+            <th>Time (ms)</th>
+            <th>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>fft [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>124.5K</td>
+            <td>10.9K</td>
+            <td>91.90μs</td>
+            <td><span class="ratio bad">11.45x</span></td>
+          </tr>
+          <tr>
+            <td>ifft [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>119.8K</td>
+            <td>10.6K</td>
+            <td>94.20μs</td>
+            <td><span class="ratio bad">11.28x</span></td>
+          </tr>
+          <tr>
+            <td>rfft [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>170.0K</td>
+            <td>10.6K</td>
+            <td>94.74μs</td>
+            <td><span class="ratio bad">16.11x</span></td>
+          </tr>
+          <tr>
+            <td>irfft [501] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>162.5K</td>
+            <td>10.2K</td>
+            <td>98.33μs</td>
+            <td><span class="ratio bad">15.98x</span></td>
+          </tr>
+          <tr>
+            <td>hfft [501] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>153.9K</td>
+            <td>8.9K</td>
+            <td>112.83μs</td>
+            <td><span class="ratio bad">17.36x</span></td>
+          </tr>
+          <tr>
+            <td>ihfft [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>145.0K</td>
+            <td>9.4K</td>
+            <td>106.59μs</td>
+            <td><span class="ratio bad">15.45x</span></td>
+          </tr>
+          <tr>
+            <td>fft2 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>19.5K</td>
+            <td>527</td>
+            <td>1.899ms</td>
+            <td><span class="ratio bad">36.96x</span></td>
+          </tr>
+          <tr>
+            <td>ifft2 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>19.8K</td>
+            <td>506</td>
+            <td>1.977ms</td>
+            <td><span class="ratio bad">39.08x</span></td>
+          </tr>
+          <tr>
+            <td>rfft2 [100x100] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>29.2K</td>
+            <td>513</td>
+            <td>1.949ms</td>
+            <td><span class="ratio bad">56.94x</span></td>
+          </tr>
+          <tr>
+            <td>irfft2 [100x51] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>26.0K</td>
+            <td>503</td>
+            <td>1.989ms</td>
+            <td><span class="ratio bad">51.63x</span></td>
+          </tr>
+          <tr>
+            <td>fftn [32x32x32] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>3.4K</td>
+            <td>779</td>
+            <td>1.284ms</td>
+            <td><span class="ratio ok">4.36x</span></td>
+          </tr>
+          <tr>
+            <td>ifftn [32x32x32] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>3.2K</td>
+            <td>732</td>
+            <td>1.365ms</td>
+            <td><span class="ratio ok">4.40x</span></td>
+          </tr>
+          <tr>
+            <td>rfftn [32x32x32] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>7.1K</td>
+            <td>708</td>
+            <td>1.412ms</td>
+            <td><span class="ratio bad">10.00x</span></td>
+          </tr>
+          <tr>
+            <td>irfftn [32x32x17] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>6.5K</td>
+            <td>626</td>
+            <td>1.598ms</td>
+            <td><span class="ratio bad">10.41x</span></td>
+          </tr>
+          <tr>
+            <td>fftfreq(1000) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>280.8K</td>
+            <td>854.2K</td>
+            <td>1.17μs</td>
+            <td><span class="ratio good">0.33x</span></td>
+          </tr>
+          <tr>
+            <td>rfftfreq(1000) <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>401.8K</td>
+            <td>1.15M</td>
+            <td>0.87μs</td>
+            <td><span class="ratio good">0.35x</span></td>
+          </tr>
+          <tr>
+            <td>fftshift [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>239.8K</td>
+            <td>37.6K</td>
+            <td>26.61μs</td>
+            <td><span class="ratio bad">6.38x</span></td>
+          </tr>
+          <tr>
+            <td>ifftshift [1000] <span style="display:inline-block;font-size:0.75em;font-weight:600;padding:1px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;opacity:0.55;vertical-align:middle">float64</span></td>
+            <td>245.3K</td>
+            <td>39.0K</td>
+            <td>25.65μs</td>
+            <td><span class="ratio bad">6.29x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <p>Generated by numpy-ts Benchmark Suite</p>
+      <p>Lower ratios are better (closer to NumPy performance)</p>
+    </div>
+  </div>
+
+  <script>
+    // Category chart
+    new Chart(document.getElementById('categoryChart'), {
+      type: 'bar',
+      data: {
+        labels: ["creation","arithmetic","math","gradient","linalg","reductions","manipulation","io","trig","indexing","bitwise","sorting","sets","logic","random","complex","polynomials","utilities","fft"],
+        datasets: [{
+          label: 'Average Slowdown (x times slower than NumPy)',
+          data: [2.727691283745544,12.204471421520504,7.671867481598198,21.193623264428695,61.02000063461869,7.289913780661505,6.776389413646996,1.77849544069997,4.264359409016371,7.12669585235464,7.53567769355602,16.907063097063038,1.911746868160082,13.857324702189349,4.967227876882001,5.926662884837598,2.348249168327494,0.09118629215296878,17.485829458060582],
+          backgroundColor: 'rgba(102, 126, 234, 0.8)',
+          borderColor: 'rgba(102, 126, 234, 1)',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: true
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Slowdown Ratio'
+            }
+          }
+        }
+      }
+    });
+
+    // Detailed chart
+    new Chart(document.getElementById('detailedChart'), {
+      type: 'bar',
+      data: {
+        labels: ["zeros [1000]","zeros [100x100]","ones [100x100]","arange(1000)","linspace(0, 100, 1000)","logspace(0, 3, 1000)","geomspace(1, 1000, 1000)","eye(100)","identity(100)","empty [100x100]","full [100x100]","copy [100x100]","zeros_like [100x100]","asarray_chkfinite [100x100]","require [100x100]","zeros [100x100] float32","ones [100x100] float32","zeros [100x100] int32","ones [100x100] int32","add [100x100] + scalar","add [100x100] + [100x100]","multiply [100x100] * scalar","multiply [100x100] * [100x100]","mod [100x100] % scalar","floor_divide [100x100] // scalar","reciprocal [100x100]","cbrt [100x100]","fabs [100x100]","divmod [100x100] % scalar","gcd [100x100] scalar","lcm [100x100] scalar","float_power [100x100] ** scalar","add [100x100] + [100x100] float32","multiply [100x100] * [100x100] float32","add [100x100] + [100x100] int8","add [100x100] + [100x100] uint16","sqrt [100x100]","power [100x100] ** 2","absolute [100x100]","negative [100x100]","sign [100x100]","sin [100x100]","cos [100x100]","tan [100x100]","arctan2 [100x100]","hypot [100x100]","sinh [100x100]","cosh [100x100]","tanh [100x100]","exp [100x100]","exp2 [100x100]","log [100x100]","log2 [100x100]","log10 [100x100]","logaddexp [100x100]","diff [100x100]","gradient [1000]","cross [1000x3]","sqrt [100x100] float32","exp [100x100] float32","sin [100x100] float32","log [100x100] float32","absolute [100x100] float32","absolute [100x100] int32","sign [100x100] int32","dot 1D · 1D [1000]","dot 2D · 1D [100x100] · [100]","dot 2D · 2D [100x100] · [100x100]","matmul [100x100] @ [100x100]","matmul [100x100] @ [100x100]","complex matmul [100x100] @ [100x100]","trace [100x100]","inner 1D · 1D [1000]","inner 2D · 2D [100x100]","outer [1000] x [1000]","trace [100x100]","transpose [100x100]","matmul [500x500] @ [500x500]","sum [100x100]","sum [100x100] axis=0","mean [100x100]","max [100x100]","min [100x100]","prod [100x100]","argmin [100x100]","argmax [100x100]","var [100x100]","std [100x100]","all [100x100]","any [100x100]","cumsum [100x100]","cumprod [100x100]","ptp [100x100]","median [100x100]","percentile [100x100]","quantile [100x100]","average [100x100]","nansum [100x100]","nanmean [100x100]","nanmin [100x100]","nanmax [100x100]","nanquantile [100x100]","nanpercentile [100x100]","sum [100x100] float32","mean [100x100] float32","sum [100x100] int8","sum [100x100] uint16","reshape [100x100] -> [100x100] (contiguous)","flatten [100x100]","ravel [100x100]","swapaxes [100x100]","concatenate [100x100] + [100x100]","stack [100x100] + [100x100]","vstack [100x100]","hstack [100x100]","tile [100x100] x [2,2]","repeat [100x100] x 2","broadcast_to [100] -> [100x100]","take [100x100] 100 indices","concat [100x100] + [100x100]","unstack [100x100]","block [100x100] + [100x100]","item [100x100]","tolist [100x100]","reshape [100x100] -> [100x100] float32","concatenate [100x100] + [100x100] float32","reshape [100x100] -> [100x100] int32","concatenate [100x100] + [100x100] int32","serializeNpy [100x100] float64","serializeNpy [100x100] int32","parseNpy [100x100] float64","parseNpy [100x100] int32","serializeNpzSync {a, b} [100x100]","parseNpzSync {a, b} [100x100]","serializeNpy [500x500] float64","parseNpy [500x500] float64","zeros [100x100] (int64)","add [100x100] + [100x100] (int64)","multiply [100x100] * scalar (int64)","absolute [100x100] (int64)","sum [100x100] (int64)","max [100x100] (int64)","add [100x100] + [100x100] (uint64)","deg2rad [1000] float32","deg2rad [1000] int32","deg2rad [1000]","rad2deg [1000]","diagonal [100x100]","kron [10x10] ⊗ [10x10]","diag [100]","tri [100x100]","tril [100x100]","triu [100x100]","flip [100x100]","rot90 [100x100]","roll [100x100] shift=10","pad [100x100] width=2","einsum matmul [50x50]","linalg.det [50x50]","linalg.inv [50x50]","linalg.solve [50x50]","linalg.qr [50x50]","linalg.cholesky [50x50]","linalg.svd [50x50]","linalg.eigh [50x50]","linalg.norm [50x50]","linalg.matrix_rank [50x50]","linalg.pinv [50x50]","linalg.cond [50x50]","linalg.matrix_power [50x50] n=3","linalg.lstsq [50x50]","linalg.cross [3]","linalg.slogdet [50x50]","linalg.svdvals [50x50]","linalg.multi_dot [50x50] x3","vdot [1000]","vecdot [100x100]","matrix_transpose [100x100]","matvec [50x50] · [50]","vecmat [50] · [50x50]","take_along_axis [100x100]","compress [100x100]","diag_indices n=100","tril_indices n=100","triu_indices n=100","indices [100x100]","ravel_multi_index [1000]","unravel_index [1000]","bitwise_and [100x100] & [100x100]","bitwise_or [100x100] | [100x100]","bitwise_xor [100x100] ^ [100x100]","bitwise_not [100x100]","invert [100x100]","left_shift [100x100] << 2","right_shift [100x100] >> 2","packbits [1000]","unpackbits [125]","bitwise_count [100x100]","bitwise_and [100x100] & [100x100] uint8","bitwise_and [100x100] & [100x100] int8","sort [100x100]","argsort [100x100]","partition [100x100] kth=50","argpartition [100x100] kth=50","lexsort [1000] x 2 keys","sort_complex [1000]","sort [100x100] float32","argsort [100x100] float32","sort [100x100] int32","argsort [100x100] int32","nonzero [100x100]","argwhere [100x100]","flatnonzero [100x100]","where [100x100] with x,y","searchsorted [1000]","extract [100x100]","count_nonzero [100x100]","bincount [1000]","digitize [1000]","histogram [1000]","histogram2d [1000]","correlate [1000]","convolve [1000]","cov [100x100]","corrcoef [100x100]","histogram_bin_edges [1000]","trapezoid [1000]","trim_zeros [1000]","unique_values [1000]","unique_counts [1000]","unique_values [1000] float32","unique_values [1000] int32","logical_and [100x100] & scalar","logical_and [100x100] & [100x100]","logical_or [100x100] | scalar","logical_not [100x100]","logical_xor [100x100] ^ scalar","isfinite [100x100]","isnan [100x100]","signbit [100x100]","copysign [100x100] scalar","isneginf [100x100]","isposinf [100x100]","isreal [100x100]","isnan [100x100] float32","logical_and [100x100] int32","logical_and [100x100] float32","random.random [100x100]","random.rand [100x100]","random.randn [100x100]","random.randint [100x100]","random.uniform [100x100]","random.normal [100x100]","random.standard_normal [100x100]","random.exponential [100x100]","random.poisson [100x100]","random.binomial [100x100]","random.choice [1000]","random.permutation [1000]","random.gamma [100x100]","random.beta [100x100]","random.chisquare [100x100]","random.laplace [100x100]","random.geometric [100x100]","random.dirichlet [1000]","zeros [100x100] (complex128)","ones [100x100] (complex128)","add [100x100] + [100x100] (complex128)","multiply [100x100] * [100x100] (complex128)","divide [100x100] / [100x100] (complex128)","real [100x100] (complex128)","imag [100x100] (complex128)","conj [100x100] (complex128)","angle [100x100] (complex128)","abs [100x100] (complex128)","sqrt [100x100] (complex128)","sum [100x100] (complex128)","mean [100x100] (complex128)","prod [100x100] (complex128)","poly [10 roots]","polyadd [10] + [10]","polyder [10]","polydiv [10] / [5]","polyfit [100] deg=5","polyint [10]","polymul [10] * [10]","polysub [10] - [10]","polyval [10] at [100 points]","roots [5]","can_cast","result_type","min_scalar_type","issubdtype","clip [100x100]","maximum [100x100]","minimum [100x100]","fmax [100x100]","fmin [100x100]","nan_to_num [100x100]","sinc [100x100]","i0 [100x100]","interp [1000]","unwrap [1000]","fft [1000]","ifft [1000]","rfft [1000]","irfft [501]","hfft [501]","ihfft [1000]","fft2 [100x100]","ifft2 [100x100]","rfft2 [100x100]","irfft2 [100x51]","fftn [32x32x32]","ifftn [32x32x32]","rfftn [32x32x32]","irfftn [32x32x17]","fftfreq(1000)","rfftfreq(1000)","fftshift [1000]","ifftshift [1000]"],
+        datasets: [{
+          label: 'Slowdown Ratio (x times slower)',
+          data: [2.8294902724487088,2.119523635549706,2.455439921120338,3.923703008372575,0.42745392130021737,0.8140013870683683,0.2819639425305048,1.2587408395447532,1.2033285452715201,14.190362363567381,1.819961693296696,2.6685376608541196,1.7013060646475755,11.724178331658782,0.09150019598478752,2.9791957872983925,2.260166420882309,3.355578794392401,2.3879690767839823,5.271851933570985,7.594811967811215,5.1692624147680135,7.398244348186438,3.67827391624212,2.4979863808782614,4.514712351984706,1.8213377549524108,0.9629752566046008,8.0835591691669,4.8907282813128585,3.670328285689361,1.2720780796066482,19.94575171692662,19.11748588198761,47.34658895255648,36.967291871488925,2.6413341563855894,28.745025726942345,6.118909603357916,5.8455176209532125,3.085895528698752,5.3431228318233925,5.481865603864508,5.515994724308617,3.583480165646282,4.480669296217681,3.476677528351028,2.2526901996163433,2.503304075454492,3.1346511871167984,4.4654360056813305,2.9522623400540797,2.190024470803728,2.149729941239403,11.098155100592141,34.15102676538287,5.550327768878007,23.879515259025208,29.32423769719265,4.293558001866555,12.656104900503319,3.7969273350995367,17.10941429050378,21.70513836655837,16.525831091412115,4.171226075356504,34.39986190862859,97.0109586955493,93.56738561718848,200.5397151147971,773.0423173558456,0.875839677772199,4.21261084801568,149.26926319398768,18.35673247741685,0.8223373560229265,2.377366216143051,242.92755958571718,2.8573575328602363,79.8727662536012,2.12615433968849,5.100418865135602,2.892855784940202,0.9549885410286066,0.6605333559571999,1.3286152563814715,1.370139575516303,1.3252234706624304,1.2349079478638971,1.2256023363218331,0.4732713220125496,0.5014935231687446,3.5090821757887305,8.596103409136376,3.8724104920190516,3.9471798674463026,1.80948974586761,2.088386898083967,0.9112547176827328,6.281188250518298,6.069157533964475,3.514740794118369,3.5504490544389204,3.7470154297155047,2.202761862670221,4.345104855201128,4.172227087558216,0.8755538144242639,2.1112287815925748,0.933400789557274,0.9307047418123474,1.9307509709260122,1.6537072332811127,1.7857181606193853,2.179511787481497,36.4404082812835,16.043444459737117,0.46312075654581975,0.5253926996855662,1.8739302542468046,5.94903131068682,1.8240459852446027,0.34091413963808564,0.10712057184569147,0.8684710859604091,1.8647993530106441,0.8513614565123383,1.920874459395216,0.47428439629294467,0.37740793153297414,0.2007766296862719,0.11820571340424453,10.325144976450355,2.0884199199741107,0.2718102522903732,0.37191370596848433,3.692873285121064,5.170041648325914,2.67086482990359,38.28165749295719,9.864913685691176,33.6562707925022,19.367423818256835,4.69241233709757,3.4487513478942797,4.510811335262544,4.405462615811089,5.736757068418023,68.85478403510808,1.3450111451031,1.0329578249414408,1.018300737527768,0.8482279560020929,13.257344642717664,3.9178138742261512,15.426501760285566,55.33458397045842,5.953277925206401,3.5250735614873987,4.194971347392828,3.0813743830310387,57.547439103946026,17.95427950362533,32.42052234562616,2.6389353928782584,4.677416121452318,38.916723428262976,33.732487934425606,39.48400573584022,126.92453811817086,52.36672551855265,0.06404147032798174,2.427715402346872,42.26116603659264,51.732458110725446,4.9312819255439475,65.6458571465464,1.823776867055616,7.692259795486901,22.59898171501947,10.252577939289779,5.402230715573753,1.4297227585624073,1.308313879534758,1.1558490134455561,23.69102009386457,3.472673328057844,10.30117909050845,5.964403680279167,5.925097580356208,5.8824932076785466,5.025782665999957,4.9245687014228805,4.521805891771219,4.495743607738527,1.7756606483078483,1.6023344437142717,16.902403761096206,15.878592682214586,17.529245452092816,7.368271477079789,31.395526357946196,49.565016157168024,48.45723585371456,7.462833468842326,0.9161484135593319,25.336283523042233,31.106878556705716,30.69362196441257,37.70879324806066,2.5976232426086354,3.197740253212734,1.6926556078599768,4.232394729048001,1.4250402668517534,1.2500824047542922,3.013927125204948,0.9219506649240584,1.8446215539895336,0.1613638259173769,0.24430161232194514,48.72428230095766,46.867531648553665,13.262437376621696,11.051805127472123,0.13001158426504986,0.557451471426893,0.29897513143090204,2.2027679805573874,1.8439571279514582,4.24027161589223,0.9727624849684312,48.948021904610776,2.717310358210831,1.993981703353911,2.0955580543063403,53.86122717127983,3.902156849492431,4.027820666692962,11.249697639940026,54.124959864221054,2.5238704640606664,2.3205867522684387,0.2947554183632569,6.966741041004728,8.651845516501377,4.181337128533581,7.9481020458125045,7.855460648920243,3.199483483778243,6.4394135787778675,6.133841470913214,3.1988923773836415,3.2858494087421035,2.8489358364214534,3.5012373499490637,5.6837473639452085,5.515722661993903,9.534829457954004,4.23225038467573,4.301039295640648,8.589578976810856,1.7248682341243506,2.2765138945797028,3.1403353134532788,1.9166611549512018,4.763569707503503,31.44811411561454,13.029545751925486,5.3018247478637655,7.034594192613373,7.60765667136853,3.0189236889889886,3.9496447009369207,0.6612676379209665,0.9332732793736427,1.5546744293706505,1.3661726621873616,0.38735764710745524,0.17314101250017108,2.8818690927879462,0.41000610720413294,0.028611404246376825,0.278704047580481,0.3806432959423629,1.2265724390664214,2.799412713949003,14.792701872221485,0.510829697776561,0.09112501941533464,0.10677353791294111,0.07695780542868974,0.08988880585490959,3.5243625447455504,7.288953295017605,17.33737279552087,16.678170434417776,16.66923597681766,0.6640221757524062,1.300910008050952,0.07291770152216993,1.8674437379204076,0.3078828775258464,11.445656167166161,11.284115932774197,16.105350758821153,15.978533654433983,17.359617877055395,15.451404338005853,36.958857955634016,39.0787974664401,56.93817826024497,51.63332188586473,4.3559430925054095,4.402834746044337,9.996261362348339,10.405626366756612,0.32872969985593087,0.347933375050043,6.381071608126873,6.292695697962356],
+          backgroundColor: ["rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(255, 195, 18, 0.8)","rgba(255, 195, 18, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)","rgba(46, 213, 115, 0.8)","rgba(46, 213, 115, 0.8)","rgba(235, 77, 75, 0.8)","rgba(235, 77, 75, 0.8)"],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        indexAxis: 'y',
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Slowdown Ratio'
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
