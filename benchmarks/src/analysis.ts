@@ -6,7 +6,8 @@ import type {
   BenchmarkTiming,
   BenchmarkComparison,
   BenchmarkSummary,
-  BenchmarkCase
+  BenchmarkCase,
+  RuntimeComparison,
 } from './types';
 
 export function compareResults(
@@ -156,4 +157,136 @@ export function printResults(comparisons: BenchmarkComparison[], summary: Benchm
   }
 
   console.log('='.repeat(80) + '\n');
+}
+
+// --- Multi-runtime functions ---
+
+export function compareMultiRuntime(
+  specs: BenchmarkCase[],
+  numpyResults: BenchmarkTiming[],
+  runtimeResults: Map<string, BenchmarkTiming[]>
+): RuntimeComparison[] {
+  const comparisons: RuntimeComparison[] = [];
+
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i]!;
+    const numpy = numpyResults[i]!;
+    const runtimes: Record<string, { timing: BenchmarkTiming; ratio: number }> = {};
+
+    for (const [runtimeName, results] of runtimeResults) {
+      const timing = results[i]!;
+      runtimes[runtimeName] = {
+        timing,
+        ratio: timing.mean_ms / numpy.mean_ms,
+      };
+    }
+
+    comparisons.push({
+      name: spec.name,
+      category: spec.category,
+      numpy,
+      runtimes,
+    });
+  }
+
+  return comparisons;
+}
+
+export function calculateMultiRuntimeSummaries(
+  comparisons: RuntimeComparison[]
+): Record<string, BenchmarkSummary> {
+  // Collect all runtime names
+  const runtimeNames = new Set<string>();
+  for (const c of comparisons) {
+    for (const name of Object.keys(c.runtimes)) {
+      runtimeNames.add(name);
+    }
+  }
+
+  const summaries: Record<string, BenchmarkSummary> = {};
+
+  for (const runtimeName of runtimeNames) {
+    const ratios = comparisons
+      .filter((c) => c.runtimes[runtimeName])
+      .map((c) => c.runtimes[runtimeName]!.ratio);
+
+    if (ratios.length === 0) continue;
+
+    const sum = ratios.reduce((a, b) => a + b, 0);
+    const avg_slowdown = sum / ratios.length;
+    const sorted = [...ratios].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median_slowdown =
+      sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+
+    summaries[runtimeName] = {
+      avg_slowdown,
+      median_slowdown,
+      best_case: Math.min(...ratios),
+      worst_case: Math.max(...ratios),
+      total_benchmarks: ratios.length,
+    };
+  }
+
+  return summaries;
+}
+
+export function groupMultiRuntimeByCategory(
+  comparisons: RuntimeComparison[]
+): Map<string, RuntimeComparison[]> {
+  const groups = new Map<string, RuntimeComparison[]>();
+  for (const comparison of comparisons) {
+    const existing = groups.get(comparison.category) || [];
+    existing.push(comparison);
+    groups.set(comparison.category, existing);
+  }
+  return groups;
+}
+
+export function printMultiRuntimeResults(
+  comparisons: RuntimeComparison[],
+  summaries: Record<string, BenchmarkSummary>
+): void {
+  const groups = groupMultiRuntimeByCategory(comparisons);
+  const runtimeNames = Object.keys(summaries);
+
+  console.log('\n' + '='.repeat(100));
+  console.log('MULTI-RUNTIME BENCHMARK RESULTS');
+  console.log('='.repeat(100));
+
+  for (const [category, items] of groups) {
+    console.log(`\n[${category.toUpperCase()}]`);
+
+    for (const item of items) {
+      const parts = [`  ${item.name.padEnd(35)} NumPy: ${formatDuration(item.numpy.mean_ms).padStart(10)}`];
+
+      for (const rt of runtimeNames) {
+        const entry = item.runtimes[rt];
+        if (entry) {
+          const color = entry.ratio < 2 ? '\x1b[32m' : entry.ratio < 5 ? '\x1b[33m' : '\x1b[31m';
+          const reset = '\x1b[0m';
+          parts.push(
+            `${rt}: ${formatDuration(entry.timing.mean_ms).padStart(10)} (${color}${formatRatio(entry.ratio)}${reset})`
+          );
+        }
+      }
+
+      console.log(parts.join(' | '));
+    }
+  }
+
+  // Per-runtime summary
+  console.log('\n' + '='.repeat(100));
+  console.log('SUMMARY BY RUNTIME');
+  console.log('='.repeat(100));
+
+  for (const [runtimeName, summary] of Object.entries(summaries)) {
+    console.log(`\n  ${runtimeName}:`);
+    console.log(`    Average slowdown: ${formatRatio(summary.avg_slowdown)}`);
+    console.log(`    Median slowdown:  ${formatRatio(summary.median_slowdown)}`);
+    console.log(`    Best case:        ${formatRatio(summary.best_case)}`);
+    console.log(`    Worst case:       ${formatRatio(summary.worst_case)}`);
+  }
+
+  console.log('='.repeat(100) + '\n');
 }

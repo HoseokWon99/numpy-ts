@@ -10,12 +10,22 @@ import type { BenchmarkCase, BenchmarkTiming } from './types';
 export async function runPythonBenchmarks(
   specs: BenchmarkCase[],
   minSampleTimeMs: number = 100,
-  targetSamples: number = 5
+  targetSamples: number = 5,
+  singleThread: boolean = false
 ): Promise<{ results: BenchmarkTiming[]; pythonVersion?: string; numpyVersion?: string }> {
   const scriptPath = resolve(__dirname, '../scripts/numpy_benchmark.py');
 
   return new Promise((resolve, reject) => {
-    const python = spawn('python3', [scriptPath]);
+    const env = { ...process.env };
+    if (singleThread) {
+      env.OMP_NUM_THREADS = '1';
+      env.MKL_NUM_THREADS = '1';
+      env.OPENBLAS_NUM_THREADS = '1';
+      env.NUMEXPR_NUM_THREADS = '1';
+      env.VECLIB_MAXIMUM_THREADS = '1'; // Apple Accelerate
+    }
+
+    const python = spawn('python3', [scriptPath], { env });
 
     let stdout = '';
     let stderr = '';

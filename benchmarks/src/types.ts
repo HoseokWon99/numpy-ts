@@ -64,8 +64,36 @@ export interface BenchmarkReport {
 
 export type BenchmarkMode = 'quick' | 'standard' | 'large';
 
+export type RuntimeName = 'node' | 'deno' | 'bun';
+
+export interface RuntimeInfo {
+  name: RuntimeName;
+  version: string;
+}
+
+export interface RuntimeComparison {
+  name: string;
+  category: string;
+  numpy: BenchmarkTiming;
+  runtimes: Record<string, { timing: BenchmarkTiming; ratio: number }>;
+}
+
+export interface MultiRuntimeReport {
+  timestamp: string;
+  environment: {
+    python_version?: string;
+    numpy_version?: string;
+    numpyjs_version: string;
+    runtimes: Record<string, string>;
+  };
+  results: RuntimeComparison[];
+  summaries: Record<string, BenchmarkSummary>;
+}
+
 export interface BenchmarkOptions {
   mode?: BenchmarkMode;
   category?: string;
   output?: string;
+  singleThread?: boolean;
+  runtimes?: RuntimeName[];
 }
