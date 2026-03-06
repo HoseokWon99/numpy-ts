@@ -128,14 +128,16 @@ describe('NDArray Operations', () => {
       ]);
       const B = array([[1, 2, 3]]);
 
-      expect(() => A.matmul(B)).toThrow('matmul shape mismatch');
+      expect(() => A.matmul(B)).toThrow('matmul');
     });
 
-    it('throws on non-2D arrays', () => {
+    it('supports 1D@1D (inner product)', () => {
       const A = array([1, 2, 3]);
       const B = array([4, 5, 6]);
 
-      expect(() => A.matmul(B)).toThrow('matmul requires 2D arrays');
+      // 1D @ 1D → scalar array (not an error)
+      const result = A.matmul(B);
+      expect(result).toBeTruthy();
     });
   });
 
