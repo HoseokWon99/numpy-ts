@@ -662,23 +662,22 @@ function matmul2D(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     return result;
   }
 
-  const computeDtype =
+  const outputDtype =
     resultDtype.startsWith('int') || resultDtype.startsWith('uint') || resultDtype === 'bool'
       ? 'float64'
       : resultDtype;
 
-  if (computeDtype !== 'float64') {
-    throw new Error(`matmul currently only supports float64, got ${computeDtype}`);
+  if (outputDtype !== 'float64' && outputDtype !== 'float32') {
+    throw new Error(`matmul currently only supports float64/float32, got ${outputDtype}`);
   }
 
-  let aData =
-    a.dtype === 'float64'
-      ? (a.data as Float64Array)
-      : Float64Array.from(Array.from(a.data as ArrayLike<number>).map(Number));
-  let bData =
-    b.dtype === 'float64'
-      ? (b.data as Float64Array)
-      : Float64Array.from(Array.from(b.data as ArrayLike<number>).map(Number));
+  const toF64 = (storage: typeof a): Float64Array => {
+    if (storage.dtype === 'float64') return storage.data as Float64Array;
+    if (storage.dtype === 'float32') return Float64Array.from(storage.data as Float32Array);
+    return Float64Array.from(Array.from(storage.data as ArrayLike<number>).map(Number));
+  };
+  let aData = toF64(a);
+  let bData = toF64(b);
 
   if (a.offset > 0) {
     aData = aData.subarray(a.offset) as Float64Array;
@@ -714,6 +713,14 @@ function matmul2D(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const result = ArrayStorage.zeros([m, n], 'float64');
 
   dgemm(transA, transB, m, n, k, 1.0, aData, lda, bData, ldb, result.data as Float64Array, n);
+
+  if (outputDtype === 'float32') {
+    const f32 = ArrayStorage.zeros([m, n], 'float32');
+    const src = result.data as Float64Array;
+    const dst = f32.data as Float32Array;
+    for (let i = 0; i < src.length; i++) dst[i] = src[i]!;
+    return f32;
+  }
 
   return result;
 }

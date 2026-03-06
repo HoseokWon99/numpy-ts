@@ -62,10 +62,14 @@ def build_doc(report: dict[str, Any], source_path: str) -> str:
         "meta": {
             "generatedAt": format_timestamp(report["timestamp"]),
             "sourceJson": source_path,
-            "nodeVersion": report["environment"]["node_version"],
+            "runtimes": report["environment"].get("runtimes") or (
+                {"node": report["environment"]["node_version"]}
+                if "node_version" in report["environment"] else {}
+            ),
             "pythonVersion": report["environment"].get("python_version"),
             "numpyVersion": report["environment"].get("numpy_version"),
             "numpyTsVersion": report["environment"]["numpyjs_version"],
+            "machine": report["environment"].get("machine"),
         },
         "categories": categories,
     }

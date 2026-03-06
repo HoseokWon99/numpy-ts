@@ -4,6 +4,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getBenchmarkSpecs, filterByCategory } from './specs';
 import { setBenchmarkConfig } from './runner';
@@ -33,6 +34,14 @@ const packageJson = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf-8')
 );
 
+function getMachineInfo(): string {
+  const cpu = os.cpus()[0]?.model ?? 'Unknown CPU';
+  const cores = os.cpus().length;
+  const ramGb = Math.round(os.totalmem() / (1024 ** 3));
+  const arch = os.arch();
+  return `${cpu} (${cores} cores, ${ramGb} GB, ${arch})`;
+}
+
 async function main() {
   // Parse command line arguments
   const args = process.argv.slice(2);
@@ -47,8 +56,10 @@ async function main() {
       options.mode = 'quick';
     } else if (arg === '--standard') {
       options.mode = 'standard';
+    } else if (arg === '--full') {
+      options.mode = 'full';
     } else if (arg === '--large') {
-      options.mode = 'large';
+      options.mode = 'full'; // deprecated alias for --full
     } else if (arg === '--category' && i + 1 < args.length) {
       options.category = args[++i];
     } else if (arg === '--output' && i + 1 < args.length) {
@@ -71,9 +82,9 @@ async function main() {
     minSampleTimeMs = 50;
     targetSamples = 1;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
-  } else if (options.mode === 'large') {
-    minSampleTimeMs = 200;
-    targetSamples = 3;
+  } else if (options.mode === 'full') {
+    minSampleTimeMs = 100;
+    targetSamples = 5;
     setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else {
     minSampleTimeMs = 100;
@@ -116,6 +127,11 @@ async function main() {
   // Get benchmark specifications
   let specs = getBenchmarkSpecs(options.mode || 'standard');
 
+  // In quick mode, run only the representative tagged specs
+  if (options.mode === 'quick') {
+    specs = specs.filter((s) => s.includeInQuick);
+  }
+
   if (options.category) {
     console.log(`Category filter: ${options.category}`);
     specs = filterByCategory(specs, options.category);
@@ -137,7 +153,7 @@ async function main() {
     ]);
     const validatableSpecs = specs.filter(
       (spec) =>
-        spec.category !== 'bigint' &&
+        !Object.values(spec.setup).some((s) => s.dtype === 'int64' || s.dtype === 'uint64') &&
         spec.category !== 'io' &&
         !nonValidatableOperations.has(spec.operation)
     );
@@ -149,7 +165,7 @@ async function main() {
     const skippedCount = specs.length - validatableSpecs.length;
     if (skippedCount > 0) {
       console.log(
-        `Skipping validation for ${skippedCount} benchmarks (BigInt/IO/Complex linalg)\n`
+        `Skipping validation for ${skippedCount} benchmarks (int64/uint64/IO/Complex linalg)\n`
       );
     }
 
@@ -190,7 +206,7 @@ async function main() {
 
     // Determine file suffix based on mode and threading
     const modeSuffix =
-      (options.mode === 'large' ? '-large' : '') + (options.singleThread ? '_single' : '');
+      (options.mode === 'full' ? '-full' : '') + (options.singleThread ? '_single' : '');
 
     // Save results
     const resultsDir = path.resolve(__dirname, '../results');
@@ -213,6 +229,7 @@ async function main() {
           python_version: pythonVersion,
           numpy_version: numpyVersion,
           numpyjs_version: packageJson.version,
+          machine: getMachineInfo(),
         },
         results: comparisons,
         summary,
@@ -255,6 +272,7 @@ async function main() {
           numpy_version: numpyVersion,
           numpyjs_version: packageJson.version,
           runtimes: runtimeVersions,
+          machine: getMachineInfo(),
         },
         results: comparisons,
         summaries,
@@ -298,12 +316,10 @@ Usage:
   npm run bench [options]
 
 Options:
-  --quick              Quick benchmarks (1 sample, 50ms/sample, ~2-3min)
-                       Arrays: 1K, 100x100, 500x500
-  --standard           Standard benchmarks (5 samples, 100ms/sample, ~5-10min, default)
-                       Arrays: 1K, 100x100, 500x500
-  --large              Large array benchmarks (3 samples, 200ms/sample, ~10-20min)
-                       Arrays: 10K, 316x316 (~100K), 1000x1000 (1M)
+  --quick              Quick benchmarks (~50 representative ops, 1 sample, 50ms/sample)
+  --standard           Standard benchmarks (all ops, float64, 5 samples, 100ms/sample, default)
+  --full               Full benchmarks (all ops, all dtypes, 10 samples, 200ms/sample)
+  --large              Deprecated alias for --full
   --single-thread      Force NumPy to run single-threaded (OMP/MKL/OpenBLAS)
   --runtime <list>     Comma-separated runtimes to use (default: auto-detect)
                        Values: node, deno, bun  (e.g. --runtime node,bun)
@@ -313,12 +329,23 @@ Options:
 
 Categories:
   creation             Array creation (zeros, ones, arange, etc.)
-  arithmetic           Arithmetic operations (add, multiply, etc.)
-  linalg               Linear algebra (matmul, transpose)
-  reductions           Reductions (sum, mean, max, min)
-  reshape              Reshape operations (reshape, flatten, ravel)
+  arithmetic           Arithmetic operations (add, multiply, etc.; includes int64/uint64 in full)
+  math                 Math ops (sqrt, exp, log, trig, etc.)
+  linalg               Linear algebra (matmul, dot, inv, svd, etc.)
+  reductions           Reductions & statistics (sum, mean, std, etc.)
+  manipulation         Array manipulation (reshape, concatenate, etc.)
+  sorting              Sorting & searching (sort, argsort, where, etc.)
+  logic                Logic & comparison (isnan, where, logical_and, etc.)
+  sets                 Set operations (unique, etc.)
+  bitwise              Bitwise operations
+  indexing             Indexing (take, compress, etc.)
+  gradient             Gradient & differences (diff, gradient, etc.)
+  random               Random number generation
+  fft                  Fast Fourier Transform
   io                   IO operations (parseNpy, serializeNpy, etc.)
-  bigint               BigInt (int64/uint64) operations
+  complex              Complex number operations
+  polynomials          Polynomial operations
+  utilities            Type utilities (can_cast, result_type, etc.)
 
 Examples:
   npm run bench                           # Run standard benchmarks (all detected runtimes)
