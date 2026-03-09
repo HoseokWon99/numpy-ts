@@ -10,25 +10,16 @@
 
 import { performance } from 'perf_hooks';
 import * as np from '../../src/index';
-import * as wasmCore from '../../src/wasm/core';
 import { serializeNpy, parseNpy, serializeNpzSync, parseNpzSync } from '../../src/io';
 import type { BenchmarkCase, BenchmarkTiming, BenchmarkSetup } from './types';
 
 // Benchmark configuration - can be overridden
 let MIN_SAMPLE_TIME_MS = 100; // Minimum time per sample (reduces noise)
 let TARGET_SAMPLES = 5; // Number of samples to collect for statistics
-let USE_WASM = false;
 
-// WASM-accelerated operations: maps operation name to wasm function
-// Add entries here as new WASM kernels are implemented
-const WASM_OPS: Record<string, (arrays: Record<string, any>) => any> = {
-  matmul: (arrays) => wasmCore.matmul(arrays['a'], arrays['b']),
-};
-
-export function setBenchmarkConfig(minSampleTimeMs: number, targetSamples: number, wasm: boolean = false): void {
+export function setBenchmarkConfig(minSampleTimeMs: number, targetSamples: number): void {
   MIN_SAMPLE_TIME_MS = minSampleTimeMs;
   TARGET_SAMPLES = targetSamples;
-  USE_WASM = wasm;
 }
 
 function mean(arr: number[]): number {
@@ -146,11 +137,6 @@ function setupArrays(setup: BenchmarkSetup, operation?: string): Record<string, 
 }
 
 function executeOperation(operation: string, arrays: Record<string, any>): any {
-  // WASM-accelerated dispatch
-  if (USE_WASM && WASM_OPS[operation]) {
-    return WASM_OPS[operation]!(arrays);
-  }
-
   // Array creation
   if (operation === 'zeros') {
     return np.zeros(arrays['shape']);

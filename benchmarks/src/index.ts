@@ -68,8 +68,6 @@ async function main() {
       options.singleThread = true;
     } else if (arg === '--runtime' && i + 1 < args.length) {
       options.runtimes = args[++i]!.split(',').map((s) => s.trim()) as RuntimeName[];
-    } else if (arg === '--wasm') {
-      options.wasm = true;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -83,19 +81,19 @@ async function main() {
   if (options.mode === 'quick') {
     minSampleTimeMs = 50;
     targetSamples = 1;
-    setBenchmarkConfig(minSampleTimeMs, targetSamples, options.wasm);
+    setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else if (options.mode === 'full') {
     minSampleTimeMs = 100;
     targetSamples = 5;
-    setBenchmarkConfig(minSampleTimeMs, targetSamples, options.wasm);
+    setBenchmarkConfig(minSampleTimeMs, targetSamples);
   } else {
     minSampleTimeMs = 100;
     targetSamples = 5;
-    setBenchmarkConfig(minSampleTimeMs, targetSamples, options.wasm);
+    setBenchmarkConfig(minSampleTimeMs, targetSamples);
   }
 
   console.log('NumPy vs numpy-ts Benchmark Suite\n');
-  console.log(`Mode: ${options.mode}${options.wasm ? ' (WASM-accelerated)' : ''}`);
+  console.log(`Mode: ${options.mode}`);
   if (options.singleThread) {
     console.log('NumPy threading: single-threaded (OMP/MKL/OpenBLAS threads = 1)');
   }
@@ -192,7 +190,6 @@ async function main() {
           specs,
           minSampleTimeMs,
           targetSamples,
-          options.wasm ?? false
         );
         runtimeResultsMap.set(runtime.name, results);
         runtimeVersions[runtime.name] = version;
@@ -323,7 +320,6 @@ Options:
   --standard           Standard benchmarks (all ops, float64, 5 samples, 100ms/sample, default)
   --full               Full benchmarks (all ops, all dtypes, 10 samples, 200ms/sample)
   --large              Deprecated alias for --full
-  --wasm               Use WASM-accelerated kernels for supported operations
   --single-thread      Force NumPy to run single-threaded (OMP/MKL/OpenBLAS)
   --runtime <list>     Comma-separated runtimes to use (default: auto-detect)
                        Values: node, deno, bun  (e.g. --runtime node,bun)

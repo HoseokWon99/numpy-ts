@@ -99,5 +99,4 @@ export interface BenchmarkOptions {
   output?: string;
   singleThread?: boolean;
   runtimes?: RuntimeName[];
-  wasm?: boolean;
 }
