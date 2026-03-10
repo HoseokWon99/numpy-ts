@@ -3,7 +3,8 @@
  * Defines all benchmarks to run
  */
 
-import type { BenchmarkCase, BenchmarkMode } from './types';
+import type { DType } from '../../src/core/dtype';
+import type { BenchmarkCase, BenchmarkMode, BenchmarkSetup } from './types';
 
 export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCase[] {
   // Array sizes vary by mode
@@ -226,44 +227,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
   }
 
-  // Creation dtype variants (standard/full)
-  if (mode !== 'quick' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `zeros [${sizes.medium.join('x')}] float32`,
-      category: 'creation',
-      operation: 'zeros',
-      setup: { shape: { shape: sizes.medium, dtype: 'float32' } },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `ones [${sizes.medium.join('x')}] float32`,
-      category: 'creation',
-      operation: 'ones',
-      setup: { shape: { shape: sizes.medium, dtype: 'float32' } },
-      iterations,
-      warmup,
-    });
-  }
-  if (mode === 'full' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `zeros [${sizes.medium.join('x')}] int32`,
-      category: 'creation',
-      operation: 'zeros',
-      setup: { shape: { shape: sizes.medium, dtype: 'int32' } },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `ones [${sizes.medium.join('x')}] int32`,
-      category: 'creation',
-      operation: 'ones',
-      setup: { shape: { shape: sizes.medium, dtype: 'int32' } },
-      iterations,
-      warmup,
-    });
-  }
-
   // ========================================
   // Arithmetic Benchmarks
   // ========================================
@@ -419,60 +382,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       setup: {
         a: { shape: sizes.medium, fill: 'arange', value: 1 },
         b: { shape: [1], value: 2 },
-      },
-      iterations,
-      warmup,
-    });
-  }
-
-  // Arithmetic dtype variants (standard/full only)
-  if (mode !== 'quick' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `add [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] float32`,
-      category: 'arithmetic',
-      operation: 'add',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'float32' },
-        b: { shape: sizes.medium, fill: 'ones', dtype: 'float32' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `multiply [${sizes.medium.join('x')}] * [${sizes.medium.join('x')}] float32`,
-      category: 'arithmetic',
-      operation: 'multiply',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-        b: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-      },
-      iterations,
-      warmup,
-    });
-  }
-
-  // Arithmetic full-mode dtype variants (complex128, int8, uint16)
-  if (mode === 'full' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `add [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] int8`,
-      category: 'arithmetic',
-      operation: 'add',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'int8' },
-        b: { shape: sizes.medium, fill: 'ones', dtype: 'int8' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `add [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] uint16`,
-      category: 'arithmetic',
-      operation: 'add',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'uint16' },
-        b: { shape: sizes.medium, fill: 'ones', dtype: 'uint16' },
       },
       iterations,
       warmup,
@@ -741,77 +650,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
   }
 
-  // Math dtype variants (standard/full only)
-  if (mode !== 'quick' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `sqrt [${sizes.medium.join('x')}] float32`,
-      category: 'math',
-      operation: 'sqrt',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'float32' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `exp [${sizes.medium.join('x')}] float32`,
-      category: 'math',
-      operation: 'exp',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'float32' },
-      },
-      iterations,
-      warmup,
-    });
-  }
-
-  // Math additional dtype variants (standard/full)
-  if (mode !== 'quick' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `sin [${sizes.medium.join('x')}] float32`,
-      category: 'math',
-      operation: 'sin',
-      setup: { a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' } },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `log [${sizes.medium.join('x')}] float32`,
-      category: 'math',
-      operation: 'log',
-      setup: { a: { shape: sizes.medium, fill: 'ones', dtype: 'float32' } },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `absolute [${sizes.medium.join('x')}] float32`,
-      category: 'math',
-      operation: 'absolute',
-      setup: { a: { shape: sizes.medium, fill: 'arange', value: -100, dtype: 'float32' } },
-      iterations,
-      warmup,
-    });
-  }
-  if (mode === 'full' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `absolute [${sizes.medium.join('x')}] int32`,
-      category: 'math',
-      operation: 'absolute',
-      setup: { a: { shape: sizes.medium, fill: 'arange', value: -100, dtype: 'int32' } },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `sign [${sizes.medium.join('x')}] int32`,
-      category: 'math',
-      operation: 'sign',
-      setup: { a: { shape: sizes.medium, fill: 'arange', value: -100, dtype: 'int32' } },
-      iterations,
-      warmup,
-    });
-  }
-
   // ========================================
   // Linear Algebra Benchmarks
   // ========================================
@@ -869,36 +707,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       includeInQuick: true,
       warmup,
     });
-
-    // Linalg dtype variants (standard/full only)
-    if (mode !== 'quick') {
-      specs.push({
-        name: `matmul [${m}x${n}] @ [${n}x${m}] float32`,
-        category: 'linalg',
-        operation: 'matmul',
-        setup: {
-          a: { shape: [m!, n!], fill: 'arange', dtype: 'float32' },
-          b: { shape: [n!, m!], fill: 'arange', dtype: 'float32' },
-        },
-        iterations,
-        warmup,
-      });
-    }
-
-    // Linalg full-mode: complex128 matmul
-    if (mode === 'full') {
-      specs.push({
-        name: `complex matmul [${m}x${n}] @ [${n}x${m}]`,
-        category: 'linalg',
-        operation: 'matmul',
-        setup: {
-          a: { shape: [m!, n!], fill: 'arange', dtype: 'complex128' },
-          b: { shape: [n!, m!], fill: 'arange', dtype: 'complex128' },
-        },
-        iterations,
-        warmup,
-      });
-    }
 
     // Trace
     specs.push({
@@ -1297,47 +1105,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     }
   }
 
-  // Reductions dtype variants (standard/full only)
-  if (mode !== 'quick' && Array.isArray(sizes.medium)) {
-    for (const op of ['sum', 'mean', 'max', 'min'] as const) {
-      specs.push({
-        name: `${op} [${sizes.medium.join('x')}] float32`,
-        category: 'reductions',
-        operation: op,
-        setup: {
-          a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-        },
-        iterations,
-        warmup,
-      });
-    }
-  }
-
-  // Reductions full-mode dtype variants (int8, uint16)
-  if (mode === 'full' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `sum [${sizes.medium.join('x')}] int8`,
-      category: 'reductions',
-      operation: 'sum',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'int8' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `sum [${sizes.medium.join('x')}] uint16`,
-      category: 'reductions',
-      operation: 'sum',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones', dtype: 'uint16' },
-      },
-      iterations,
-      warmup,
-    });
-  }
-
   // ========================================
   // Reshape Benchmarks
   // ========================================
@@ -1549,64 +1316,12 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
   }
 
-  // Manipulation dtype variants (standard/full)
-  if (mode !== 'quick' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `reshape [${sizes.medium.join('x')}] -> [${sizes.medium[1]}x${sizes.medium[0]}] float32`,
-      category: 'manipulation',
-      operation: 'reshape',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-        new_shape: { shape: [sizes.medium[1]!, sizes.medium[0]!] },
-      },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `concatenate [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] float32`,
-      category: 'manipulation',
-      operation: 'concatenate',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-        b: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-      },
-      iterations,
-      warmup,
-    });
-  }
-  if (mode === 'full' && Array.isArray(sizes.medium)) {
-    specs.push({
-      name: `reshape [${sizes.medium.join('x')}] -> [${sizes.medium[1]}x${sizes.medium[0]}] int32`,
-      category: 'manipulation',
-      operation: 'reshape',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'int32' },
-        new_shape: { shape: [sizes.medium[1]!, sizes.medium[0]!] },
-      },
-      iterations,
-      warmup,
-    });
-    specs.push({
-      name: `concatenate [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] int32`,
-      category: 'manipulation',
-      operation: 'concatenate',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'int32' },
-        b: { shape: sizes.medium, fill: 'arange', dtype: 'int32' },
-      },
-      iterations,
-      warmup,
-    });
-  }
-
   // ========================================
   // IO Benchmarks (NPY/NPZ parsing and serialization)
   // ========================================
 
   if (Array.isArray(sizes.medium)) {
     const [m, n] = sizes.medium;
-    const ioSize = m! * n!; // Total elements for IO benchmarks
-
     // NPY serialization
     specs.push({
       name: `serializeNpy [${m}x${n}] float64`,
@@ -1706,119 +1421,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       },
       iterations: Math.floor(iterations / 2),
       warmup: Math.floor(warmup / 2),
-    });
-  }
-
-  // ========================================
-  // int64/uint64 dtype variants (full mode only)
-  // ========================================
-
-  if (mode === 'full' && Array.isArray(sizes.medium)) {
-    // Creation with BigInt
-    specs.push({
-      name: `zeros [${sizes.medium.join('x')}] (int64)`,
-      category: 'arithmetic',
-      operation: 'zeros',
-      setup: {
-        shape: { shape: sizes.medium, dtype: 'int64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    // Arithmetic with BigInt
-    specs.push({
-      name: `add [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] (int64)`,
-      category: 'arithmetic',
-      operation: 'add',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'int64' },
-        b: { shape: sizes.medium, fill: 'ones', dtype: 'int64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `multiply [${sizes.medium.join('x')}] * scalar (int64)`,
-      category: 'arithmetic',
-      operation: 'multiply',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'int64' },
-        b: { shape: [1], value: 2, dtype: 'int64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    // Math operations with BigInt
-    specs.push({
-      name: `absolute [${sizes.medium.join('x')}] (int64)`,
-      category: 'arithmetic',
-      operation: 'absolute',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -100, dtype: 'int64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    // Reductions with BigInt
-    specs.push({
-      name: `sum [${sizes.medium.join('x')}] (int64)`,
-      category: 'arithmetic',
-      operation: 'sum',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'int64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `max [${sizes.medium.join('x')}] (int64)`,
-      category: 'arithmetic',
-      operation: 'max',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'int64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    // Unsigned BigInt test
-    specs.push({
-      name: `add [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] (uint64)`,
-      category: 'arithmetic',
-      operation: 'add',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', dtype: 'uint64' },
-        b: { shape: sizes.medium, fill: 'ones', dtype: 'uint64' },
-      },
-      iterations,
-      warmup,
-    });
-  }
-
-  // Trig dtype variants (standard/full)
-  if (mode !== 'quick') {
-    specs.push({
-      name: `deg2rad [${sizes.small}] float32`,
-      category: 'trig',
-      operation: 'deg2rad',
-      setup: { a: { shape: [sizes.small], fill: 'arange', value: 0, dtype: 'float32' } },
-      iterations,
-      warmup,
-    });
-  }
-  if (mode === 'full') {
-    specs.push({
-      name: `deg2rad [${sizes.small}] int32`,
-      category: 'trig',
-      operation: 'deg2rad',
-      setup: { a: { shape: [sizes.small], fill: 'arange', value: 0, dtype: 'int32' } },
-      iterations,
-      warmup,
     });
   }
 
@@ -2460,34 +2062,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
-    // Bitwise dtype variants (standard/full)
-    if (mode !== 'quick') {
-      specs.push({
-        name: `bitwise_and [${sizes.medium.join('x')}] & [${sizes.medium.join('x')}] uint8`,
-        category: 'bitwise',
-        operation: 'bitwise_and',
-        setup: {
-          a: { shape: sizes.medium, fill: 'arange', dtype: 'uint8' },
-          b: { shape: sizes.medium, fill: 'arange', dtype: 'uint8' },
-        },
-        iterations,
-        warmup,
-      });
-    }
-    if (mode === 'full') {
-      specs.push({
-        name: `bitwise_and [${sizes.medium.join('x')}] & [${sizes.medium.join('x')}] int8`,
-        category: 'bitwise',
-        operation: 'bitwise_and',
-        setup: {
-          a: { shape: sizes.medium, fill: 'arange', dtype: 'int8' },
-          b: { shape: sizes.medium, fill: 'arange', dtype: 'int8' },
-        },
-        iterations,
-        warmup,
-      });
-    }
-
     // ========================================
     // Sorting Benchmarks
     // ========================================
@@ -2562,44 +2136,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       iterations,
       warmup,
     });
-
-    // Sorting dtype variants (standard/full)
-    if (mode !== 'quick') {
-      specs.push({
-        name: `sort [${sizes.medium.join('x')}] float32`,
-        category: 'sorting',
-        operation: 'sort',
-        setup: { a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' } },
-        iterations,
-        warmup,
-      });
-      specs.push({
-        name: `argsort [${sizes.medium.join('x')}] float32`,
-        category: 'sorting',
-        operation: 'argsort',
-        setup: { a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' } },
-        iterations,
-        warmup,
-      });
-    }
-    if (mode === 'full') {
-      specs.push({
-        name: `sort [${sizes.medium.join('x')}] int32`,
-        category: 'sorting',
-        operation: 'sort',
-        setup: { a: { shape: sizes.medium, fill: 'arange', dtype: 'int32' } },
-        iterations,
-        warmup,
-      });
-      specs.push({
-        name: `argsort [${sizes.medium.join('x')}] int32`,
-        category: 'sorting',
-        operation: 'argsort',
-        setup: { a: { shape: sizes.medium, fill: 'arange', dtype: 'int32' } },
-        iterations,
-        warmup,
-      });
-    }
 
     // ========================================
     // Searching Benchmarks
@@ -2840,28 +2376,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
-    // Sets dtype variants (standard/full)
-    if (mode !== 'quick') {
-      specs.push({
-        name: `unique_values [${sizes.small}] float32`,
-        category: 'sets',
-        operation: 'unique_values',
-        setup: { a: { shape: [sizes.small], fill: 'arange', dtype: 'float32' } },
-        iterations,
-        warmup,
-      });
-    }
-    if (mode === 'full') {
-      specs.push({
-        name: `unique_values [${sizes.small}] int32`,
-        category: 'sets',
-        operation: 'unique_values',
-        setup: { a: { shape: [sizes.small], fill: 'arange', dtype: 'int32' } },
-        iterations,
-        warmup,
-      });
-    }
-
     // ========================================
     // Logic Benchmarks
     // ========================================
@@ -3003,42 +2517,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       iterations,
       warmup,
     });
-
-    // Logic dtype variants (standard/full)
-    if (mode !== 'quick') {
-      specs.push({
-        name: `isnan [${sizes.medium.join('x')}] float32`,
-        category: 'logic',
-        operation: 'isnan',
-        setup: { a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' } },
-        iterations,
-        warmup,
-      });
-      specs.push({
-        name: `logical_and [${sizes.medium.join('x')}] int32`,
-        category: 'logic',
-        operation: 'logical_and',
-        setup: {
-          a: { shape: sizes.medium, fill: 'arange', dtype: 'int32' },
-          b: { shape: sizes.medium, fill: 'ones', dtype: 'int32' },
-        },
-        iterations,
-        warmup,
-      });
-    }
-    if (mode === 'full') {
-      specs.push({
-        name: `logical_and [${sizes.medium.join('x')}] float32`,
-        category: 'logic',
-        operation: 'logical_and',
-        setup: {
-          a: { shape: sizes.medium, fill: 'arange', dtype: 'float32' },
-          b: { shape: sizes.medium, fill: 'ones', dtype: 'float32' },
-        },
-        iterations,
-        warmup,
-      });
-    }
 
     // ========================================
     // Random Benchmarks
@@ -3902,6 +3380,145 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     iterations,
     warmup,
   });
+
+  // ========================================
+  // Auto-generate dtype variants
+  // ========================================
+  // For each base spec, generate variants with alternative dtypes.
+  // Variants are inserted inline right after their base spec.
+  // Categories declare which dtype families they support: float, int, complex.
+  //
+  // Standard mode: float64 (base) + float32
+  // Full mode:     float64 (base) + float32 + complex128 + int64 + int32 + int16 + int8
+
+  type DtypeFamily = 'float' | 'int';
+
+  // Which dtype families each category supports
+  const CATEGORY_DTYPE_SUPPORT: Record<string, DtypeFamily[]> = {
+    creation: ['float', 'int'],
+    arithmetic: ['float', 'int'],
+    math: ['float', 'int'],
+    linalg: ['float'],
+    reductions: ['float', 'int'],
+    statistics: ['float'],
+    manipulation: ['float', 'int'],
+    sorting: ['float', 'int'],
+    sets: ['float', 'int'],
+    logic: ['float', 'int'],
+    gradient: ['float', 'int'],
+    trig: ['float'],
+    indexing: ['float', 'int'],
+    polynomials: ['float'],
+    bitwise: ['int'],
+    // Skipped entirely (no variants): random, utilities, complex, io, fft
+  };
+
+  // Variant dtypes for each family, keyed by minimum mode required
+  const FAMILY_VARIANTS: Record<DtypeFamily, { dtype: string; minMode: BenchmarkMode }[]> = {
+    float: [{ dtype: 'float32', minMode: 'standard' }],
+    int: [
+      { dtype: 'int64', minMode: 'full' },
+      { dtype: 'int32', minMode: 'full' },
+      { dtype: 'int16', minMode: 'full' },
+      { dtype: 'int8', minMode: 'full' },
+    ],
+  };
+
+  // Mode ordering for comparison
+  const MODE_RANK: Record<BenchmarkMode, number> = { quick: 0, standard: 1, full: 2 };
+
+  // Setup keys that represent data arrays (get dtype changed)
+  const DATA_ARRAY_KEYS = new Set(['a', 'b', 'shape']);
+
+  // Operations to skip for ALL auto dtype variants
+  const SKIP_DTYPE_OPERATIONS = new Set([
+    'linalg_cholesky', // positive-definiteness lost in float32
+    'linalg_eigh', // eigenvalue decomposition numerically sensitive
+    'linalg_eigvalsh', // eigenvalue computation numerically sensitive
+    'mod', // int overflow issues with narrow types
+    'floor_divide', // int overflow issues
+    'divmod', // int overflow issues
+    'gcd', // integer-only, already tests int semantics
+    'lcm', // integer-only, already tests int semantics
+    'fabs', // only for real float types
+    'cbrt', // only for real float types
+    'float_power', // only for float types
+  ]);
+
+  // Operations to skip for INT dtype variants only (overflow with narrow int types)
+  const SKIP_INT_OPERATIONS = new Set([
+    'sum', 'mean', 'var', 'std', 'nansum', 'nanmean', 'nanvar', // accumulation overflow
+    'cumsum', 'cumprod', // cumulative overflow
+    'prod', 'nanprod', // product overflow
+    'ptp', // peak-to-peak overflow
+    'average', // weighted accumulation
+    'dot', 'inner', 'outer', 'matmul', 'vecdot', 'matvec', 'vecmat', // matrix ops overflow
+    'linalg_multi_dot', 'einsum', 'tensordot', // more matrix ops
+    'correlate', 'convolve', // accumulation in convolution
+    'linalg_norm', // accumulation
+    'cov', 'corrcoef', // statistical accumulation
+    'histogram', 'histogram2d', 'bincount', // binning with int arrays
+    'trapezoid', // numerical integration
+    'argpartition', 'partition', // partition indices differ with wrapped int values
+    'searchsorted', // binary search on wrapped int values gives different results
+    'unwrap', // phase unwrapping assumes continuous values, broken with int wrap
+    'asarray_chkfinite', // NaN/Inf check doesn't work with BigInt (int64)
+    'i0', // Bessel function overflow with int types
+    'sinc', // sinc of int values produces precision issues
+  ]);
+
+  if (mode !== 'quick') {
+    const expanded: BenchmarkCase[] = [];
+
+    for (const spec of specs) {
+      expanded.push(spec);
+
+      // Skip operations that are numerically unstable at lower precision
+      if (SKIP_DTYPE_OPERATIONS.has(spec.operation)) continue;
+
+      // Skip specs that already have an explicit non-default dtype
+      const dataEntries = Object.entries(spec.setup).filter(([key]) => DATA_ARRAY_KEYS.has(key));
+      if (dataEntries.length === 0) continue;
+      const hasNonDefaultDtype = dataEntries.some(
+        ([, entry]) => entry.dtype && entry.dtype !== 'float64'
+      );
+      if (hasNonDefaultDtype) continue;
+
+      // Get supported families for this category
+      const families = CATEGORY_DTYPE_SUPPORT[spec.category];
+      if (!families) continue; // Category not listed = skip (random, utilities, etc.)
+
+      // Collect all applicable variant dtypes
+      for (const family of families) {
+        // Skip int variants for operations prone to overflow
+        if (family === 'int' && SKIP_INT_OPERATIONS.has(spec.operation)) continue;
+
+        for (const variant of FAMILY_VARIANTS[family]!) {
+          if (MODE_RANK[mode]! < MODE_RANK[variant.minMode]!) continue;
+
+          // Clone setup with the new dtype on data array entries
+          const variantSetup: BenchmarkSetup = {};
+          for (const [key, entry] of Object.entries(spec.setup)) {
+            if (DATA_ARRAY_KEYS.has(key)) {
+              variantSetup[key] = { ...entry, dtype: variant.dtype as DType };
+            } else {
+              variantSetup[key] = { ...entry };
+            }
+          }
+
+          expanded.push({
+            ...spec,
+            name: `${spec.name} ${variant.dtype}`,
+            setup: variantSetup,
+            includeInQuick: undefined, // Never include variants in quick mode
+          });
+        }
+      }
+    }
+
+    specs.length = 0;
+    specs.push(...expanded);
+  }
 
   return specs;
 }

@@ -2058,7 +2058,7 @@ export function cross(
   axisb: number = -1,
   axisc: number = -1,
   axis?: number
-): ArrayStorage | number | Complex {
+): ArrayStorage | number | bigint | Complex {
   // If axis is specified, use it for all
   if (axis !== undefined) {
     axisa = axis;
@@ -2077,27 +2077,36 @@ export function cross(
   const isComplex = isComplexDType(resultDtype);
 
   // Helper to get value as number or Complex
-  const getValue = (storage: ArrayStorage, ...indices: number[]): number | Complex => {
+  type CrossVal = number | bigint | Complex;
+
+  const getValue = (storage: ArrayStorage, ...indices: number[]): CrossVal => {
     const val = storage.get(...indices);
     if (val instanceof Complex) return val;
+    if (typeof val === 'bigint') return val;
     return Number(val);
   };
 
   // Helper for cross product arithmetic
-  const crossMul = (x: number | Complex, y: number | Complex): number | Complex => {
+  const crossMul = (x: CrossVal, y: CrossVal): CrossVal => {
     if (x instanceof Complex || y instanceof Complex) {
-      const xc = x instanceof Complex ? x : new Complex(x, 0);
-      const yc = y instanceof Complex ? y : new Complex(y, 0);
+      const xc = x instanceof Complex ? x : new Complex(Number(x), 0);
+      const yc = y instanceof Complex ? y : new Complex(Number(y), 0);
       return xc.mul(yc);
+    }
+    if (typeof x === 'bigint' || typeof y === 'bigint') {
+      return BigInt(x as bigint) * BigInt(y as bigint);
     }
     return x * y;
   };
 
-  const crossSub = (x: number | Complex, y: number | Complex): number | Complex => {
+  const crossSub = (x: CrossVal, y: CrossVal): CrossVal => {
     if (x instanceof Complex || y instanceof Complex) {
-      const xc = x instanceof Complex ? x : new Complex(x, 0);
-      const yc = y instanceof Complex ? y : new Complex(y, 0);
+      const xc = x instanceof Complex ? x : new Complex(Number(x), 0);
+      const yc = y instanceof Complex ? y : new Complex(Number(y), 0);
       return xc.sub(yc);
+    }
+    if (typeof x === 'bigint' || typeof y === 'bigint') {
+      return BigInt(x as bigint) - BigInt(y as bigint);
     }
     return x - y;
   };
@@ -2132,10 +2141,24 @@ export function cross(
       // Mixed 2D/3D - treat 2D as having z=0
       const a0 = getValue(a, 0);
       const a1 = getValue(a, 1);
-      const a2 = dimA === 3 ? getValue(a, 2) : isComplex ? new Complex(0, 0) : 0;
+      const a2 =
+        dimA === 3
+          ? getValue(a, 2)
+          : isComplex
+            ? new Complex(0, 0)
+            : isBigIntDType(resultDtype)
+              ? 0n
+              : 0;
       const b0 = getValue(b, 0);
       const b1 = getValue(b, 1);
-      const b2 = dimB === 3 ? getValue(b, 2) : isComplex ? new Complex(0, 0) : 0;
+      const b2 =
+        dimB === 3
+          ? getValue(b, 2)
+          : isComplex
+            ? new Complex(0, 0)
+            : isBigIntDType(resultDtype)
+              ? 0n
+              : 0;
 
       const result = ArrayStorage.zeros([3], resultDtype);
       result.set([0], crossSub(crossMul(a1, b2), crossMul(a2, b1)));
@@ -2216,21 +2239,35 @@ export function cross(
     const bIndices = [...otherIndices.slice(0, axisB), 0, ...otherIndices.slice(axisB)];
 
     // Extract vector components
-    const getA = (idx: number): number | Complex => {
+    const getA = (idx: number): CrossVal => {
       aIndices[axisA] = idx;
       return getValue(a, ...aIndices);
     };
-    const getB = (idx: number): number | Complex => {
+    const getB = (idx: number): CrossVal => {
       bIndices[axisB] = idx;
       return getValue(b, ...bIndices);
     };
 
     const a0 = getA(0);
     const a1 = getA(1);
-    const a2 = vectorDimA === 3 ? getA(2) : isComplex ? new Complex(0, 0) : 0;
+    const a2 =
+      vectorDimA === 3
+        ? getA(2)
+        : isComplex
+          ? new Complex(0, 0)
+          : isBigIntDType(resultDtype)
+            ? 0n
+            : 0;
     const b0 = getB(0);
     const b1 = getB(1);
-    const b2 = vectorDimB === 3 ? getB(2) : isComplex ? new Complex(0, 0) : 0;
+    const b2 =
+      vectorDimB === 3
+        ? getB(2)
+        : isComplex
+          ? new Complex(0, 0)
+          : isBigIntDType(resultDtype)
+            ? 0n
+            : 0;
 
     if (outputVectorDim === 0) {
       // Scalar result
@@ -2241,7 +2278,7 @@ export function cross(
       const c1 = crossSub(crossMul(a2, b0), crossMul(a0, b2));
       const c2 = crossSub(crossMul(a0, b1), crossMul(a1, b0));
 
-      const setResult = (idx: number, val: number | Complex) => {
+      const setResult = (idx: number, val: CrossVal) => {
         const resultIndices = [
           ...otherIndices.slice(0, normalizedAxisC),
           idx,
@@ -4247,7 +4284,11 @@ export function vecdot(
 
   if (resultShape.length === 0) {
     // Scalar result
-    let sum: number | bigint | Complex = isComplex ? new Complex(0, 0) : 0;
+    let sum: number | bigint | Complex = isComplex
+      ? new Complex(0, 0)
+      : isBigIntDType(resultDtype)
+        ? 0n
+        : 0;
     for (let k = 0; k < contractDim; k++) {
       const aVal = a.get(k);
       const bVal = b.get(k);
@@ -4283,7 +4324,11 @@ export function vecdot(
     const aIdx = [...multiIdx.slice(0, normalizedAxisA), 0, ...multiIdx.slice(normalizedAxisA)];
     const bIdx = [...multiIdx.slice(0, normalizedAxisB), 0, ...multiIdx.slice(normalizedAxisB)];
 
-    let sum: number | bigint | Complex = isComplex ? new Complex(0, 0) : 0;
+    let sum: number | bigint | Complex = isComplex
+      ? new Complex(0, 0)
+      : isBigIntDType(resultDtype)
+        ? 0n
+        : 0;
     for (let k = 0; k < contractDim; k++) {
       aIdx[normalizedAxisA] = k;
       bIdx[normalizedAxisB] = k;
@@ -4421,7 +4466,11 @@ export function matvec(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
     });
 
     for (let i = 0; i < m; i++) {
-      let sum: number | bigint | Complex = isComplex ? new Complex(0, 0) : 0;
+      let sum: number | bigint | Complex = isComplex
+        ? new Complex(0, 0)
+        : isBigIntDType(resultDtype)
+          ? 0n
+          : 0;
       for (let j = 0; j < n1; j++) {
         const x1Idx = [...x1BatchIdx, i, j];
         const x2Idx = [...x2BatchIdx, j];
@@ -4525,7 +4574,11 @@ export function vecmat(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
     });
 
     for (let j = 0; j < n; j++) {
-      let sum: number | bigint | Complex = isComplex ? new Complex(0, 0) : 0;
+      let sum: number | bigint | Complex = isComplex
+        ? new Complex(0, 0)
+        : isBigIntDType(resultDtype)
+          ? 0n
+          : 0;
       for (let i = 0; i < m1; i++) {
         const x1Idx = [...x1BatchIdx, i];
         const x2Idx = [...x2BatchIdx, i, j];

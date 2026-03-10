@@ -601,12 +601,30 @@ async function main() {
 
   for (let i = 0; i < specs.length; i++) {
     const spec = specs[i]!;
-    const result = runBenchmark(spec);
-    results.push(result);
+    try {
+      const result = runBenchmark(spec);
+      results.push(result);
 
-    console.error(
-      `  [${i + 1}/${specs.length}] ${spec.name.padEnd(40)} ${result.mean_ms.toFixed(3).padStart(8)}ms  ${Math.round(result.ops_per_sec).toLocaleString().padStart(12)} ops/sec`
-    );
+      console.error(
+        `  [${i + 1}/${specs.length}] ${spec.name.padEnd(40)} ${result.mean_ms.toFixed(3).padStart(8)}ms  ${Math.round(result.ops_per_sec).toLocaleString().padStart(12)} ops/sec`
+      );
+    } catch (err) {
+      // Push a placeholder result so indices stay aligned with Python results
+      results.push({
+        name: spec.name,
+        mean_ms: 0,
+        median_ms: 0,
+        min_ms: 0,
+        max_ms: 0,
+        std_ms: 0,
+        ops_per_sec: 0,
+        total_ops: 0,
+        total_samples: 0,
+      });
+      console.error(
+        `  [${i + 1}/${specs.length}] ${spec.name.padEnd(40)}   FAILED: ${err instanceof Error ? err.message : err}`
+      );
+    }
   }
 
   // Output results as JSON to stdout

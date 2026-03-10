@@ -312,8 +312,9 @@ export function unique(
   // Create result arrays
   const uniqueResult = ArrayStorage.zeros([uniqueValues.length], dtype as DType);
   const uniqueData = uniqueResult.data;
+  const isBigInt = uniqueData instanceof BigInt64Array || uniqueData instanceof BigUint64Array;
   for (let i = 0; i < uniqueValues.length; i++) {
-    uniqueData[i] = uniqueValues[i]!;
+    (uniqueData as any)[i] = isBigInt ? BigInt(uniqueValues[i]!) : uniqueValues[i]!;
   }
 
   if (!returnIndex && !returnInverse && !returnCounts) {
