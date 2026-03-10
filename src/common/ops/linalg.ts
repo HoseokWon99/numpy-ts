@@ -16,6 +16,33 @@ import {
 import { Complex } from '../complex';
 import { wasmMatmul } from '../wasm/matmul';
 import * as shapeOps from './shape';
+import type { DType } from '../dtype';
+
+// 1-element typed-array accumulators for wrapping integer arithmetic.
+// Writing to acc[0] implicitly truncates/wraps to the dtype's range,
+// matching NumPy's native accumulation behavior.
+const _i32acc = new Int32Array(1);
+const _u32acc = new Uint32Array(1);
+const _i16acc = new Int16Array(1);
+const _u16acc = new Uint16Array(1);
+const _i8acc = new Int8Array(1);
+const _u8acc = new Uint8Array(1);
+
+type IntAcc = Int32Array | Uint32Array | Int16Array | Uint16Array | Int8Array | Uint8Array;
+
+const _intAccMap: Partial<Record<DType, IntAcc>> = {
+  int32: _i32acc,
+  uint32: _u32acc,
+  int16: _i16acc,
+  uint16: _u16acc,
+  int8: _i8acc,
+  uint8: _u8acc,
+};
+
+/** Returns a 1-element wrapping accumulator for narrow int dtypes, or null for float/bigint. */
+function getIntAcc(dtype: DType): IntAcc | null {
+  return _intAccMap[dtype] ?? null;
+}
 
 /**
  * Helper to multiply two values that may be Complex
@@ -92,7 +119,8 @@ function innerContiguousNumeric(
         const bFlatIdx = bDim === 1 ? k : j * contractionDim + k;
         sum += (aData[aOff + aFlatIdx] as number) * (bData[bOff + bFlatIdx] as number);
       }
-      resultData[aOuterSize === 1 ? j : i * bOuterSize + j] = sum;
+      const idx = aOuterSize === 1 ? j : i * bOuterSize + j;
+      resultData[idx] = sum;
     }
   }
 }
@@ -283,6 +311,15 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
       return new Complex(sumRe, sumIm);
     }
 
+    const resultDtype = promoteDTypes(a.dtype, b.dtype);
+    const acc = getIntAcc(resultDtype);
+    if (acc) {
+      acc[0] = 0;
+      for (let i = 0; i < n; i++) {
+        acc[0] += Number(a.get(i)) * Number(b.get(i));
+      }
+      return acc[0]!;
+    }
     let sum = 0;
     for (let i = 0; i < n; i++) {
       const aVal = a.get(i);
@@ -327,18 +364,27 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         result.set([i], new Complex(sumRe, sumIm));
       }
     } else {
+      const dotAcc = getIntAcc(resultDtype);
       for (let i = 0; i < m!; i++) {
-        let sum = 0;
-        for (let j = 0; j < k!; j++) {
-          const aVal = a.get(i, j);
-          const bVal = b.get(j);
-          if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-            sum = Number(sum) + Number(aVal * bVal);
-          } else {
-            sum += Number(aVal) * Number(bVal);
+        if (dotAcc) {
+          dotAcc[0] = 0;
+          for (let j = 0; j < k!; j++) {
+            dotAcc[0] += Number(a.get(i, j)) * Number(b.get(j));
           }
+          result.set([i], dotAcc[0]!);
+        } else {
+          let sum = 0;
+          for (let j = 0; j < k!; j++) {
+            const aVal = a.get(i, j);
+            const bVal = b.get(j);
+            if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
+              sum = Number(sum) + Number(aVal * bVal);
+            } else {
+              sum += Number(aVal) * Number(bVal);
+            }
+          }
+          result.set([i], sum);
         }
-        result.set([i], sum);
       }
     }
 
@@ -371,18 +417,27 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         result.set([j], new Complex(sumRe, sumIm));
       }
     } else {
+      const dotAcc2 = getIntAcc(resultDtype);
       for (let j = 0; j < n!; j++) {
-        let sum = 0;
-        for (let i = 0; i < m; i++) {
-          const aVal = a.get(i);
-          const bVal = b.get(i, j);
-          if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-            sum = Number(sum) + Number(aVal * bVal);
-          } else {
-            sum += Number(aVal) * Number(bVal);
+        if (dotAcc2) {
+          dotAcc2[0] = 0;
+          for (let i = 0; i < m; i++) {
+            dotAcc2[0] += Number(a.get(i)) * Number(b.get(i, j));
           }
+          result.set([j], dotAcc2[0]!);
+        } else {
+          let sum = 0;
+          for (let i = 0; i < m; i++) {
+            const aVal = a.get(i);
+            const bVal = b.get(i, j);
+            if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
+              sum = Number(sum) + Number(aVal * bVal);
+            } else {
+              sum += Number(aVal) * Number(bVal);
+            }
+          }
+          result.set([j], sum);
         }
-        result.set([j], sum);
       }
     }
 
@@ -425,8 +480,8 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         result.set(resultIdx, new Complex(sumRe, sumIm));
       }
     } else {
+      const ndDot1DAcc = getIntAcc(resultDtype);
       for (let i = 0; i < resultSize; i++) {
-        let sum = 0;
         let temp = i;
         const resultIdx: number[] = [];
         for (let d = resultShape.length - 1; d >= 0; d--) {
@@ -434,17 +489,27 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
           temp = Math.floor(temp / resultShape[d]!);
         }
 
-        for (let k = 0; k < lastDimA; k++) {
-          const aIdx = [...resultIdx, k];
-          const aVal = a.get(...aIdx);
-          const bVal = b.get(k);
-          if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-            sum = Number(sum) + Number(aVal * bVal);
-          } else {
-            sum += Number(aVal) * Number(bVal);
+        if (ndDot1DAcc) {
+          ndDot1DAcc[0] = 0;
+          for (let k = 0; k < lastDimA; k++) {
+            const aIdx = [...resultIdx, k];
+            ndDot1DAcc[0] += Number(a.get(...aIdx)) * Number(b.get(k));
           }
+          result.set(resultIdx, ndDot1DAcc[0]!);
+        } else {
+          let sum = 0;
+          for (let k = 0; k < lastDimA; k++) {
+            const aIdx = [...resultIdx, k];
+            const aVal = a.get(...aIdx);
+            const bVal = b.get(k);
+            if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
+              sum = Number(sum) + Number(aVal * bVal);
+            } else {
+              sum += Number(aVal) * Number(bVal);
+            }
+          }
+          result.set(resultIdx, sum);
         }
-        result.set(resultIdx, sum);
       }
     }
 
@@ -492,6 +557,7 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         result.set(resultIdx, new Complex(sumRe, sumIm));
       }
     } else {
+      const dot1dNdAcc = getIntAcc(resultDtype);
       for (let i = 0; i < resultSize; i++) {
         let temp = i;
         const resultIdx: number[] = [];
@@ -503,18 +569,27 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         const bIdxBefore = resultIdx.slice(0, contractAxisB);
         const bIdxAfter = resultIdx.slice(contractAxisB);
 
-        let sum = 0;
-        for (let k = 0; k < aSize; k++) {
-          const aVal = a.get(k);
-          const bIdx = [...bIdxBefore, k, ...bIdxAfter];
-          const bVal = b.get(...bIdx);
-          if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-            sum = Number(sum) + Number(aVal * bVal);
-          } else {
-            sum += Number(aVal) * Number(bVal);
+        if (dot1dNdAcc) {
+          dot1dNdAcc[0] = 0;
+          for (let k = 0; k < aSize; k++) {
+            const bIdx = [...bIdxBefore, k, ...bIdxAfter];
+            dot1dNdAcc[0] += Number(a.get(k)) * Number(b.get(...bIdx));
           }
+          result.set(resultIdx, dot1dNdAcc[0]!);
+        } else {
+          let sum = 0;
+          for (let k = 0; k < aSize; k++) {
+            const aVal = a.get(k);
+            const bIdx = [...bIdxBefore, k, ...bIdxAfter];
+            const bVal = b.get(...bIdx);
+            if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
+              sum = Number(sum) + Number(aVal * bVal);
+            } else {
+              sum += Number(aVal) * Number(bVal);
+            }
+          }
+          result.set(resultIdx, sum);
         }
-        result.set(resultIdx, sum);
       }
     }
 
@@ -585,9 +660,11 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         a.isCContiguous &&
         b.isCContiguous &&
         !isBigIntDType(a.dtype) &&
-        !isBigIntDType(b.dtype)
+        !isBigIntDType(b.dtype) &&
+        !getIntAcc(resultDtype)
       ) {
         // Fast path: contiguous numeric arrays - extracted for V8 optimization
+        // Excludes narrow int types (int8/int16 etc.) which need wrapping accumulators
         dotContiguousNumeric(
           a.data,
           a.offset,
@@ -601,25 +678,35 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
         );
       } else {
         // General fallback: non-contiguous or bigint arrays
+        const ndMdAcc = getIntAcc(resultDtype);
         for (let i = 0; i < aOuterSize; i++) {
           for (let j = 0; j < bOuterSize; j++) {
             for (let k = 0; k < bLastDim; k++) {
-              let sum = 0;
-              for (let m = 0; m < contractionDim; m++) {
-                const aFlatIdx = i * contractionDim + m;
-                const bFlatIdx = j * contractionDim * bLastDim + m * bLastDim + k;
-                const aVal = a.iget(aFlatIdx);
-                const bVal = b.iget(bFlatIdx);
-
-                if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-                  sum = Number(sum) + Number(aVal * bVal);
-                } else {
-                  sum += Number(aVal) * Number(bVal);
-                }
-              }
-
               const resultIdx = i * bOuterSize * bLastDim + j * bLastDim + k;
-              result.data[resultIdx] = sum;
+              if (ndMdAcc) {
+                ndMdAcc[0] = 0;
+                for (let m = 0; m < contractionDim; m++) {
+                  const aFlatIdx = i * contractionDim + m;
+                  const bFlatIdx = j * contractionDim * bLastDim + m * bLastDim + k;
+                  ndMdAcc[0] += Number(a.iget(aFlatIdx)) * Number(b.iget(bFlatIdx));
+                }
+                result.data[resultIdx] = ndMdAcc[0]!;
+              } else {
+                let sum = 0;
+                for (let m = 0; m < contractionDim; m++) {
+                  const aFlatIdx = i * contractionDim + m;
+                  const bFlatIdx = j * contractionDim * bLastDim + m * bLastDim + k;
+                  const aVal = a.iget(aFlatIdx);
+                  const bVal = b.iget(bFlatIdx);
+
+                  if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
+                    sum = Number(sum) + Number(aVal * bVal);
+                  } else {
+                    sum += Number(aVal) * Number(bVal);
+                  }
+                }
+                result.data[resultIdx] = sum;
+              }
             }
           }
         }
@@ -1254,8 +1341,16 @@ export function inner(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number |
     }
   } else {
     // Non-complex fast path
-    if (a.isCContiguous && b.isCContiguous && !isBigIntDType(a.dtype) && !isBigIntDType(b.dtype)) {
-      // Scalar result special case
+    const innerAcc = getIntAcc(resultDtype);
+    if (
+      a.isCContiguous &&
+      b.isCContiguous &&
+      !isBigIntDType(a.dtype) &&
+      !isBigIntDType(b.dtype) &&
+      !innerAcc
+    ) {
+      // Fast path: contiguous numeric arrays - extracted for V8 optimization
+      // Excludes narrow int types (int8/int16 etc.) which need wrapping accumulators
       if (resultShape.length === 0) {
         const aData = a.data;
         const bData = b.data;
@@ -1267,7 +1362,6 @@ export function inner(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number |
         }
         return sum;
       }
-      // Fast path: contiguous numeric arrays - extracted for V8 optimization
       innerContiguousNumeric(
         a.data,
         a.offset,
@@ -1284,26 +1378,40 @@ export function inner(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number |
       // General fallback: non-contiguous or bigint arrays
       for (let i = 0; i < aOuterSize; i++) {
         for (let j = 0; j < bOuterSize; j++) {
-          let sum = 0;
-          for (let k = 0; k < contractionDim; k++) {
-            const aFlatIdx = aDim === 1 ? k : i * contractionDim + k;
-            const bFlatIdx = bDim === 1 ? k : j * contractionDim + k;
-            const aVal = a.iget(aFlatIdx);
-            const bVal = b.iget(bFlatIdx);
-
-            if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-              sum = Number(sum) + Number(aVal * bVal);
-            } else {
-              sum += Number(aVal) * Number(bVal);
+          if (innerAcc) {
+            innerAcc[0] = 0;
+            for (let k = 0; k < contractionDim; k++) {
+              const aFlatIdx = aDim === 1 ? k : i * contractionDim + k;
+              const bFlatIdx = bDim === 1 ? k : j * contractionDim + k;
+              innerAcc[0] += Number(a.iget(aFlatIdx)) * Number(b.iget(bFlatIdx));
             }
-          }
+            if (resultShape.length === 0) {
+              return innerAcc[0]!;
+            }
+            const resultIdx = aOuterSize === 1 ? j : i * bOuterSize + j;
+            result.data[resultIdx] = innerAcc[0]!;
+          } else {
+            let sum = 0;
+            for (let k = 0; k < contractionDim; k++) {
+              const aFlatIdx = aDim === 1 ? k : i * contractionDim + k;
+              const bFlatIdx = bDim === 1 ? k : j * contractionDim + k;
+              const aVal = a.iget(aFlatIdx);
+              const bVal = b.iget(bFlatIdx);
 
-          // Set result
-          if (resultShape.length === 0) {
-            return sum;
+              if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
+                sum = Number(sum) + Number(aVal * bVal);
+              } else {
+                sum += Number(aVal) * Number(bVal);
+              }
+            }
+
+            // Set result
+            if (resultShape.length === 0) {
+              return sum;
+            }
+            const resultIdx = aOuterSize === 1 ? j : i * bOuterSize + j;
+            result.data[resultIdx] = sum;
           }
-          const resultIdx = aOuterSize === 1 ? j : i * bOuterSize + j;
-          result.data[resultIdx] = sum;
         }
       }
     }
@@ -4325,6 +4433,15 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
   }
 
   // Real case
+  const vdotResultDtype = promoteDTypes(a.dtype, b.dtype);
+  const vdotAcc = getIntAcc(vdotResultDtype);
+  if (vdotAcc) {
+    vdotAcc[0] = 0;
+    for (let i = 0; i < aSize; i++) {
+      vdotAcc[0] += Number(aFlat.get(i)) * Number(bFlat.get(i));
+    }
+    return vdotAcc[0]!;
+  }
   let sum: number | bigint = 0;
   for (let i = 0; i < aSize; i++) {
     const aVal = aFlat.get(i);
@@ -4405,8 +4522,17 @@ export function vecdot(
   const resultShape =
     aShapeWithoutAxis.length > bShapeWithoutAxis.length ? aShapeWithoutAxis : bShapeWithoutAxis;
 
+  const vecdotAcc = getIntAcc(resultDtype);
+
   if (resultShape.length === 0) {
     // Scalar result
+    if (vecdotAcc) {
+      vecdotAcc[0] = 0;
+      for (let k = 0; k < contractDim; k++) {
+        vecdotAcc[0] += Number(a.get(k)) * Number(b.get(k));
+      }
+      return vecdotAcc[0]!;
+    }
     let sum: number | bigint | Complex = isComplex
       ? new Complex(0, 0)
       : isBigIntDType(resultDtype)
@@ -4447,28 +4573,38 @@ export function vecdot(
     const aIdx = [...multiIdx.slice(0, normalizedAxisA), 0, ...multiIdx.slice(normalizedAxisA)];
     const bIdx = [...multiIdx.slice(0, normalizedAxisB), 0, ...multiIdx.slice(normalizedAxisB)];
 
-    let sum: number | bigint | Complex = isComplex
-      ? new Complex(0, 0)
-      : isBigIntDType(resultDtype)
-        ? 0n
-        : 0;
-    for (let k = 0; k < contractDim; k++) {
-      aIdx[normalizedAxisA] = k;
-      bIdx[normalizedAxisB] = k;
-      const aVal = a.get(...aIdx);
-      const bVal = b.get(...bIdx);
-      const prod = multiplyValues(aVal, bVal);
-      if (sum instanceof Complex || prod instanceof Complex) {
-        const sumC: Complex = sum instanceof Complex ? sum : new Complex(Number(sum), 0);
-        const prodC: Complex = prod instanceof Complex ? prod : new Complex(Number(prod), 0);
-        sum = sumC.add(prodC);
-      } else if (typeof sum === 'bigint' || typeof prod === 'bigint') {
-        sum = BigInt(sum as number) + BigInt(prod as number);
-      } else {
-        sum = (sum as number) + (prod as number);
+    if (vecdotAcc) {
+      vecdotAcc[0] = 0;
+      for (let k = 0; k < contractDim; k++) {
+        aIdx[normalizedAxisA] = k;
+        bIdx[normalizedAxisB] = k;
+        vecdotAcc[0] += Number(a.get(...aIdx)) * Number(b.get(...bIdx));
       }
+      result.set(multiIdx, vecdotAcc[0]!);
+    } else {
+      let sum: number | bigint | Complex = isComplex
+        ? new Complex(0, 0)
+        : isBigIntDType(resultDtype)
+          ? 0n
+          : 0;
+      for (let k = 0; k < contractDim; k++) {
+        aIdx[normalizedAxisA] = k;
+        bIdx[normalizedAxisB] = k;
+        const aVal = a.get(...aIdx);
+        const bVal = b.get(...bIdx);
+        const prod = multiplyValues(aVal, bVal);
+        if (sum instanceof Complex || prod instanceof Complex) {
+          const sumC: Complex = sum instanceof Complex ? sum : new Complex(Number(sum), 0);
+          const prodC: Complex = prod instanceof Complex ? prod : new Complex(Number(prod), 0);
+          sum = sumC.add(prodC);
+        } else if (typeof sum === 'bigint' || typeof prod === 'bigint') {
+          sum = BigInt(sum as number) + BigInt(prod as number);
+        } else {
+          sum = (sum as number) + (prod as number);
+        }
+      }
+      result.set(multiIdx, sum);
     }
-    result.set(multiIdx, sum);
   }
 
   return result;
@@ -4588,30 +4724,40 @@ export function matvec(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
       return dim === 1 ? 0 : idx;
     });
 
+    const matvecAcc = getIntAcc(resultDtype);
     for (let i = 0; i < m; i++) {
-      let sum: number | bigint | Complex = isComplex
-        ? new Complex(0, 0)
-        : isBigIntDType(resultDtype)
-          ? 0n
-          : 0;
-      for (let j = 0; j < n1; j++) {
-        const x1Idx = [...x1BatchIdx, i, j];
-        const x2Idx = [...x2BatchIdx, j];
-        const x1Val = x1.get(...x1Idx);
-        const x2Val = x2.get(...x2Idx);
-        const prod = multiplyValues(x1Val, x2Val);
-        if (sum instanceof Complex || prod instanceof Complex) {
-          const sumC: Complex = sum instanceof Complex ? sum : new Complex(Number(sum), 0);
-          const prodC: Complex = prod instanceof Complex ? prod : new Complex(Number(prod), 0);
-          sum = sumC.add(prodC);
-        } else if (typeof sum === 'bigint' || typeof prod === 'bigint') {
-          sum = BigInt(sum as number) + BigInt(prod as number);
-        } else {
-          sum = (sum as number) + (prod as number);
+      if (matvecAcc) {
+        matvecAcc[0] = 0;
+        for (let j = 0; j < n1; j++) {
+          const x1Idx = [...x1BatchIdx, i, j];
+          const x2Idx = [...x2BatchIdx, j];
+          matvecAcc[0] += Number(x1.get(...x1Idx)) * Number(x2.get(...x2Idx));
         }
+        result.set([...batchMultiIdx, i], matvecAcc[0]!);
+      } else {
+        let sum: number | bigint | Complex = isComplex
+          ? new Complex(0, 0)
+          : isBigIntDType(resultDtype)
+            ? 0n
+            : 0;
+        for (let j = 0; j < n1; j++) {
+          const x1Idx = [...x1BatchIdx, i, j];
+          const x2Idx = [...x2BatchIdx, j];
+          const x1Val = x1.get(...x1Idx);
+          const x2Val = x2.get(...x2Idx);
+          const prod = multiplyValues(x1Val, x2Val);
+          if (sum instanceof Complex || prod instanceof Complex) {
+            const sumC: Complex = sum instanceof Complex ? sum : new Complex(Number(sum), 0);
+            const prodC: Complex = prod instanceof Complex ? prod : new Complex(Number(prod), 0);
+            sum = sumC.add(prodC);
+          } else if (typeof sum === 'bigint' || typeof prod === 'bigint') {
+            sum = BigInt(sum as number) + BigInt(prod as number);
+          } else {
+            sum = (sum as number) + (prod as number);
+          }
+        }
+        result.set([...batchMultiIdx, i], sum);
       }
-      const resultIdx = [...batchMultiIdx, i];
-      result.set(resultIdx, sum);
     }
   }
 
@@ -4696,30 +4842,40 @@ export function vecmat(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
       return dim === 1 ? 0 : idx;
     });
 
+    const vecmatAcc = getIntAcc(resultDtype);
     for (let j = 0; j < n; j++) {
-      let sum: number | bigint | Complex = isComplex
-        ? new Complex(0, 0)
-        : isBigIntDType(resultDtype)
-          ? 0n
-          : 0;
-      for (let i = 0; i < m1; i++) {
-        const x1Idx = [...x1BatchIdx, i];
-        const x2Idx = [...x2BatchIdx, i, j];
-        const x1Val = x1.get(...x1Idx);
-        const x2Val = x2.get(...x2Idx);
-        const prod = multiplyValues(x1Val, x2Val);
-        if (sum instanceof Complex || prod instanceof Complex) {
-          const sumC: Complex = sum instanceof Complex ? sum : new Complex(Number(sum), 0);
-          const prodC: Complex = prod instanceof Complex ? prod : new Complex(Number(prod), 0);
-          sum = sumC.add(prodC);
-        } else if (typeof sum === 'bigint' || typeof prod === 'bigint') {
-          sum = BigInt(sum as number) + BigInt(prod as number);
-        } else {
-          sum = (sum as number) + (prod as number);
+      if (vecmatAcc) {
+        vecmatAcc[0] = 0;
+        for (let i = 0; i < m1; i++) {
+          const x1Idx = [...x1BatchIdx, i];
+          const x2Idx = [...x2BatchIdx, i, j];
+          vecmatAcc[0] += Number(x1.get(...x1Idx)) * Number(x2.get(...x2Idx));
         }
+        result.set([...batchMultiIdx, j], vecmatAcc[0]!);
+      } else {
+        let sum: number | bigint | Complex = isComplex
+          ? new Complex(0, 0)
+          : isBigIntDType(resultDtype)
+            ? 0n
+            : 0;
+        for (let i = 0; i < m1; i++) {
+          const x1Idx = [...x1BatchIdx, i];
+          const x2Idx = [...x2BatchIdx, i, j];
+          const x1Val = x1.get(...x1Idx);
+          const x2Val = x2.get(...x2Idx);
+          const prod = multiplyValues(x1Val, x2Val);
+          if (sum instanceof Complex || prod instanceof Complex) {
+            const sumC: Complex = sum instanceof Complex ? sum : new Complex(Number(sum), 0);
+            const prodC: Complex = prod instanceof Complex ? prod : new Complex(Number(prod), 0);
+            sum = sumC.add(prodC);
+          } else if (typeof sum === 'bigint' || typeof prod === 'bigint') {
+            sum = BigInt(sum as number) + BigInt(prod as number);
+          } else {
+            sum = (sum as number) + (prod as number);
+          }
+        }
+        result.set([...batchMultiIdx, j], sum);
       }
-      const resultIdx = [...batchMultiIdx, j];
-      result.set(resultIdx, sum);
     }
   }
 
