@@ -7,6 +7,11 @@
 - [ ] Implement `unfunc` support
 - [ ] Implement masked array support
 - [-] Begin implementing WASM?
+    - [ ] Linalg
+    - [ ] Reductions
+    - [ ] Arithmetic
+    - [ ] RNGs
+    - [ ] FFTs
 - [X] Support `[]` operator that returns either a view (for > 1 dim) or a scalar (for 1 dim)
 - [X] Add `float32` support to `matmul` (`sgemm`)
 - [X] Fix `matmul` not supporting `1D` or `> 2D` ndarrays

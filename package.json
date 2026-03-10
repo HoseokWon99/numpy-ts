@@ -44,12 +44,12 @@
     "build": "npm run build:clean && npm run generate && tsx build.ts && npm run build:types",
     "build:clean": "rm -rf dist",
     "build:types": "tsc --emitDeclarationOnly --outDir dist/types",
-    "test": "npm run build && vitest run",
+    "test": "npm run build:test && vitest run",
     "test:unit": "vitest run --project=unit",
     "test:validation": "vitest run --project=validation",
-    "test:bundles": "npm run build && vitest run --project=bundle-node --project=bundle-esm --project=bundle-browser",
+    "test:bundles": "npm run build:test && vitest run --project=bundle-node --project=bundle-esm --project=bundle-browser",
     "test:tree-shaking": "vitest run --project=tree-shaking",
-    "test:ci": "npm run lint && npm run typecheck && npm test",
+    "test:ci": "npm run lint && npm run typecheck && npm run test",
     "test:coverage": "vitest run --project=unit --project=validation --coverage",
     "test:coverage:view": "open coverage/index.html || xdg-open coverage/index.html",
     "lint": "eslint --cache src tests",
@@ -74,7 +74,9 @@
     "bench:docs": "python3 scripts/generate-bench-docs.py",
     "compare-api": "python3 scripts/compare-api-coverage.py",
     "compare-docs-api": "python3 scripts/compare-docs-api-coverage.py",
-    "build:wasm": "tsx scripts/build-wasm.ts"
+    "build:wasm": "tsx scripts/build-wasm.ts",
+    "build:wasm:safe": "tsx scripts/build-wasm.ts --safe",
+    "build:test": "npm run build:clean && npm run generate && npm run build:wasm:safe && tsx build.ts --skip-wasm && npm run build:types"
   },
   "keywords": [
     "numpy",

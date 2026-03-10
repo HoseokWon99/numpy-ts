@@ -17,9 +17,11 @@ function buildWasm() {
   }
 }
 
+const skipWasm = process.argv.includes('--skip-wasm');
+
 async function buildAll() {
-  // Build WASM kernels (optional — skipped if Zig not installed)
-  buildWasm();
+  // Build WASM kernels (optional — skipped if Zig not installed or --skip-wasm)
+  if (!skipWasm) buildWasm();
 
   // Main bundle for Node.js (CJS) - core functionality only
   console.log('Building Node.js CJS bundle...');

@@ -4,7 +4,7 @@
  * Compiles Zig kernels to .wasm, base64-encodes them, and generates
  * TypeScript wrapper modules in src/common/wasm/bins/.
  *
- * Usage: tsx scripts/build-wasm.ts
+ * Usage: tsx scripts/build-wasm.ts [--safe]
  *
  * Requires Zig installed. If Zig is not found, exits with a warning
  * (checked-in .wasm.ts files will be used as-is).
@@ -22,6 +22,10 @@ const ROOT = join(__dirname, '..');
 const ZIG_DIR = join(ROOT, 'src/wasm/zig');
 const BINS_DIR = join(ROOT, 'src/common/wasm/bins');
 const TMP_DIR = join(ROOT, '.wasm-tmp');
+
+// --safe flag: compile with ReleaseSafe (bounds checks, overflow detection)
+const SAFE_MODE = process.argv.includes('--safe');
+const ZIG_OPT = SAFE_MODE ? 'ReleaseSafe' : 'ReleaseFast';
 
 // --- Check for Zig ---
 
@@ -126,7 +130,7 @@ const zigFiles = readdirSync(ZIG_DIR).filter(
   (f) => f.endsWith('.zig') && f !== 'simd.zig'
 );
 
-console.log(`Building ${zigFiles.length} WASM kernel(s)...\n`);
+console.log(`Building ${zigFiles.length} WASM kernel(s) [${ZIG_OPT}]...\n`);
 
 // --- Run Zig tests ---
 
@@ -158,21 +162,19 @@ for (const file of zigFiles) {
   // Compile Zig -> .wasm
   console.log(`  Compiling ${file}...`);
   try {
-    execSync(
-      [
+    const zigArgs = [
         'zig', 'build-exe',
         zigPath,
         '-target', 'wasm32-freestanding',
-        '-O', 'ReleaseFast',
+        '-O', ZIG_OPT,
         '-mcpu=generic+simd128',
         '-fno-entry',
         '-rdynamic',
-        '-fstrip',
         `--import-memory`,
         `-femit-bin=${wasmPath}`,
-      ].join(' '),
-      { stdio: 'pipe', cwd: ZIG_DIR }
-    );
+      ];
+    if (!SAFE_MODE) zigArgs.push('-fstrip');
+    execSync(zigArgs.join(' '), { stdio: 'pipe', cwd: ZIG_DIR });
   } catch (err: unknown) {
     const error = err as { stderr?: Buffer };
     console.error(`  FAILED to compile ${file}:`);
