@@ -49,18 +49,36 @@ export fn dot_f32(a: [*]const f32, b: [*]const f32, out: [*]f32, K: u32) void {
 /// a and b are interleaved [re0, im0, re1, im1, ...]
 /// out is also interleaved [re_out, im_out]
 /// K is the number of complex elements (each = 2 f64s).
+/// Uses SIMD deinterleaving: processes 2 complex elements (4 f64s) per iteration.
 export fn dot_c128(a: [*]const f64, b: [*]const f64, out: [*]f64, K: u32) void {
-    var sum_re: f64 = 0;
-    var sum_im: f64 = 0;
+    var acc_re: simd.V2f64 = @splat(0);
+    var acc_im: simd.V2f64 = @splat(0);
 
-    // Scalar loop: complex multiply-accumulate
-    for (0..K) |k| {
+    // SIMD loop: 2 complex elements per iteration
+    var k: usize = 0;
+    while (k + 2 <= K) : (k += 2) {
+        const idx = k * 2;
+        const a0 = simd.load2_f64(a, idx); // [a0_re, a0_im]
+        const a1 = simd.load2_f64(a, idx + 2); // [a1_re, a1_im]
+        const b0 = simd.load2_f64(b, idx);
+        const b1 = simd.load2_f64(b, idx + 2);
+        const a_re = @shuffle(f64, a0, a1, [2]i32{ 0, -1 }); // [a0_re, a1_re]
+        const a_im = @shuffle(f64, a0, a1, [2]i32{ 1, -2 }); // [a0_im, a1_im]
+        const b_re = @shuffle(f64, b0, b1, [2]i32{ 0, -1 });
+        const b_im = @shuffle(f64, b0, b1, [2]i32{ 1, -2 });
+        acc_re += a_re * b_re - a_im * b_im;
+        acc_im += a_re * b_im + a_im * b_re;
+    }
+
+    // Horizontal sum + scalar remainder
+    var sum_re: f64 = acc_re[0] + acc_re[1];
+    var sum_im: f64 = acc_im[0] + acc_im[1];
+    while (k < K) : (k += 1) {
         const idx = k * 2;
         const a_re = a[idx];
         const a_im = a[idx + 1];
         const b_re = b[idx];
         const b_im = b[idx + 1];
-        // (a_re + a_im*i) * (b_re + b_im*i)
         sum_re += a_re * b_re - a_im * b_im;
         sum_im += a_re * b_im + a_im * b_re;
     }
@@ -72,18 +90,36 @@ export fn dot_c128(a: [*]const f64, b: [*]const f64, out: [*]f64, K: u32) void {
 /// a and b are interleaved [re0, im0, re1, im1, ...]
 /// out is also interleaved [re_out, im_out]
 /// K is the number of complex elements (each = 2 f32s).
+/// Uses SIMD deinterleaving: processes 4 complex elements (8 f32s) per iteration.
 export fn dot_c64(a: [*]const f32, b: [*]const f32, out: [*]f32, K: u32) void {
-    var sum_re: f32 = 0;
-    var sum_im: f32 = 0;
+    var acc_re: simd.V4f32 = @splat(0);
+    var acc_im: simd.V4f32 = @splat(0);
 
-    // Scalar loop: complex multiply-accumulate
-    for (0..K) |k| {
+    // SIMD loop: 4 complex elements per iteration
+    var k: usize = 0;
+    while (k + 4 <= K) : (k += 4) {
+        const idx = k * 2;
+        const a0 = simd.load4_f32(a, idx); // [a0_re, a0_im, a1_re, a1_im]
+        const a1 = simd.load4_f32(a, idx + 4); // [a2_re, a2_im, a3_re, a3_im]
+        const b0 = simd.load4_f32(b, idx);
+        const b1 = simd.load4_f32(b, idx + 4);
+        const a_re = @shuffle(f32, a0, a1, [4]i32{ 0, 2, -1, -3 });
+        const a_im = @shuffle(f32, a0, a1, [4]i32{ 1, 3, -2, -4 });
+        const b_re = @shuffle(f32, b0, b1, [4]i32{ 0, 2, -1, -3 });
+        const b_im = @shuffle(f32, b0, b1, [4]i32{ 1, 3, -2, -4 });
+        acc_re += a_re * b_re - a_im * b_im;
+        acc_im += a_re * b_im + a_im * b_re;
+    }
+
+    // Horizontal sum + scalar remainder
+    var sum_re: f32 = acc_re[0] + acc_re[1] + acc_re[2] + acc_re[3];
+    var sum_im: f32 = acc_im[0] + acc_im[1] + acc_im[2] + acc_im[3];
+    while (k < K) : (k += 1) {
         const idx = k * 2;
         const a_re = a[idx];
         const a_im = a[idx + 1];
         const b_re = b[idx];
         const b_im = b[idx + 1];
-        // (a_re + a_im*i) * (b_re + b_im*i)
         sum_re += a_re * b_re - a_im * b_im;
         sum_im += a_re * b_im + a_im * b_re;
     }

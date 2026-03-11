@@ -18,6 +18,7 @@ import {
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
+import { Complex } from '../complex';
 
 import { wasmConfig } from './config';
 
@@ -65,7 +66,7 @@ const complexFactor: Partial<Record<DType, number>> = {
  * WASM-accelerated 1D dot product. Returns null if WASM can't handle.
  * Both a and b must be 1D, contiguous, same-length.
  */
-export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | null {
+export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | Complex | null {
   if (a.ndim !== 1 || b.ndim !== 1) return null;
   if (!a.isCContiguous || !b.isCContiguous) return null;
 
@@ -79,8 +80,6 @@ export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | null {
   if (!kernel || !Ctor) return null;
 
   const factor = complexFactor[resultDtype] ?? 1;
-  // Complex scalars are harder to return — let JS handle
-  if (factor === 2) return null;
 
   const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const aBytes = K * factor * bytesPerElement;
@@ -104,5 +103,14 @@ export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | null {
     1 * factor,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
+
+  // Complex scalar: read re + im from the 2-element output buffer
+  if (factor === 2) {
+    return new Complex(
+      Number((outData as Float64Array | Float32Array)[0]!),
+      Number((outData as Float64Array | Float32Array)[1]!)
+    );
+  }
+
   return Number(outData[0]!);
 }
