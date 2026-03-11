@@ -1,192 +1,123 @@
-//! WASM matmul kernels for f32, f64, complex64, and complex128.
+//! WASM matmul kernels for f32, f64, complex64, complex128, and integer types.
 //!
 //! Convention: C = A @ B where A is (M x K), B is (K x N), C is (M x N).
 //! All matrices are row-major (C-contiguous).
 //! Complex matrices are interleaved [re, im, re, im, ...]; M, N, K are element counts.
+//!
+//! Uses 4×N register-blocked micro-kernels for real types (f64, f32, i64, i32, i16).
+//! Processes 4 rows of i simultaneously — each B load is reused across all 4 rows,
 
 const simd = @import("simd.zig");
 
-const TILE_F64 = 64; // Tile size for f64 matmul (tuned for WASM v128)
-const TILE_F32 = 128; // Tile size for f32 matmul (tuned for WASM v128)
-const F64_CROSSOVER = 256; // ijk→ikj crossover for f64; V2f64 (2-wide)
-const F32_CROSSOVER = 512; // ijk→ikj crossover for f32; V4f32 (4-wide)
+const TILE_F64 = 64; // Tile size for f64/i64 matmul (tuned for WASM v128)
+const TILE_F32 = 128; // Tile size for f32/i32/i16 matmul (tuned for WASM v128)
 
 /// Computes C = A @ B for row-major f64 matrices.
 /// A is (M x K), B is (K x N), C is (M x N).
-/// Dispatches to ijk (N ≤ F64_CROSSOVER) or ikj (N > F64_CROSSOVER) based on benchmarked
-/// crossover point — ijk reduces C-memory traffic but degrades under large N due to B-cache pressure.
+/// Uses a 4×N register-blocked micro-kernel with 4-wide SIMD for the main loop, then 2-wide and scalar remainders.
 export fn matmul_f64(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K: u32) void {
-
-    if (N <= F64_CROSSOVER) {
-        // For smaller N, the i-j-k order with accumulated SIMD is faster due to better cache reuse of C.
-        matmul_f64_ijk(a, b, c, M, N, K);
-    } else {
-        // For larger N, the i-k-j order with SIMD in the k loop is faster due to better prefetching of B.
-        matmul_f64_ikj(a, b, c, M, N, K);
-    }
-}
-
-/// Computes C = A @ B for row-major f32 matrices.
-/// A is (M x K), B is (K x N), C is (M x N).
-/// Dispatches to ijk (N ≤ F32_CROSSOVER) or ikj (N > F32_CROSSOVER) based on benchmarked
-/// crossover point — ijk reduces C-memory traffic but degrades under large N due to B-cache pressure.
-export fn matmul_f32(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
-
-    if (N <= F32_CROSSOVER) {
-        // For smaller N, the i-j-k order with accumulated SIMD is faster due to better cache reuse of C.
-        matmul_f32_ijk(a, b, c, M, N, K);
-    } else {
-        // For larger N, the i-k-j order with SIMD in the k loop is faster due to better prefetching of B.
-        matmul_f32_ikj(a, b, c, M, N, K);
-    }
-}
-
-/// Computes C = A @ B for row-major complex128 matrices (interleaved f64: [re, im, re, im, ...]).
-/// M, N, K are element counts; the underlying f64 arrays are 2x that size.
-/// Each output element:
-///   re = sum(A[i,k].re*B[k,j].re - A[i,k].im*B[k,j].im)
-///   im = sum(A[i,k].re*B[k,j].im + A[i,k].im*B[k,j].re)
-export fn matmul_c128(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K: u32) void {
-
-    // TODO: implement i-j-k version with register accumulation; more complex but should give ~35-50% speedup at small N.
-    // For now, just use i-k-j
-    matmul_c128_ikj(a, b, c, M, N, K);
-}
-
-/// Computes C = A @ B for row-major complex64 matrices (interleaved f32: [re, im, re, im, ...]).
-/// M, N, K are element counts; the underlying f32 arrays are 2x that size.
-/// Each output element:
-///   re = sum(A[i,k].re*B[k,j].re - A[i,k].im*B[k,j].im)
-///   im = sum(A[i,k].re*B[k,j].im + A[i,k].im*B[k,j].re)
-export fn matmul_c64(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
-
-    // TODO: implement i-j-k version with register accumulation; more complex but should give ~35-50% speedup at small N.
-    // For now, just use i-k-j
-    matmul_c64_ikj(a, b, c, M, N, K);
-}
-
-/// Computes C = A @ B for row-major i64 matrices with wrapping arithmetic.
-/// Handles both signed (i64) and unsigned (u64) — wrapping add/mul produce identical bits.
-export fn matmul_i64(a: [*]const i64, b: [*]const i64, c: [*]i64, M: u32, N: u32, K: u32) void {
-
-    // TODO: implement i-j-k version with register accumulation; more complex but should give ~35-50% speedup at small N.
-    // For now, just use i-k-j
-    matmul_i64_ikj(a, b, c, M, N, K);
-}
-
-/// Computes C = A @ B for row-major i32 matrices with wrapping arithmetic.
-/// Handles both signed (i32) and unsigned (u32) — wrapping add/mul produce identical bits.
-export fn matmul_i32(a: [*]const i32, b: [*]const i32, c: [*]i32, M: u32, N: u32, K: u32) void {
-
-    // TODO: implement i-j-k version with register accumulation; more complex but should give ~35-50% speedup at small N.
-    // For now, just use i-k-j
-    matmul_i32_ikj(a, b, c, M, N, K);
-}
-
-/// Computes C = A @ B for row-major i16 matrices with wrapping arithmetic.
-/// Handles both signed (i16) and unsigned (u16) — wrapping add/mul produce identical bits.
-export fn matmul_i16(a: [*]const i16, b: [*]const i16, c: [*]i16, M: u32, N: u32, K: u32) void {
-
-    // TODO: implement i-j-k version with register accumulation; more complex but should give ~35-50% speedup at small N.
-    // For now, just use i-k-j
-    matmul_i16_ikj(a, b, c, M, N, K);
-}
-
-/// Computes C = A @ B for row-major i8 matrices with wrapping arithmetic.
-/// Handles both signed (i8) and unsigned (u8) — wrapping add/mul produce identical bits.
-export fn matmul_i8(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: u32) void {
-
-    // TODO: implement i-j-k version with register accumulation; more complex but should give ~35-50% speedup at small N.
-    // For now, just use i-k-j
-    matmul_i8_ikj(a, b, c, M, N, K);
-}
-
-// --- Implementations ---
-
-/// Computes C = A @ B for row-major f64 matrices.
-/// Uses i-k-j tiled blocking with SIMD vectorization in the inner k loop.
-/// Preferred when N > F64_CROSSOVER — sequential B access degrades gracefully under cache pressure.
-fn matmul_f64_ikj(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K: u32) void {
-    // Zero output
     @memset(c[0..@as(usize, M) * N], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F64) {
         const i_end = @min(ii + TILE_F64, M);
-    
-        // Outer tile loop over k (columns of A, rows of B)
-        var kk: usize = 0;
-        while (kk < K) : (kk += TILE_F64) {
-            const k_end = @min(kk + TILE_F64, K);
-    
-            // Outer tile loop over j (columns of B and C)
-            var jj: usize = 0;
-            while (jj < N) : (jj += TILE_F64) {
-                const j_end = @min(jj + TILE_F64, N);
-
-                // Inner tile: compute C[ii:i_end, jj:j_end ] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
-                var i: usize = ii;
-                while (i < i_end) : (i += 1) {
-
-                    var k: usize = kk;
-                    while (k < k_end) : (k += 1) {
-                        const a_ik = a[i * K + k];
-                        const a_vec: simd.V2f64 = @splat(a_ik);
-                        const b_row = k * N;
-                        const c_row = i * N;
-
-                        // Vectorized j loop: two v128 (2×f64) per step = 4 f64
-                        var j: usize = jj;
-                        while (j + 4 <= j_end) : (j += 4) {
-                            simd.store2_f64(c, c_row + j, simd.load2_f64(c, c_row + j) + a_vec * simd.load2_f64(b, b_row + j));
-                            simd.store2_f64(c, c_row + j + 2, simd.load2_f64(c, c_row + j + 2) + a_vec * simd.load2_f64(b, b_row + j + 2));
-                        }
-                        // One more v128 if possible
-                        while (j + 2 <= j_end) : (j += 2) {
-                            simd.store2_f64(c, c_row + j, simd.load2_f64(c, c_row + j) + a_vec * simd.load2_f64(b, b_row + j));
-                        }
-                        // Scalar remainder
-                        while (j < j_end) : (j += 1) {
-                            c[c_row + j] += a_ik * b[b_row + j];
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Computes C = A @ B for row-major f64 matrices.
-/// Uses i-j-k accumulated tiled blocking with SIMD vectorization in the inner k loop.
-/// Preferred when N ≤ F64_CROSSOVER — register accumulation gives ~35-50% speedup at small N.
-fn matmul_f64_ijk(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K: u32) void {
-    // Zero output
-    @memset(c[0..@as(usize, M) * N], 0);
-
-    // Tiled i-j-k loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
-    var ii: usize = 0;
-    while (ii < M) : (ii += TILE_F64) {
-        const i_end = @min(ii + TILE_F64, M);
-    
-        // Outer tile loop over j (columns of B and C)
         var jj: usize = 0;
         while (jj < N) : (jj += TILE_F64) {
             const j_end = @min(jj + TILE_F64, N);
-
-            // Outer tile loop over k (columns of A, rows of B)
             var kk: usize = 0;
             while (kk < K) : (kk += TILE_F64) {
                 const k_end = @min(kk + TILE_F64, K);
-    
-                // Inner tile: compute C[ii:i_end, jj:j_end ] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
+
+                // 4-row micro-kernel
                 var i: usize = ii;
+                while (i + 4 <= i_end) : (i += 4) {
+                    var j: usize = jj;
+                    while (j + 4 <= j_end) : (j += 4) {
+                        var acc00: simd.V2f64 = @splat(0.0);
+                        var acc01: simd.V2f64 = @splat(0.0);
+                        var acc10: simd.V2f64 = @splat(0.0);
+                        var acc11: simd.V2f64 = @splat(0.0);
+                        var acc20: simd.V2f64 = @splat(0.0);
+                        var acc21: simd.V2f64 = @splat(0.0);
+                        var acc30: simd.V2f64 = @splat(0.0);
+                        var acc31: simd.V2f64 = @splat(0.0);
+
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const b_row = k * N;
+                            const b0 = simd.load2_f64(b, b_row + j);
+                            const b1 = simd.load2_f64(b, b_row + j + 2);
+                            const a0: simd.V2f64 = @splat(a[(i + 0) * K + k]);
+                            acc00 += a0 * b0;
+                            acc01 += a0 * b1;
+                            const a1: simd.V2f64 = @splat(a[(i + 1) * K + k]);
+                            acc10 += a1 * b0;
+                            acc11 += a1 * b1;
+                            const a2: simd.V2f64 = @splat(a[(i + 2) * K + k]);
+                            acc20 += a2 * b0;
+                            acc21 += a2 * b1;
+                            const a3: simd.V2f64 = @splat(a[(i + 3) * K + k]);
+                            acc30 += a3 * b0;
+                            acc31 += a3 * b1;
+                        }
+
+                        const c0 = (i + 0) * N;
+                        simd.store2_f64(c, c0 + j, simd.load2_f64(c, c0 + j) + acc00);
+                        simd.store2_f64(c, c0 + j + 2, simd.load2_f64(c, c0 + j + 2) + acc01);
+                        const c1 = (i + 1) * N;
+                        simd.store2_f64(c, c1 + j, simd.load2_f64(c, c1 + j) + acc10);
+                        simd.store2_f64(c, c1 + j + 2, simd.load2_f64(c, c1 + j + 2) + acc11);
+                        const c2 = (i + 2) * N;
+                        simd.store2_f64(c, c2 + j, simd.load2_f64(c, c2 + j) + acc20);
+                        simd.store2_f64(c, c2 + j + 2, simd.load2_f64(c, c2 + j + 2) + acc21);
+                        const c3 = (i + 3) * N;
+                        simd.store2_f64(c, c3 + j, simd.load2_f64(c, c3 + j) + acc30);
+                        simd.store2_f64(c, c3 + j + 2, simd.load2_f64(c, c3 + j + 2) + acc31);
+                    }
+
+                    // Remainder columns: 2-wide
+                    while (j + 2 <= j_end) : (j += 2) {
+                        var r0: simd.V2f64 = @splat(0.0);
+                        var r1: simd.V2f64 = @splat(0.0);
+                        var r2: simd.V2f64 = @splat(0.0);
+                        var r3: simd.V2f64 = @splat(0.0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = simd.load2_f64(b, k * N + j);
+                            r0 += @as(simd.V2f64, @splat(a[(i + 0) * K + k])) * bv;
+                            r1 += @as(simd.V2f64, @splat(a[(i + 1) * K + k])) * bv;
+                            r2 += @as(simd.V2f64, @splat(a[(i + 2) * K + k])) * bv;
+                            r3 += @as(simd.V2f64, @splat(a[(i + 3) * K + k])) * bv;
+                        }
+                        simd.store2_f64(c, (i + 0) * N + j, simd.load2_f64(c, (i + 0) * N + j) + r0);
+                        simd.store2_f64(c, (i + 1) * N + j, simd.load2_f64(c, (i + 1) * N + j) + r1);
+                        simd.store2_f64(c, (i + 2) * N + j, simd.load2_f64(c, (i + 2) * N + j) + r2);
+                        simd.store2_f64(c, (i + 3) * N + j, simd.load2_f64(c, (i + 3) * N + j) + r3);
+                    }
+                    // Remainder columns: scalar
+                    while (j < j_end) : (j += 1) {
+                        var s0: f64 = 0;
+                        var s1: f64 = 0;
+                        var s2: f64 = 0;
+                        var s3: f64 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = b[k * N + j];
+                            s0 += a[(i + 0) * K + k] * bv;
+                            s1 += a[(i + 1) * K + k] * bv;
+                            s2 += a[(i + 2) * K + k] * bv;
+                            s3 += a[(i + 3) * K + k] * bv;
+                        }
+                        c[(i + 0) * N + j] += s0;
+                        c[(i + 1) * N + j] += s1;
+                        c[(i + 2) * N + j] += s2;
+                        c[(i + 3) * N + j] += s3;
+                    }
+                }
+
+                // Remainder rows: 1-row accumulation
                 while (i < i_end) : (i += 1) {
                     const c_row = i * N;
-
-                    // Vectorized j: accumulate across k into V2f64 registers, write C once
                     var j: usize = jj;
                     while (j + 4 <= j_end) : (j += 4) {
                         var acc0: simd.V2f64 = @splat(0.0);
@@ -198,20 +129,17 @@ fn matmul_f64_ijk(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K
                             acc0 += a_vec * simd.load2_f64(b, b_row + j);
                             acc1 += a_vec * simd.load2_f64(b, b_row + j + 2);
                         }
-                        simd.store2_f64(c, c_row + j,     simd.load2_f64(c, c_row + j)     + acc0);
+                        simd.store2_f64(c, c_row + j, simd.load2_f64(c, c_row + j) + acc0);
                         simd.store2_f64(c, c_row + j + 2, simd.load2_f64(c, c_row + j + 2) + acc1);
                     }
-                    // One more v128 if possible
                     while (j + 2 <= j_end) : (j += 2) {
                         var acc: simd.V2f64 = @splat(0.0);
                         var k: usize = kk;
                         while (k < k_end) : (k += 1) {
-                            const a_vec: simd.V2f64 = @splat(a[i * K + k]);
-                            acc += a_vec * simd.load2_f64(b, k * N + j);
+                            acc += @as(simd.V2f64, @splat(a[i * K + k])) * simd.load2_f64(b, k * N + j);
                         }
                         simd.store2_f64(c, c_row + j, simd.load2_f64(c, c_row + j) + acc);
                     }
-                    // Scalar remainder
                     while (j < j_end) : (j += 1) {
                         var acc: f64 = 0.0;
                         var k: usize = kk;
@@ -227,89 +155,110 @@ fn matmul_f64_ijk(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K
 }
 
 /// Computes C = A @ B for row-major f32 matrices.
-/// Uses i-k-j tiled blocking with SIMD vectorization in the inner k loop.
-/// Preferred when N > F32_CROSSOVER — sequential B access degrades gracefully under cache pressure.
-fn matmul_f32_ikj(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// A is (M x K), B is (K x N), C is (M x N).
+/// Uses a 4×N register-blocked micro-kernel with 4-wide SIMD for the main loop, then 2-wide and scalar remainders.
+export fn matmul_f32(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F32) {
         const i_end = @min(ii + TILE_F32, M);
-    
-        // Outer tile loop over k (columns of A, rows of B)
-        var kk: usize = 0;
-        while (kk < K) : (kk += TILE_F32) {
-            const k_end = @min(kk + TILE_F32, K);
-    
-            // Outer tile loop over j (columns of B and C)
-            var jj: usize = 0;
-            while (jj < N) : (jj += TILE_F32) {
-                const j_end = @min(jj + TILE_F32, N);
-
-                // Inner tile: compute C[ii:i_end, jj:j_end ] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
-                var i: usize = ii;
-                while (i < i_end) : (i += 1) {
-
-                    var k: usize = kk;
-                    while (k < k_end) : (k += 1) {
-                        const a_ik = a[i * K + k];
-                        const a_vec: simd.V4f32 = @splat(a_ik);
-                        const b_row = k * N;
-                        const c_row = i * N;
-
-                        // Vectorized j loop: two v128 (4xf32) per step = 8 f32
-                        var j: usize = jj;
-                        while (j + 8 <= j_end) : (j += 8) {
-                            simd.store4_f32(c, c_row + j, simd.load4_f32(c, c_row + j) + a_vec * simd.load4_f32(b, b_row + j));
-                            simd.store4_f32(c, c_row + j + 4, simd.load4_f32(c, c_row + j + 4) + a_vec * simd.load4_f32(b, b_row + j + 4));
-                        }
-                        // One more v128 if possible
-                        while (j + 4 <= j_end) : (j += 4) {
-                            simd.store4_f32(c, c_row + j, simd.load4_f32(c, c_row + j) + a_vec * simd.load4_f32(b, b_row + j));
-                        }
-                        // Scalar remainder
-                        while (j < j_end) : (j += 1) {
-                            c[c_row + j] += a_ik * b[b_row + j];
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Computes C = A @ B for row-major f32 matrices.
-/// Uses i-j-k accumulated tiled blocking with SIMD vectorization in the inner k loop.
-/// Preferred when N ≤ F32_CROSSOVER — register accumulation gives ~35-50% speedup at small N.
-fn matmul_f32_ijk(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
-    // Zero output
-    @memset(c[0..@as(usize, M) * N], 0);
-
-    // Tiled i-j-k loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
-    var ii: usize = 0;
-    while (ii < M) : (ii += TILE_F32) {
-        const i_end = @min(ii + TILE_F32, M);
-    
-        // Outer tile loop over j (columns of B and C)
         var jj: usize = 0;
         while (jj < N) : (jj += TILE_F32) {
             const j_end = @min(jj + TILE_F32, N);
-
-            // Outer tile loop over k (columns of A, rows of B)
             var kk: usize = 0;
             while (kk < K) : (kk += TILE_F32) {
                 const k_end = @min(kk + TILE_F32, K);
-    
-                // Inner tile: compute C[ii:i_end, jj:j_end ] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
+
                 var i: usize = ii;
+                while (i + 4 <= i_end) : (i += 4) {
+                    var j: usize = jj;
+                    while (j + 8 <= j_end) : (j += 8) {
+                        var acc00: simd.V4f32 = @splat(0.0);
+                        var acc01: simd.V4f32 = @splat(0.0);
+                        var acc10: simd.V4f32 = @splat(0.0);
+                        var acc11: simd.V4f32 = @splat(0.0);
+                        var acc20: simd.V4f32 = @splat(0.0);
+                        var acc21: simd.V4f32 = @splat(0.0);
+                        var acc30: simd.V4f32 = @splat(0.0);
+                        var acc31: simd.V4f32 = @splat(0.0);
+
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const b_row = k * N;
+                            const b0 = simd.load4_f32(b, b_row + j);
+                            const b1 = simd.load4_f32(b, b_row + j + 4);
+                            const a0: simd.V4f32 = @splat(a[(i + 0) * K + k]);
+                            acc00 += a0 * b0;
+                            acc01 += a0 * b1;
+                            const a1: simd.V4f32 = @splat(a[(i + 1) * K + k]);
+                            acc10 += a1 * b0;
+                            acc11 += a1 * b1;
+                            const a2: simd.V4f32 = @splat(a[(i + 2) * K + k]);
+                            acc20 += a2 * b0;
+                            acc21 += a2 * b1;
+                            const a3: simd.V4f32 = @splat(a[(i + 3) * K + k]);
+                            acc30 += a3 * b0;
+                            acc31 += a3 * b1;
+                        }
+
+                        const c0 = (i + 0) * N;
+                        simd.store4_f32(c, c0 + j, simd.load4_f32(c, c0 + j) + acc00);
+                        simd.store4_f32(c, c0 + j + 4, simd.load4_f32(c, c0 + j + 4) + acc01);
+                        const c1 = (i + 1) * N;
+                        simd.store4_f32(c, c1 + j, simd.load4_f32(c, c1 + j) + acc10);
+                        simd.store4_f32(c, c1 + j + 4, simd.load4_f32(c, c1 + j + 4) + acc11);
+                        const c2 = (i + 2) * N;
+                        simd.store4_f32(c, c2 + j, simd.load4_f32(c, c2 + j) + acc20);
+                        simd.store4_f32(c, c2 + j + 4, simd.load4_f32(c, c2 + j + 4) + acc21);
+                        const c3 = (i + 3) * N;
+                        simd.store4_f32(c, c3 + j, simd.load4_f32(c, c3 + j) + acc30);
+                        simd.store4_f32(c, c3 + j + 4, simd.load4_f32(c, c3 + j + 4) + acc31);
+                    }
+
+                    // Remainder columns: 4-wide
+                    while (j + 4 <= j_end) : (j += 4) {
+                        var r0: simd.V4f32 = @splat(0.0);
+                        var r1: simd.V4f32 = @splat(0.0);
+                        var r2: simd.V4f32 = @splat(0.0);
+                        var r3: simd.V4f32 = @splat(0.0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = simd.load4_f32(b, k * N + j);
+                            r0 += @as(simd.V4f32, @splat(a[(i + 0) * K + k])) * bv;
+                            r1 += @as(simd.V4f32, @splat(a[(i + 1) * K + k])) * bv;
+                            r2 += @as(simd.V4f32, @splat(a[(i + 2) * K + k])) * bv;
+                            r3 += @as(simd.V4f32, @splat(a[(i + 3) * K + k])) * bv;
+                        }
+                        simd.store4_f32(c, (i + 0) * N + j, simd.load4_f32(c, (i + 0) * N + j) + r0);
+                        simd.store4_f32(c, (i + 1) * N + j, simd.load4_f32(c, (i + 1) * N + j) + r1);
+                        simd.store4_f32(c, (i + 2) * N + j, simd.load4_f32(c, (i + 2) * N + j) + r2);
+                        simd.store4_f32(c, (i + 3) * N + j, simd.load4_f32(c, (i + 3) * N + j) + r3);
+                    }
+                    // Remainder columns: scalar
+                    while (j < j_end) : (j += 1) {
+                        var s0: f32 = 0;
+                        var s1: f32 = 0;
+                        var s2: f32 = 0;
+                        var s3: f32 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = b[k * N + j];
+                            s0 += a[(i + 0) * K + k] * bv;
+                            s1 += a[(i + 1) * K + k] * bv;
+                            s2 += a[(i + 2) * K + k] * bv;
+                            s3 += a[(i + 3) * K + k] * bv;
+                        }
+                        c[(i + 0) * N + j] += s0;
+                        c[(i + 1) * N + j] += s1;
+                        c[(i + 2) * N + j] += s2;
+                        c[(i + 3) * N + j] += s3;
+                    }
+                }
+
+                // Remainder rows
                 while (i < i_end) : (i += 1) {
                     const c_row = i * N;
-
-                    // Vectorized j: accumulate across k into V4f32 registers, write C once
                     var j: usize = jj;
                     while (j + 8 <= j_end) : (j += 8) {
                         var acc0: simd.V4f32 = @splat(0.0);
@@ -321,20 +270,17 @@ fn matmul_f32_ijk(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K
                             acc0 += a_vec * simd.load4_f32(b, b_row + j);
                             acc1 += a_vec * simd.load4_f32(b, b_row + j + 4);
                         }
-                        simd.store4_f32(c, c_row + j,     simd.load4_f32(c, c_row + j)     + acc0);
+                        simd.store4_f32(c, c_row + j, simd.load4_f32(c, c_row + j) + acc0);
                         simd.store4_f32(c, c_row + j + 4, simd.load4_f32(c, c_row + j + 4) + acc1);
                     }
-                    // One more v128 if possible
                     while (j + 4 <= j_end) : (j += 4) {
                         var acc: simd.V4f32 = @splat(0.0);
                         var k: usize = kk;
                         while (k < k_end) : (k += 1) {
-                            const a_vec: simd.V4f32 = @splat(a[i * K + k]);
-                            acc += a_vec * simd.load4_f32(b, k * N + j);
+                            acc += @as(simd.V4f32, @splat(a[i * K + k])) * simd.load4_f32(b, k * N + j);
                         }
                         simd.store4_f32(c, c_row + j, simd.load4_f32(c, c_row + j) + acc);
                     }
-                    // Scalar remainder
                     while (j < j_end) : (j += 1) {
                         var acc: f32 = 0.0;
                         var k: usize = kk;
@@ -350,80 +296,53 @@ fn matmul_f32_ijk(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K
 }
 
 /// Computes C = A @ B for row-major complex128 matrices (interleaved f64: [re, im, re, im, ...]).
-/// Uses i-k-j tiled blocking with deinterleaved V2f64 SIMD in the inner j loop.
-fn matmul_c128_ikj(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// M, N, K are element counts; the underlying f64 arrays are 2x that size.
+/// Uses a 2×N register-blocked micro-kernel with deinterleaving shuffles to minimize redundant loads.
+export fn matmul_c128(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N * 2], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F64) {
         const i_end = @min(ii + TILE_F64, M);
-
-        // Outer tile loop over k (columns of A, rows of B)
         var kk: usize = 0;
         while (kk < K) : (kk += TILE_F64) {
             const k_end = @min(kk + TILE_F64, K);
-
-            // Outer tile loop over j (columns of B and C)
             var jj: usize = 0;
             while (jj < N) : (jj += TILE_F64) {
                 const j_end = @min(jj + TILE_F64, N);
 
-                // Inner tile: C[ii:i_end, jj:j_end] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
                 var i: usize = ii;
                 while (i < i_end) : (i += 1) {
-
                     var k: usize = kk;
                     while (k < k_end) : (k += 1) {
-                        // Load A[i,k] = (a_re, a_im) — one complex element = one v128
                         const a_base = (i * K + k) * 2;
                         const a_re: simd.V2f64 = @splat(a[a_base]);
                         const a_im: simd.V2f64 = @splat(a[a_base + 1]);
-
                         const b_row = k * N * 2;
                         const c_row = i * N * 2;
 
-                        // Vectorized j loop: one v128 = one complex element (re, im)
-                        // Two complex elements per step = 2 v128 ops
                         var j: usize = jj;
                         while (j + 2 <= j_end) : (j += 2) {
                             const bj = b_row + j * 2;
                             const cj = c_row + j * 2;
-
-                            // Load B[k,j] and B[k,j+1]
-                            const b0 = simd.load2_f64(b, bj);      // (b0.re, b0.im)
-                            const b1 = simd.load2_f64(b, bj + 2);  // (b1.re, b1.im)
-
-                            // Deinterleave via @shuffle — compiles to i64x2.shuffle on WASM
-                            // b_re = (b0.re, b1.re), b_im = (b0.im, b1.im)
-                            const b_re = @shuffle(f64, b0, b1, [2]i32{  0, -1 }); // b0[0], b1[0]
-                            const b_im = @shuffle(f64, b0, b1, [2]i32{  1, -2 }); // b0[1], b1[1]
-
+                            const b0 = simd.load2_f64(b, bj);
+                            const b1 = simd.load2_f64(b, bj + 2);
+                            const b_re = @shuffle(f64, b0, b1, [2]i32{ 0, -1 });
+                            const b_im = @shuffle(f64, b0, b1, [2]i32{ 1, -2 });
                             const c0 = simd.load2_f64(c, cj);
                             const c1 = simd.load2_f64(c, cj + 2);
-                            const c_re = @shuffle(f64, c0, c1, [2]i32{  0, -1 }); // c0[0], c1[0]
-                            const c_im = @shuffle(f64, c0, c1, [2]i32{  1, -2 }); // c0[1], c1[1]
-
+                            const c_re = @shuffle(f64, c0, c1, [2]i32{ 0, -1 });
+                            const c_im = @shuffle(f64, c0, c1, [2]i32{ 1, -2 });
                             const out_re = c_re + a_re * b_re - a_im * b_im;
                             const out_im = c_im + a_re * b_im + a_im * b_re;
-
-                            // Reinterleave for store — interleave re and im back into (re, im) pairs
-                            const out0 = @shuffle(f64, out_re, out_im, [2]i32{  0, -1 }); // (re[0], im[0])
-                            const out1 = @shuffle(f64, out_re, out_im, [2]i32{  1, -2 }); // (re[1], im[1])
-
-                            simd.store2_f64(c, cj,     out0);
-                            simd.store2_f64(c, cj + 2, out1);
+                            simd.store2_f64(c, cj, @shuffle(f64, out_re, out_im, [2]i32{ 0, -1 }));
+                            simd.store2_f64(c, cj + 2, @shuffle(f64, out_re, out_im, [2]i32{ 1, -2 }));
                         }
-                        // Scalar remainder
                         while (j < j_end) : (j += 1) {
                             const bj = b_row + j * 2;
                             const cj = c_row + j * 2;
-                            const b_re = b[bj];
-                            const b_im = b[bj + 1];
-                            c[cj]     += a[a_base] * b_re - a[a_base + 1] * b_im;
-                            c[cj + 1] += a[a_base] * b_im + a[a_base + 1] * b_re;
+                            c[cj] += a[a_base] * b[bj] - a[a_base + 1] * b[bj + 1];
+                            c[cj + 1] += a[a_base] * b[bj + 1] + a[a_base + 1] * b[bj];
                         }
                     }
                 }
@@ -433,78 +352,53 @@ fn matmul_c128_ikj(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32, 
 }
 
 /// Computes C = A @ B for row-major complex64 matrices (interleaved f32: [re, im, re, im, ...]).
-/// Uses i-k-j tiled blocking with deinterleaved V4f32 SIMD in the inner j loop.
-fn matmul_c64_ikj(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// M, N, K are element counts; the underlying f32 arrays are 2x that size.
+/// Uses a 4×N register-blocked micro-kernel with deinterleaving shuffles to minimize redundant loads.
+export fn matmul_c64(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N * 2], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F32) {
         const i_end = @min(ii + TILE_F32, M);
-
-        // Outer tile loop over k (columns of A, rows of B)
         var kk: usize = 0;
         while (kk < K) : (kk += TILE_F32) {
             const k_end = @min(kk + TILE_F32, K);
-
-            // Outer tile loop over j (columns of B and C)
             var jj: usize = 0;
             while (jj < N) : (jj += TILE_F32) {
                 const j_end = @min(jj + TILE_F32, N);
 
-                // Inner tile: C[ii:i_end, jj:j_end] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
                 var i: usize = ii;
                 while (i < i_end) : (i += 1) {
-
                     var k: usize = kk;
                     while (k < k_end) : (k += 1) {
-                        // Load A[i,k] = (a_re, a_im) — one complex element = one v128
                         const a_base = (i * K + k) * 2;
                         const a_re: simd.V4f32 = @splat(a[a_base]);
                         const a_im: simd.V4f32 = @splat(a[a_base + 1]);
-
                         const b_row = k * N * 2;
                         const c_row = i * N * 2;
 
-                        // Vectorized j loop: two v128 = two complex element (re, im)
-                        // Four complex elements per step = 2 v128 ops
                         var j: usize = jj;
                         while (j + 4 <= j_end) : (j += 4) {
                             const bj = b_row + j * 2;
                             const cj = c_row + j * 2;
-
-                            // Load 4 complex f32 elements across two v128s
-                            const b0 = simd.load4_f32(b, bj);      // (b0.re, b0.im, b1.re, b1.im)
-                            const b1 = simd.load4_f32(b, bj + 4);  // (b2.re, b2.im, b3.re, b3.im)
-
-                            // Deinterleave — compiles to f32x4.shuffle on WASM
-                            const b_re = @shuffle(f32, b0, b1, [4]i32{  0,  2, -1, -3 }); // b0.re, b1.re, b2.re, b3.re
-                            const b_im = @shuffle(f32, b0, b1, [4]i32{  1,  3, -2, -4 }); // b0.im, b1.im, b2.im, b3.im
-
+                            const b0 = simd.load4_f32(b, bj);
+                            const b1 = simd.load4_f32(b, bj + 4);
+                            const b_re = @shuffle(f32, b0, b1, [4]i32{ 0, 2, -1, -3 });
+                            const b_im = @shuffle(f32, b0, b1, [4]i32{ 1, 3, -2, -4 });
                             const c0 = simd.load4_f32(c, cj);
                             const c1 = simd.load4_f32(c, cj + 4);
-                            const c_re = @shuffle(f32, c0, c1, [4]i32{  0,  2, -1, -3 }); // c0.re, c1.re, c2.re, c3.re
-                            const c_im = @shuffle(f32, c0, c1, [4]i32{  1,  3, -2, -4 }); // c0.im, c1.im, c2.im, c3.im
-
+                            const c_re = @shuffle(f32, c0, c1, [4]i32{ 0, 2, -1, -3 });
+                            const c_im = @shuffle(f32, c0, c1, [4]i32{ 1, 3, -2, -4 });
                             const out_re = c_re + a_re * b_re - a_im * b_im;
                             const out_im = c_im + a_re * b_im + a_im * b_re;
-
-                            // Reinterleave for store
-                            const out0 = @shuffle(f32, out_re, out_im, [4]i32{  0, -1,  1, -2 }); // (re[0],im[0],re[1],im[1])
-                            const out1 = @shuffle(f32, out_re, out_im, [4]i32{  2, -3,  3, -4 }); // (re[2],im[2],re[3],im[3])
-                            simd.store4_f32(c, cj,     out0);
-                            simd.store4_f32(c, cj + 4, out1);
+                            simd.store4_f32(c, cj, @shuffle(f32, out_re, out_im, [4]i32{ 0, -1, 1, -2 }));
+                            simd.store4_f32(c, cj + 4, @shuffle(f32, out_re, out_im, [4]i32{ 2, -3, 3, -4 }));
                         }
-                        // Scalar remainder
                         while (j < j_end) : (j += 1) {
                             const bj = b_row + j * 2;
                             const cj = c_row + j * 2;
-                            const b_re = b[bj];
-                            const b_im = b[bj + 1];
-                            c[cj]     += a[a_base] * b_re - a[a_base + 1] * b_im;
-                            c[cj + 1] += a[a_base] * b_im + a[a_base + 1] * b_re;
+                            c[cj] += a[a_base] * b[bj] - a[a_base + 1] * b[bj + 1];
+                            c[cj + 1] += a[a_base] * b[bj + 1] + a[a_base + 1] * b[bj];
                         }
                     }
                 }
@@ -514,53 +408,138 @@ fn matmul_c64_ikj(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32, K
 }
 
 /// Computes C = A @ B for row-major i64 matrices with wrapping arithmetic.
-/// Uses i-k-j tiled blocking with V2i64 SIMD in the inner j loop.
+/// A is (M x K), B is (K x N), C is (M x N).
 /// Handles both signed (i64) and unsigned (u64) — wrapping add/mul produce identical bits.
-fn matmul_i64_ikj(a: [*]const i64, b: [*]const i64, c: [*]i64, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// Uses a 4×N register-blocked micro-kernel with 4-wide SIMD for the main loop, then 2-wide and scalar remainders.
+export fn matmul_i64(a: [*]const i64, b: [*]const i64, c: [*]i64, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F64) {
         const i_end = @min(ii + TILE_F64, M);
+        var jj: usize = 0;
+        while (jj < N) : (jj += TILE_F64) {
+            const j_end = @min(jj + TILE_F64, N);
+            var kk: usize = 0;
+            while (kk < K) : (kk += TILE_F64) {
+                const k_end = @min(kk + TILE_F64, K);
 
-        // Outer tile loop over k (columns of A, rows of B)
-        var kk: usize = 0;
-        while (kk < K) : (kk += TILE_F64) {
-            const k_end = @min(kk + TILE_F64, K);
-
-            // Outer tile loop over j (columns of B and C)
-            var jj: usize = 0;
-            while (jj < N) : (jj += TILE_F64) {
-                const j_end = @min(jj + TILE_F64, N);
-
-                // Inner tile: C[ii:i_end, jj:j_end] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
                 var i: usize = ii;
+                while (i + 4 <= i_end) : (i += 4) {
+                    var j: usize = jj;
+                    while (j + 4 <= j_end) : (j += 4) {
+                        var acc00: simd.V2i64 = @splat(0);
+                        var acc01: simd.V2i64 = @splat(0);
+                        var acc10: simd.V2i64 = @splat(0);
+                        var acc11: simd.V2i64 = @splat(0);
+                        var acc20: simd.V2i64 = @splat(0);
+                        var acc21: simd.V2i64 = @splat(0);
+                        var acc30: simd.V2i64 = @splat(0);
+                        var acc31: simd.V2i64 = @splat(0);
+
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const b_row = k * N;
+                            const b0 = simd.load2_i64(b, b_row + j);
+                            const b1 = simd.load2_i64(b, b_row + j + 2);
+                            const a0: simd.V2i64 = @splat(a[(i + 0) * K + k]);
+                            acc00 +%= a0 *% b0;
+                            acc01 +%= a0 *% b1;
+                            const a1: simd.V2i64 = @splat(a[(i + 1) * K + k]);
+                            acc10 +%= a1 *% b0;
+                            acc11 +%= a1 *% b1;
+                            const a2: simd.V2i64 = @splat(a[(i + 2) * K + k]);
+                            acc20 +%= a2 *% b0;
+                            acc21 +%= a2 *% b1;
+                            const a3: simd.V2i64 = @splat(a[(i + 3) * K + k]);
+                            acc30 +%= a3 *% b0;
+                            acc31 +%= a3 *% b1;
+                        }
+
+                        const c0 = (i + 0) * N;
+                        simd.store2_i64(c, c0 + j, simd.load2_i64(c, c0 + j) +% acc00);
+                        simd.store2_i64(c, c0 + j + 2, simd.load2_i64(c, c0 + j + 2) +% acc01);
+                        const c1 = (i + 1) * N;
+                        simd.store2_i64(c, c1 + j, simd.load2_i64(c, c1 + j) +% acc10);
+                        simd.store2_i64(c, c1 + j + 2, simd.load2_i64(c, c1 + j + 2) +% acc11);
+                        const c2 = (i + 2) * N;
+                        simd.store2_i64(c, c2 + j, simd.load2_i64(c, c2 + j) +% acc20);
+                        simd.store2_i64(c, c2 + j + 2, simd.load2_i64(c, c2 + j + 2) +% acc21);
+                        const c3 = (i + 3) * N;
+                        simd.store2_i64(c, c3 + j, simd.load2_i64(c, c3 + j) +% acc30);
+                        simd.store2_i64(c, c3 + j + 2, simd.load2_i64(c, c3 + j + 2) +% acc31);
+                    }
+
+                    while (j + 2 <= j_end) : (j += 2) {
+                        var r0: simd.V2i64 = @splat(0);
+                        var r1: simd.V2i64 = @splat(0);
+                        var r2: simd.V2i64 = @splat(0);
+                        var r3: simd.V2i64 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = simd.load2_i64(b, k * N + j);
+                            r0 +%= @as(simd.V2i64, @splat(a[(i + 0) * K + k])) *% bv;
+                            r1 +%= @as(simd.V2i64, @splat(a[(i + 1) * K + k])) *% bv;
+                            r2 +%= @as(simd.V2i64, @splat(a[(i + 2) * K + k])) *% bv;
+                            r3 +%= @as(simd.V2i64, @splat(a[(i + 3) * K + k])) *% bv;
+                        }
+                        simd.store2_i64(c, (i + 0) * N + j, simd.load2_i64(c, (i + 0) * N + j) +% r0);
+                        simd.store2_i64(c, (i + 1) * N + j, simd.load2_i64(c, (i + 1) * N + j) +% r1);
+                        simd.store2_i64(c, (i + 2) * N + j, simd.load2_i64(c, (i + 2) * N + j) +% r2);
+                        simd.store2_i64(c, (i + 3) * N + j, simd.load2_i64(c, (i + 3) * N + j) +% r3);
+                    }
+                    while (j < j_end) : (j += 1) {
+                        var s0: i64 = 0;
+                        var s1: i64 = 0;
+                        var s2: i64 = 0;
+                        var s3: i64 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = b[k * N + j];
+                            s0 +%= a[(i + 0) * K + k] *% bv;
+                            s1 +%= a[(i + 1) * K + k] *% bv;
+                            s2 +%= a[(i + 2) * K + k] *% bv;
+                            s3 +%= a[(i + 3) * K + k] *% bv;
+                        }
+                        c[(i + 0) * N + j] +%= s0;
+                        c[(i + 1) * N + j] +%= s1;
+                        c[(i + 2) * N + j] +%= s2;
+                        c[(i + 3) * N + j] +%= s3;
+                    }
+                }
+
+                // Remainder rows
                 while (i < i_end) : (i += 1) {
-
-                    var k: usize = kk;
-                    while (k < k_end) : (k += 1) {
-                        const a_ik = a[i * K + k];
-                        const a_vec: simd.V2i64 = @splat(a_ik);
-                        const b_row = k * N;
-                        const c_row = i * N;
-
-                        // Vectorized j loop: two v128 (2×i64) per step = 4 i64
-                        var j: usize = jj;
-                        while (j + 4 <= j_end) : (j += 4) {
-                            simd.store2_i64(c, c_row + j, simd.load2_i64(c, c_row + j) +% a_vec *% simd.load2_i64(b, b_row + j));
-                            simd.store2_i64(c, c_row + j + 2, simd.load2_i64(c, c_row + j + 2) +% a_vec *% simd.load2_i64(b, b_row + j + 2));
+                    const c_row = i * N;
+                    var j: usize = jj;
+                    while (j + 4 <= j_end) : (j += 4) {
+                        var acc0: simd.V2i64 = @splat(0);
+                        var acc1: simd.V2i64 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const a_vec: simd.V2i64 = @splat(a[i * K + k]);
+                            const b_row = k * N;
+                            acc0 +%= a_vec *% simd.load2_i64(b, b_row + j);
+                            acc1 +%= a_vec *% simd.load2_i64(b, b_row + j + 2);
                         }
-                        // One more v128 if possible
-                        while (j + 2 <= j_end) : (j += 2) {
-                            simd.store2_i64(c, c_row + j, simd.load2_i64(c, c_row + j) +% a_vec *% simd.load2_i64(b, b_row + j));
+                        simd.store2_i64(c, c_row + j, simd.load2_i64(c, c_row + j) +% acc0);
+                        simd.store2_i64(c, c_row + j + 2, simd.load2_i64(c, c_row + j + 2) +% acc1);
+                    }
+                    while (j + 2 <= j_end) : (j += 2) {
+                        var acc: simd.V2i64 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            acc +%= @as(simd.V2i64, @splat(a[i * K + k])) *% simd.load2_i64(b, k * N + j);
                         }
-                        // Scalar remainder
-                        while (j < j_end) : (j += 1) {
-                            c[c_row + j] +%= a_ik *% b[b_row + j];
+                        simd.store2_i64(c, c_row + j, simd.load2_i64(c, c_row + j) +% acc);
+                    }
+                    while (j < j_end) : (j += 1) {
+                        var acc: i64 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            acc +%= a[i * K + k] *% b[k * N + j];
                         }
+                        c[c_row + j] +%= acc;
                     }
                 }
             }
@@ -569,53 +548,138 @@ fn matmul_i64_ikj(a: [*]const i64, b: [*]const i64, c: [*]i64, M: u32, N: u32, K
 }
 
 /// Computes C = A @ B for row-major i32 matrices with wrapping arithmetic.
-/// Uses i-k-j tiled blocking with V4i32 SIMD in the inner j loop.
+/// A is (M x K), B is (K x N), C is (M x N).
 /// Handles both signed (i32) and unsigned (u32) — wrapping add/mul produce identical bits.
-fn matmul_i32_ikj(a: [*]const i32, b: [*]const i32, c: [*]i32, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// Uses a 4×N register-blocked micro-kernel with 4-wide SIMD for the main loop, then 2-wide and scalar remainders.
+export fn matmul_i32(a: [*]const i32, b: [*]const i32, c: [*]i32, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F32) {
         const i_end = @min(ii + TILE_F32, M);
+        var jj: usize = 0;
+        while (jj < N) : (jj += TILE_F32) {
+            const j_end = @min(jj + TILE_F32, N);
+            var kk: usize = 0;
+            while (kk < K) : (kk += TILE_F32) {
+                const k_end = @min(kk + TILE_F32, K);
 
-        // Outer tile loop over k (columns of A, rows of B)
-        var kk: usize = 0;
-        while (kk < K) : (kk += TILE_F32) {
-            const k_end = @min(kk + TILE_F32, K);
-
-            // Outer tile loop over j (columns of B and C)
-            var jj: usize = 0;
-            while (jj < N) : (jj += TILE_F32) {
-                const j_end = @min(jj + TILE_F32, N);
-
-                // Inner tile: C[ii:i_end, jj:j_end] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
                 var i: usize = ii;
+                while (i + 4 <= i_end) : (i += 4) {
+                    var j: usize = jj;
+                    while (j + 8 <= j_end) : (j += 8) {
+                        var acc00: simd.V4i32 = @splat(0);
+                        var acc01: simd.V4i32 = @splat(0);
+                        var acc10: simd.V4i32 = @splat(0);
+                        var acc11: simd.V4i32 = @splat(0);
+                        var acc20: simd.V4i32 = @splat(0);
+                        var acc21: simd.V4i32 = @splat(0);
+                        var acc30: simd.V4i32 = @splat(0);
+                        var acc31: simd.V4i32 = @splat(0);
+
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const b_row = k * N;
+                            const b0 = simd.load4_i32(b, b_row + j);
+                            const b1 = simd.load4_i32(b, b_row + j + 4);
+                            const a0: simd.V4i32 = @splat(a[(i + 0) * K + k]);
+                            acc00 +%= a0 *% b0;
+                            acc01 +%= a0 *% b1;
+                            const a1: simd.V4i32 = @splat(a[(i + 1) * K + k]);
+                            acc10 +%= a1 *% b0;
+                            acc11 +%= a1 *% b1;
+                            const a2: simd.V4i32 = @splat(a[(i + 2) * K + k]);
+                            acc20 +%= a2 *% b0;
+                            acc21 +%= a2 *% b1;
+                            const a3: simd.V4i32 = @splat(a[(i + 3) * K + k]);
+                            acc30 +%= a3 *% b0;
+                            acc31 +%= a3 *% b1;
+                        }
+
+                        const c0 = (i + 0) * N;
+                        simd.store4_i32(c, c0 + j, simd.load4_i32(c, c0 + j) +% acc00);
+                        simd.store4_i32(c, c0 + j + 4, simd.load4_i32(c, c0 + j + 4) +% acc01);
+                        const c1 = (i + 1) * N;
+                        simd.store4_i32(c, c1 + j, simd.load4_i32(c, c1 + j) +% acc10);
+                        simd.store4_i32(c, c1 + j + 4, simd.load4_i32(c, c1 + j + 4) +% acc11);
+                        const c2 = (i + 2) * N;
+                        simd.store4_i32(c, c2 + j, simd.load4_i32(c, c2 + j) +% acc20);
+                        simd.store4_i32(c, c2 + j + 4, simd.load4_i32(c, c2 + j + 4) +% acc21);
+                        const c3 = (i + 3) * N;
+                        simd.store4_i32(c, c3 + j, simd.load4_i32(c, c3 + j) +% acc30);
+                        simd.store4_i32(c, c3 + j + 4, simd.load4_i32(c, c3 + j + 4) +% acc31);
+                    }
+
+                    while (j + 4 <= j_end) : (j += 4) {
+                        var r0: simd.V4i32 = @splat(0);
+                        var r1: simd.V4i32 = @splat(0);
+                        var r2: simd.V4i32 = @splat(0);
+                        var r3: simd.V4i32 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = simd.load4_i32(b, k * N + j);
+                            r0 +%= @as(simd.V4i32, @splat(a[(i + 0) * K + k])) *% bv;
+                            r1 +%= @as(simd.V4i32, @splat(a[(i + 1) * K + k])) *% bv;
+                            r2 +%= @as(simd.V4i32, @splat(a[(i + 2) * K + k])) *% bv;
+                            r3 +%= @as(simd.V4i32, @splat(a[(i + 3) * K + k])) *% bv;
+                        }
+                        simd.store4_i32(c, (i + 0) * N + j, simd.load4_i32(c, (i + 0) * N + j) +% r0);
+                        simd.store4_i32(c, (i + 1) * N + j, simd.load4_i32(c, (i + 1) * N + j) +% r1);
+                        simd.store4_i32(c, (i + 2) * N + j, simd.load4_i32(c, (i + 2) * N + j) +% r2);
+                        simd.store4_i32(c, (i + 3) * N + j, simd.load4_i32(c, (i + 3) * N + j) +% r3);
+                    }
+                    while (j < j_end) : (j += 1) {
+                        var s0: i32 = 0;
+                        var s1: i32 = 0;
+                        var s2: i32 = 0;
+                        var s3: i32 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = b[k * N + j];
+                            s0 +%= a[(i + 0) * K + k] *% bv;
+                            s1 +%= a[(i + 1) * K + k] *% bv;
+                            s2 +%= a[(i + 2) * K + k] *% bv;
+                            s3 +%= a[(i + 3) * K + k] *% bv;
+                        }
+                        c[(i + 0) * N + j] +%= s0;
+                        c[(i + 1) * N + j] +%= s1;
+                        c[(i + 2) * N + j] +%= s2;
+                        c[(i + 3) * N + j] +%= s3;
+                    }
+                }
+
+                // Remainder rows
                 while (i < i_end) : (i += 1) {
-
-                    var k: usize = kk;
-                    while (k < k_end) : (k += 1) {
-                        const a_ik = a[i * K + k];
-                        const a_vec: simd.V4i32 = @splat(a_ik);
-                        const b_row = k * N;
-                        const c_row = i * N;
-
-                        // Vectorized j loop: two v128 (4×i32) per step = 8 i32
-                        var j: usize = jj;
-                        while (j + 8 <= j_end) : (j += 8) {
-                            simd.store4_i32(c, c_row + j, simd.load4_i32(c, c_row + j) +% a_vec *% simd.load4_i32(b, b_row + j));
-                            simd.store4_i32(c, c_row + j + 4, simd.load4_i32(c, c_row + j + 4) +% a_vec *% simd.load4_i32(b, b_row + j + 4));
+                    const c_row = i * N;
+                    var j: usize = jj;
+                    while (j + 8 <= j_end) : (j += 8) {
+                        var acc0: simd.V4i32 = @splat(0);
+                        var acc1: simd.V4i32 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const a_vec: simd.V4i32 = @splat(a[i * K + k]);
+                            const b_row = k * N;
+                            acc0 +%= a_vec *% simd.load4_i32(b, b_row + j);
+                            acc1 +%= a_vec *% simd.load4_i32(b, b_row + j + 4);
                         }
-                        // One more v128 if possible
-                        while (j + 4 <= j_end) : (j += 4) {
-                            simd.store4_i32(c, c_row + j, simd.load4_i32(c, c_row + j) +% a_vec *% simd.load4_i32(b, b_row + j));
+                        simd.store4_i32(c, c_row + j, simd.load4_i32(c, c_row + j) +% acc0);
+                        simd.store4_i32(c, c_row + j + 4, simd.load4_i32(c, c_row + j + 4) +% acc1);
+                    }
+                    while (j + 4 <= j_end) : (j += 4) {
+                        var acc: simd.V4i32 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            acc +%= @as(simd.V4i32, @splat(a[i * K + k])) *% simd.load4_i32(b, k * N + j);
                         }
-                        // Scalar remainder
-                        while (j < j_end) : (j += 1) {
-                            c[c_row + j] +%= a_ik *% b[b_row + j];
+                        simd.store4_i32(c, c_row + j, simd.load4_i32(c, c_row + j) +% acc);
+                    }
+                    while (j < j_end) : (j += 1) {
+                        var acc: i32 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            acc +%= a[i * K + k] *% b[k * N + j];
                         }
+                        c[c_row + j] +%= acc;
                     }
                 }
             }
@@ -624,53 +688,138 @@ fn matmul_i32_ikj(a: [*]const i32, b: [*]const i32, c: [*]i32, M: u32, N: u32, K
 }
 
 /// Computes C = A @ B for row-major i16 matrices with wrapping arithmetic.
-/// Uses i-k-j tiled blocking with V8i16 SIMD in the inner j loop.
+/// A is (M x K), B is (K x N), C is (M x N).
 /// Handles both signed (i16) and unsigned (u16) — wrapping add/mul produce identical bits.
-fn matmul_i16_ikj(a: [*]const i16, b: [*]const i16, c: [*]i16, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// Uses a 4×N register-blocked micro-kernel with 8-wide SIMD for the main loop, then 4-wide and scalar remainders.
+export fn matmul_i16(a: [*]const i16, b: [*]const i16, c: [*]i16, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F32) {
         const i_end = @min(ii + TILE_F32, M);
+        var jj: usize = 0;
+        while (jj < N) : (jj += TILE_F32) {
+            const j_end = @min(jj + TILE_F32, N);
+            var kk: usize = 0;
+            while (kk < K) : (kk += TILE_F32) {
+                const k_end = @min(kk + TILE_F32, K);
 
-        // Outer tile loop over k (columns of A, rows of B)
-        var kk: usize = 0;
-        while (kk < K) : (kk += TILE_F32) {
-            const k_end = @min(kk + TILE_F32, K);
-
-            // Outer tile loop over j (columns of B and C)
-            var jj: usize = 0;
-            while (jj < N) : (jj += TILE_F32) {
-                const j_end = @min(jj + TILE_F32, N);
-
-                // Inner tile: C[ii:i_end, jj:j_end] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
                 var i: usize = ii;
+                while (i + 4 <= i_end) : (i += 4) {
+                    var j: usize = jj;
+                    while (j + 16 <= j_end) : (j += 16) {
+                        var acc00: simd.V8i16 = @splat(0);
+                        var acc01: simd.V8i16 = @splat(0);
+                        var acc10: simd.V8i16 = @splat(0);
+                        var acc11: simd.V8i16 = @splat(0);
+                        var acc20: simd.V8i16 = @splat(0);
+                        var acc21: simd.V8i16 = @splat(0);
+                        var acc30: simd.V8i16 = @splat(0);
+                        var acc31: simd.V8i16 = @splat(0);
+
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const b_row = k * N;
+                            const b0 = simd.load8_i16(b, b_row + j);
+                            const b1 = simd.load8_i16(b, b_row + j + 8);
+                            const a0: simd.V8i16 = @splat(a[(i + 0) * K + k]);
+                            acc00 +%= a0 *% b0;
+                            acc01 +%= a0 *% b1;
+                            const a1: simd.V8i16 = @splat(a[(i + 1) * K + k]);
+                            acc10 +%= a1 *% b0;
+                            acc11 +%= a1 *% b1;
+                            const a2: simd.V8i16 = @splat(a[(i + 2) * K + k]);
+                            acc20 +%= a2 *% b0;
+                            acc21 +%= a2 *% b1;
+                            const a3: simd.V8i16 = @splat(a[(i + 3) * K + k]);
+                            acc30 +%= a3 *% b0;
+                            acc31 +%= a3 *% b1;
+                        }
+
+                        const c0 = (i + 0) * N;
+                        simd.store8_i16(c, c0 + j, simd.load8_i16(c, c0 + j) +% acc00);
+                        simd.store8_i16(c, c0 + j + 8, simd.load8_i16(c, c0 + j + 8) +% acc01);
+                        const c1 = (i + 1) * N;
+                        simd.store8_i16(c, c1 + j, simd.load8_i16(c, c1 + j) +% acc10);
+                        simd.store8_i16(c, c1 + j + 8, simd.load8_i16(c, c1 + j + 8) +% acc11);
+                        const c2 = (i + 2) * N;
+                        simd.store8_i16(c, c2 + j, simd.load8_i16(c, c2 + j) +% acc20);
+                        simd.store8_i16(c, c2 + j + 8, simd.load8_i16(c, c2 + j + 8) +% acc21);
+                        const c3 = (i + 3) * N;
+                        simd.store8_i16(c, c3 + j, simd.load8_i16(c, c3 + j) +% acc30);
+                        simd.store8_i16(c, c3 + j + 8, simd.load8_i16(c, c3 + j + 8) +% acc31);
+                    }
+
+                    while (j + 8 <= j_end) : (j += 8) {
+                        var r0: simd.V8i16 = @splat(0);
+                        var r1: simd.V8i16 = @splat(0);
+                        var r2: simd.V8i16 = @splat(0);
+                        var r3: simd.V8i16 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = simd.load8_i16(b, k * N + j);
+                            r0 +%= @as(simd.V8i16, @splat(a[(i + 0) * K + k])) *% bv;
+                            r1 +%= @as(simd.V8i16, @splat(a[(i + 1) * K + k])) *% bv;
+                            r2 +%= @as(simd.V8i16, @splat(a[(i + 2) * K + k])) *% bv;
+                            r3 +%= @as(simd.V8i16, @splat(a[(i + 3) * K + k])) *% bv;
+                        }
+                        simd.store8_i16(c, (i + 0) * N + j, simd.load8_i16(c, (i + 0) * N + j) +% r0);
+                        simd.store8_i16(c, (i + 1) * N + j, simd.load8_i16(c, (i + 1) * N + j) +% r1);
+                        simd.store8_i16(c, (i + 2) * N + j, simd.load8_i16(c, (i + 2) * N + j) +% r2);
+                        simd.store8_i16(c, (i + 3) * N + j, simd.load8_i16(c, (i + 3) * N + j) +% r3);
+                    }
+                    while (j < j_end) : (j += 1) {
+                        var s0: i16 = 0;
+                        var s1: i16 = 0;
+                        var s2: i16 = 0;
+                        var s3: i16 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const bv = b[k * N + j];
+                            s0 +%= a[(i + 0) * K + k] *% bv;
+                            s1 +%= a[(i + 1) * K + k] *% bv;
+                            s2 +%= a[(i + 2) * K + k] *% bv;
+                            s3 +%= a[(i + 3) * K + k] *% bv;
+                        }
+                        c[(i + 0) * N + j] +%= s0;
+                        c[(i + 1) * N + j] +%= s1;
+                        c[(i + 2) * N + j] +%= s2;
+                        c[(i + 3) * N + j] +%= s3;
+                    }
+                }
+
+                // Remainder rows
                 while (i < i_end) : (i += 1) {
-
-                    var k: usize = kk;
-                    while (k < k_end) : (k += 1) {
-                        const a_ik = a[i * K + k];
-                        const a_vec: simd.V8i16 = @splat(a_ik);
-                        const b_row = k * N;
-                        const c_row = i * N;
-
-                        // Vectorized j loop: two v128 (8×i16) per step = 16 i16
-                        var j: usize = jj;
-                        while (j + 16 <= j_end) : (j += 16) {
-                            simd.store8_i16(c, c_row + j, simd.load8_i16(c, c_row + j) +% a_vec *% simd.load8_i16(b, b_row + j));
-                            simd.store8_i16(c, c_row + j + 8, simd.load8_i16(c, c_row + j + 8) +% a_vec *% simd.load8_i16(b, b_row + j + 8));
+                    const c_row = i * N;
+                    var j: usize = jj;
+                    while (j + 16 <= j_end) : (j += 16) {
+                        var acc0: simd.V8i16 = @splat(0);
+                        var acc1: simd.V8i16 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            const a_vec: simd.V8i16 = @splat(a[i * K + k]);
+                            const b_row = k * N;
+                            acc0 +%= a_vec *% simd.load8_i16(b, b_row + j);
+                            acc1 +%= a_vec *% simd.load8_i16(b, b_row + j + 8);
                         }
-                        // One more v128 if possible
-                        while (j + 8 <= j_end) : (j += 8) {
-                            simd.store8_i16(c, c_row + j, simd.load8_i16(c, c_row + j) +% a_vec *% simd.load8_i16(b, b_row + j));
+                        simd.store8_i16(c, c_row + j, simd.load8_i16(c, c_row + j) +% acc0);
+                        simd.store8_i16(c, c_row + j + 8, simd.load8_i16(c, c_row + j + 8) +% acc1);
+                    }
+                    while (j + 8 <= j_end) : (j += 8) {
+                        var acc: simd.V8i16 = @splat(0);
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            acc +%= @as(simd.V8i16, @splat(a[i * K + k])) *% simd.load8_i16(b, k * N + j);
                         }
-                        // Scalar remainder
-                        while (j < j_end) : (j += 1) {
-                            c[c_row + j] +%= a_ik *% b[b_row + j];
+                        simd.store8_i16(c, c_row + j, simd.load8_i16(c, c_row + j) +% acc);
+                    }
+                    while (j < j_end) : (j += 1) {
+                        var acc: i16 = 0;
+                        var k: usize = kk;
+                        while (k < k_end) : (k += 1) {
+                            acc +%= a[i * K + k] *% b[k * N + j];
                         }
+                        c[c_row + j] +%= acc;
                     }
                 }
             }
@@ -678,33 +827,26 @@ fn matmul_i16_ikj(a: [*]const i16, b: [*]const i16, c: [*]i16, M: u32, N: u32, K
     }
 }
 
+
 /// Computes C = A @ B for row-major i8 matrices with wrapping arithmetic.
-/// Uses i-k-j tiled blocking with V16i8 SIMD in the inner j loop.
+/// A is (M x K), B is (K x N), C is (M x N).
 /// Handles both signed (i8) and unsigned (u8) — wrapping add/mul produce identical bits.
-fn matmul_i8_ikj(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: u32) void {
-    // Zero output
+/// Uses an i-j-j blocked approach with 16-wide SIMD for the main loop, then smaller remainders.
+export fn matmul_i8(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: u32) void {
     @memset(c[0..@as(usize, M) * N], 0);
 
-    // Tiled i-k-j loop (BLAS-style blocking)
-    // Outer tile loop over i (rows of A and C)
     var ii: usize = 0;
     while (ii < M) : (ii += TILE_F32) {
         const i_end = @min(ii + TILE_F32, M);
-
-        // Outer tile loop over k (columns of A, rows of B)
         var kk: usize = 0;
         while (kk < K) : (kk += TILE_F32) {
             const k_end = @min(kk + TILE_F32, K);
-
-            // Outer tile loop over j (columns of B and C)
             var jj: usize = 0;
             while (jj < N) : (jj += TILE_F32) {
                 const j_end = @min(jj + TILE_F32, N);
 
-                // Inner tile: C[ii:i_end, jj:j_end] += A[ii:i_end, kk:k_end] @ B[kk:k_end, jj:j_end]
                 var i: usize = ii;
                 while (i < i_end) : (i += 1) {
-
                     var k: usize = kk;
                     while (k < k_end) : (k += 1) {
                         const a_ik = a[i * K + k];
@@ -712,18 +854,14 @@ fn matmul_i8_ikj(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: u3
                         const b_row = k * N;
                         const c_row = i * N;
 
-                        // Vectorized j loop: two v128 (16×i8) per step = 32 i8
-                        // Uses widen-multiply-narrow since WASM has no i8x16.mul
                         var j: usize = jj;
                         while (j + 32 <= j_end) : (j += 32) {
                             simd.store16_i8(c, c_row + j, simd.muladd_i8x16(simd.load16_i8(c, c_row + j), a_vec, simd.load16_i8(b, b_row + j)));
                             simd.store16_i8(c, c_row + j + 16, simd.muladd_i8x16(simd.load16_i8(c, c_row + j + 16), a_vec, simd.load16_i8(b, b_row + j + 16)));
                         }
-                        // One more v128 if possible
                         while (j + 16 <= j_end) : (j += 16) {
                             simd.store16_i8(c, c_row + j, simd.muladd_i8x16(simd.load16_i8(c, c_row + j), a_vec, simd.load16_i8(b, b_row + j)));
                         }
-                        // Scalar remainder
                         while (j < j_end) : (j += 1) {
                             c[c_row + j] +%= a_ik *% b[b_row + j];
                         }
@@ -736,53 +874,41 @@ fn matmul_i8_ikj(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: u3
 
 // --- Tests ---
 
-test "matmul_f64_ikj 2x2" {
+test "matmul_f64 2x2" {
     const testing = @import("std").testing;
-    // A = [[1, 2], [3, 4]], B = [[5, 6], [7, 8]]
-    // C = [[1*5+2*7, 1*6+2*8], [3*5+4*7, 3*6+4*8]] = [[19, 22], [43, 50]]
     var a = [_]f64{ 1, 2, 3, 4 };
     var b = [_]f64{ 5, 6, 7, 8 };
     var c = [_]f64{ 0, 0, 0, 0 };
-    matmul_f64_ikj(&a, &b, &c, 2, 2, 2);
+    matmul_f64(&a, &b, &c, 2, 2, 2);
     try testing.expectApproxEqAbs(c[0], 19.0, 1e-10);
     try testing.expectApproxEqAbs(c[1], 22.0, 1e-10);
     try testing.expectApproxEqAbs(c[2], 43.0, 1e-10);
     try testing.expectApproxEqAbs(c[3], 50.0, 1e-10);
 }
 
-test "matmul_f64_ikj non-square 2x3x4" {
+test "matmul_f64 non-square 2x4x3" {
     const testing = @import("std").testing;
-    // A is 2×3, B is 3×4, C is 2×4
-    // A = [[1,2,3],[4,5,6]], B = [[1,2,3,4],[5,6,7,8],[9,10,11,12]]
-    // C[0,0] = 1*1+2*5+3*9 = 38,  C[0,1] = 1*2+2*6+3*10 = 44
-    // C[0,2] = 1*3+2*7+3*11 = 50, C[0,3] = 1*4+2*8+3*12 = 56
-    // C[1,0] = 4*1+5*5+6*9 = 83,  C[1,1] = 4*2+5*6+6*10 = 98
-    // C[1,2] = 4*3+5*7+6*11 = 113, C[1,3] = 4*4+5*8+6*12 = 128
     var a = [_]f64{ 1, 2, 3, 4, 5, 6 };
     var b = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
     var c = [_]f64{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_f64_ikj(&a, &b, &c, 2, 4, 3);
-    try testing.expectApproxEqAbs(c[0],  38.0, 1e-10);
-    try testing.expectApproxEqAbs(c[1],  44.0, 1e-10);
-    try testing.expectApproxEqAbs(c[2],  50.0, 1e-10);
-    try testing.expectApproxEqAbs(c[3],  56.0, 1e-10);
-    try testing.expectApproxEqAbs(c[4],  83.0, 1e-10);
-    try testing.expectApproxEqAbs(c[5],  98.0, 1e-10);
+    matmul_f64(&a, &b, &c, 2, 4, 3);
+    try testing.expectApproxEqAbs(c[0], 38.0, 1e-10);
+    try testing.expectApproxEqAbs(c[1], 44.0, 1e-10);
+    try testing.expectApproxEqAbs(c[2], 50.0, 1e-10);
+    try testing.expectApproxEqAbs(c[3], 56.0, 1e-10);
+    try testing.expectApproxEqAbs(c[4], 83.0, 1e-10);
+    try testing.expectApproxEqAbs(c[5], 98.0, 1e-10);
     try testing.expectApproxEqAbs(c[6], 113.0, 1e-10);
     try testing.expectApproxEqAbs(c[7], 128.0, 1e-10);
 }
 
-test "matmul_f64_ikj odd N remainder" {
+test "matmul_f64 odd N remainder" {
     const testing = @import("std").testing;
-    // N=3 forces scalar remainder path (not divisible by 2 or 4)
-    // A = [[1,2],[3,4]], B = [[1,2,3],[4,5,6]]
-    // C[0,0]=9, C[0,1]=12, C[0,2]=15
-    // C[1,0]=19, C[1,1]=26, C[1,2]=33
     var a = [_]f64{ 1, 2, 3, 4 };
     var b = [_]f64{ 1, 2, 3, 4, 5, 6 };
     var c = [_]f64{ 0, 0, 0, 0, 0, 0 };
-    matmul_f64_ikj(&a, &b, &c, 2, 3, 2);
-    try testing.expectApproxEqAbs(c[0],  9.0, 1e-10);
+    matmul_f64(&a, &b, &c, 2, 3, 2);
+    try testing.expectApproxEqAbs(c[0], 9.0, 1e-10);
     try testing.expectApproxEqAbs(c[1], 12.0, 1e-10);
     try testing.expectApproxEqAbs(c[2], 15.0, 1e-10);
     try testing.expectApproxEqAbs(c[3], 19.0, 1e-10);
@@ -790,85 +916,41 @@ test "matmul_f64_ikj odd N remainder" {
     try testing.expectApproxEqAbs(c[5], 33.0, 1e-10);
 }
 
-test "matmul_f64_ijk 2x2" {
-    const testing = @import("std").testing;
-    var a = [_]f64{ 1, 2, 3, 4 };
-    var b = [_]f64{ 5, 6, 7, 8 };
-    var c = [_]f64{ 0, 0, 0, 0 };
-    matmul_f64_ijk(&a, &b, &c, 2, 2, 2);
-    try testing.expectApproxEqAbs(c[0], 19.0, 1e-10);
-    try testing.expectApproxEqAbs(c[1], 22.0, 1e-10);
-    try testing.expectApproxEqAbs(c[2], 43.0, 1e-10);
-    try testing.expectApproxEqAbs(c[3], 50.0, 1e-10);
-}
-
-test "matmul_f64_ijk non-square 2x4x3" {
-    const testing = @import("std").testing;
-    var a = [_]f64{ 1, 2, 3, 4, 5, 6 };
-    var b = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
-    var c = [_]f64{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_f64_ijk(&a, &b, &c, 2, 4, 3);
-    try testing.expectApproxEqAbs(c[0],  38.0, 1e-10);
-    try testing.expectApproxEqAbs(c[1],  44.0, 1e-10);
-    try testing.expectApproxEqAbs(c[2],  50.0, 1e-10);
-    try testing.expectApproxEqAbs(c[3],  56.0, 1e-10);
-    try testing.expectApproxEqAbs(c[4],  83.0, 1e-10);
-    try testing.expectApproxEqAbs(c[5],  98.0, 1e-10);
-    try testing.expectApproxEqAbs(c[6], 113.0, 1e-10);
-    try testing.expectApproxEqAbs(c[7], 128.0, 1e-10);
-}
-
-test "matmul_f64_ijk odd N remainder" {
-    const testing = @import("std").testing;
-    var a = [_]f64{ 1, 2, 3, 4 };
-    var b = [_]f64{ 1, 2, 3, 4, 5, 6 };
-    var c = [_]f64{ 0, 0, 0, 0, 0, 0 };
-    matmul_f64_ijk(&a, &b, &c, 2, 3, 2);
-    try testing.expectApproxEqAbs(c[0],  9.0, 1e-10);
-    try testing.expectApproxEqAbs(c[1], 12.0, 1e-10);
-    try testing.expectApproxEqAbs(c[2], 15.0, 1e-10);
-    try testing.expectApproxEqAbs(c[3], 19.0, 1e-10);
-    try testing.expectApproxEqAbs(c[4], 26.0, 1e-10);
-    try testing.expectApproxEqAbs(c[5], 33.0, 1e-10);
-}
-
-// --- f32 ---
-
-test "matmul_f32_ikj 2x2" {
+test "matmul_f32 2x2" {
     const testing = @import("std").testing;
     var a = [_]f32{ 1, 2, 3, 4 };
     var b = [_]f32{ 5, 6, 7, 8 };
     var c = [_]f32{ 0, 0, 0, 0 };
-    matmul_f32_ikj(&a, &b, &c, 2, 2, 2);
+    matmul_f32(&a, &b, &c, 2, 2, 2);
     try testing.expectApproxEqAbs(c[0], 19.0, 1e-5);
     try testing.expectApproxEqAbs(c[1], 22.0, 1e-5);
     try testing.expectApproxEqAbs(c[2], 43.0, 1e-5);
     try testing.expectApproxEqAbs(c[3], 50.0, 1e-5);
 }
 
-test "matmul_f32_ikj non-square 2x4x3" {
+test "matmul_f32 non-square 2x4x3" {
     const testing = @import("std").testing;
     var a = [_]f32{ 1, 2, 3, 4, 5, 6 };
     var b = [_]f32{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
     var c = [_]f32{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_f32_ikj(&a, &b, &c, 2, 4, 3);
-    try testing.expectApproxEqAbs(c[0],  38.0, 1e-5);
-    try testing.expectApproxEqAbs(c[1],  44.0, 1e-5);
-    try testing.expectApproxEqAbs(c[2],  50.0, 1e-5);
-    try testing.expectApproxEqAbs(c[3],  56.0, 1e-5);
-    try testing.expectApproxEqAbs(c[4],  83.0, 1e-5);
-    try testing.expectApproxEqAbs(c[5],  98.0, 1e-5);
+    matmul_f32(&a, &b, &c, 2, 4, 3);
+    try testing.expectApproxEqAbs(c[0], 38.0, 1e-5);
+    try testing.expectApproxEqAbs(c[1], 44.0, 1e-5);
+    try testing.expectApproxEqAbs(c[2], 50.0, 1e-5);
+    try testing.expectApproxEqAbs(c[3], 56.0, 1e-5);
+    try testing.expectApproxEqAbs(c[4], 83.0, 1e-5);
+    try testing.expectApproxEqAbs(c[5], 98.0, 1e-5);
     try testing.expectApproxEqAbs(c[6], 113.0, 1e-5);
     try testing.expectApproxEqAbs(c[7], 128.0, 1e-5);
 }
 
-test "matmul_f32_ikj odd N remainder" {
+test "matmul_f32 odd N remainder" {
     const testing = @import("std").testing;
     var a = [_]f32{ 1, 2, 3, 4 };
     var b = [_]f32{ 1, 2, 3, 4, 5, 6 };
     var c = [_]f32{ 0, 0, 0, 0, 0, 0 };
-    matmul_f32_ikj(&a, &b, &c, 2, 3, 2);
-    try testing.expectApproxEqAbs(c[0],  9.0, 1e-5);
+    matmul_f32(&a, &b, &c, 2, 3, 2);
+    try testing.expectApproxEqAbs(c[0], 9.0, 1e-5);
     try testing.expectApproxEqAbs(c[1], 12.0, 1e-5);
     try testing.expectApproxEqAbs(c[2], 15.0, 1e-5);
     try testing.expectApproxEqAbs(c[3], 19.0, 1e-5);
@@ -876,187 +958,112 @@ test "matmul_f32_ikj odd N remainder" {
     try testing.expectApproxEqAbs(c[5], 33.0, 1e-5);
 }
 
-test "matmul_f32_ijk 2x2" {
+test "matmul_c128 2x2" {
     const testing = @import("std").testing;
-    var a = [_]f32{ 1, 2, 3, 4 };
-    var b = [_]f32{ 5, 6, 7, 8 };
-    var c = [_]f32{ 0, 0, 0, 0 };
-    matmul_f32_ijk(&a, &b, &c, 2, 2, 2);
-    try testing.expectApproxEqAbs(c[0], 19.0, 1e-5);
-    try testing.expectApproxEqAbs(c[1], 22.0, 1e-5);
-    try testing.expectApproxEqAbs(c[2], 43.0, 1e-5);
-    try testing.expectApproxEqAbs(c[3], 50.0, 1e-5);
-}
-
-test "matmul_f32_ijk non-square 2x4x3" {
-    const testing = @import("std").testing;
-    var a = [_]f32{ 1, 2, 3, 4, 5, 6 };
-    var b = [_]f32{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
-    var c = [_]f32{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_f32_ijk(&a, &b, &c, 2, 4, 3);
-    try testing.expectApproxEqAbs(c[0],  38.0, 1e-5);
-    try testing.expectApproxEqAbs(c[1],  44.0, 1e-5);
-    try testing.expectApproxEqAbs(c[2],  50.0, 1e-5);
-    try testing.expectApproxEqAbs(c[3],  56.0, 1e-5);
-    try testing.expectApproxEqAbs(c[4],  83.0, 1e-5);
-    try testing.expectApproxEqAbs(c[5],  98.0, 1e-5);
-    try testing.expectApproxEqAbs(c[6], 113.0, 1e-5);
-    try testing.expectApproxEqAbs(c[7], 128.0, 1e-5);
-}
-
-test "matmul_f32_ijk odd N remainder" {
-    const testing = @import("std").testing;
-    var a = [_]f32{ 1, 2, 3, 4 };
-    var b = [_]f32{ 1, 2, 3, 4, 5, 6 };
-    var c = [_]f32{ 0, 0, 0, 0, 0, 0 };
-    matmul_f32_ijk(&a, &b, &c, 2, 3, 2);
-    try testing.expectApproxEqAbs(c[0],  9.0, 1e-5);
-    try testing.expectApproxEqAbs(c[1], 12.0, 1e-5);
-    try testing.expectApproxEqAbs(c[2], 15.0, 1e-5);
-    try testing.expectApproxEqAbs(c[3], 19.0, 1e-5);
-    try testing.expectApproxEqAbs(c[4], 26.0, 1e-5);
-    try testing.expectApproxEqAbs(c[5], 33.0, 1e-5);
-}
-
-// --- c128 ---
-// Matrices stored as interleaved [re, im, re, im, ...]
-// Complex multiply: (a+bi)(c+di) = (ac-bd) + (ad+bc)i
-
-test "matmul_c128_ikj 2x2" {
-    const testing = @import("std").testing;
-    // A = [[1+2i, 3+4i], [5+6i, 7+8i]]
-    // B = [[1+1i, 0+1i], [1+0i, 1+1i]]
-    // C[0,0] = (1+2i)(1+1i) + (3+4i)(1+0i) = (-1+3i) + (3+4i) = 2+7i
-    // C[0,1] = (1+2i)(0+1i) + (3+4i)(1+1i) = (-2+1i) + (-1+7i) = -3+8i
-    // C[1,0] = (5+6i)(1+1i) + (7+8i)(1+0i) = (-1+11i) + (7+8i) = 6+19i
-    // C[1,1] = (5+6i)(0+1i) + (7+8i)(1+1i) = (-6+5i) + (-1+15i) = -7+20i
     var a = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8 };
     var b = [_]f64{ 1, 1, 0, 1, 1, 0, 1, 1 };
     var c = [_]f64{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_c128_ikj(&a, &b, &c, 2, 2, 2);
-    try testing.expectApproxEqAbs(c[0],  2.0, 1e-10); // C[0,0].re
-    try testing.expectApproxEqAbs(c[1],  7.0, 1e-10); // C[0,0].im
-    try testing.expectApproxEqAbs(c[2], -3.0, 1e-10); // C[0,1].re
-    try testing.expectApproxEqAbs(c[3],  8.0, 1e-10); // C[0,1].im
-    try testing.expectApproxEqAbs(c[4],  6.0, 1e-10); // C[1,0].re
-    try testing.expectApproxEqAbs(c[5], 19.0, 1e-10); // C[1,0].im
-    try testing.expectApproxEqAbs(c[6], -7.0, 1e-10); // C[1,1].re
-    try testing.expectApproxEqAbs(c[7], 20.0, 1e-10); // C[1,1].im
+    matmul_c128(&a, &b, &c, 2, 2, 2);
+    try testing.expectApproxEqAbs(c[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(c[1], 7.0, 1e-10);
+    try testing.expectApproxEqAbs(c[2], -3.0, 1e-10);
+    try testing.expectApproxEqAbs(c[3], 8.0, 1e-10);
+    try testing.expectApproxEqAbs(c[4], 6.0, 1e-10);
+    try testing.expectApproxEqAbs(c[5], 19.0, 1e-10);
+    try testing.expectApproxEqAbs(c[6], -7.0, 1e-10);
+    try testing.expectApproxEqAbs(c[7], 20.0, 1e-10);
 }
 
-test "matmul_c128_ikj scalar remainder" {
+test "matmul_c128 scalar remainder" {
     const testing = @import("std").testing;
-    // N=1 forces scalar remainder path
-    // A = [[1+2i]], B = [[3+4i]], C = [[(1+2i)(3+4i)]] = [[-5+10i]]
     var a = [_]f64{ 1, 2 };
     var b = [_]f64{ 3, 4 };
     var c = [_]f64{ 0, 0 };
-    matmul_c128_ikj(&a, &b, &c, 1, 1, 1);
+    matmul_c128(&a, &b, &c, 1, 1, 1);
     try testing.expectApproxEqAbs(c[0], -5.0, 1e-10);
     try testing.expectApproxEqAbs(c[1], 10.0, 1e-10);
 }
 
-test "matmul_c128_ikj non-square 2x3x2" {
+test "matmul_c128 non-square 2x3x2" {
     const testing = @import("std").testing;
-    // A is 2×2, B is 2×3, C is 2×3 — exercises non-square stride with complex
-    // A = [[1+0i, 0+1i], [1+1i, 1-1i]]
-    // B = [[1+0i, 0+1i, 1+1i], [1+0i, 1+0i, 0+1i]]
-    // C[0,0] = (1)(1)+(0+1i)(1) = 1 + i = 1+1i
-    // C[0,1] = (1)(0+1i)+(0+1i)(1) = i+i = 0+2i
-    // C[0,2] = (1)(1+1i)+(0+1i)(0+1i) = 1+1i+(-1+0i) = 0+1i
-    // C[1,0] = (1+1i)(1)+(1-1i)(1) = 1+1i+1-1i = 2+0i
-    // C[1,1] = (1+1i)(0+1i)+(1-1i)(1) = -1+1i+1-1i = 0+0i
-    // C[1,2] = (1+1i)(1+1i)+(1-1i)(0+1i) = 2i+(1+1i) = 1+3i
     var a = [_]f64{ 1, 0, 0, 1, 1, 1, 1, -1 };
     var b = [_]f64{ 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1 };
     var c = [_]f64{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_c128_ikj(&a, &b, &c, 2, 3, 2);
-    try testing.expectApproxEqAbs(c[0],  1.0, 1e-10); // C[0,0].re
-    try testing.expectApproxEqAbs(c[1],  1.0, 1e-10); // C[0,0].im
-    try testing.expectApproxEqAbs(c[2],  0.0, 1e-10); // C[0,1].re
-    try testing.expectApproxEqAbs(c[3],  2.0, 1e-10); // C[0,1].im
-    try testing.expectApproxEqAbs(c[4],  0.0, 1e-10); // C[0,2].re
-    try testing.expectApproxEqAbs(c[5],  1.0, 1e-10); // C[0,2].im
-    try testing.expectApproxEqAbs(c[6],  2.0, 1e-10); // C[1,0].re
-    try testing.expectApproxEqAbs(c[7],  0.0, 1e-10); // C[1,0].im
-    try testing.expectApproxEqAbs(c[8],  0.0, 1e-10); // C[1,1].re
-    try testing.expectApproxEqAbs(c[9],  0.0, 1e-10); // C[1,1].im
-    try testing.expectApproxEqAbs(c[10], 1.0, 1e-10); // C[1,2].re
-    try testing.expectApproxEqAbs(c[11], 3.0, 1e-10); // C[1,2].im
+    matmul_c128(&a, &b, &c, 2, 3, 2);
+    try testing.expectApproxEqAbs(c[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(c[1], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(c[2], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(c[3], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(c[4], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(c[5], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(c[6], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(c[7], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(c[8], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(c[9], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(c[10], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(c[11], 3.0, 1e-10);
 }
 
-// --- c64 ---
-
-test "matmul_c64_ikj 2x2" {
+test "matmul_c64 2x2" {
     const testing = @import("std").testing;
-    // Same as c128 2x2 test but f32
     var a = [_]f32{ 1, 2, 3, 4, 5, 6, 7, 8 };
     var b = [_]f32{ 1, 1, 0, 1, 1, 0, 1, 1 };
     var c = [_]f32{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_c64_ikj(&a, &b, &c, 2, 2, 2);
-    try testing.expectApproxEqAbs(c[0],  2.0, 1e-5);
-    try testing.expectApproxEqAbs(c[1],  7.0, 1e-5);
+    matmul_c64(&a, &b, &c, 2, 2, 2);
+    try testing.expectApproxEqAbs(c[0], 2.0, 1e-5);
+    try testing.expectApproxEqAbs(c[1], 7.0, 1e-5);
     try testing.expectApproxEqAbs(c[2], -3.0, 1e-5);
-    try testing.expectApproxEqAbs(c[3],  8.0, 1e-5);
-    try testing.expectApproxEqAbs(c[4],  6.0, 1e-5);
+    try testing.expectApproxEqAbs(c[3], 8.0, 1e-5);
+    try testing.expectApproxEqAbs(c[4], 6.0, 1e-5);
     try testing.expectApproxEqAbs(c[5], 19.0, 1e-5);
     try testing.expectApproxEqAbs(c[6], -7.0, 1e-5);
     try testing.expectApproxEqAbs(c[7], 20.0, 1e-5);
 }
 
-test "matmul_c64_ikj scalar remainder" {
+test "matmul_c64 scalar remainder" {
     const testing = @import("std").testing;
-    // N=1 forces scalar remainder — (1+2i)(3+4i) = -5+10i
     var a = [_]f32{ 1, 2 };
     var b = [_]f32{ 3, 4 };
     var c = [_]f32{ 0, 0 };
-    matmul_c64_ikj(&a, &b, &c, 1, 1, 1);
+    matmul_c64(&a, &b, &c, 1, 1, 1);
     try testing.expectApproxEqAbs(c[0], -5.0, 1e-5);
     try testing.expectApproxEqAbs(c[1], 10.0, 1e-5);
 }
 
-test "matmul_c64_ikj SIMD path N=4" {
+test "matmul_c64 SIMD path N=4" {
     const testing = @import("std").testing;
-    // N=4 exercises the full 4-wide SIMD path in c64
-    // A = [[1+0i]], B = [[1+0i, 0+1i, 1+1i, 1-1i]]
-    // C = [[(1)(1+0i), (1)(0+1i), (1)(1+1i), (1)(1-1i)]]
-    //   = [[1+0i, 0+1i, 1+1i, 1-1i]]
     var a = [_]f32{ 1, 0 };
     var b = [_]f32{ 1, 0, 0, 1, 1, 1, 1, -1 };
     var c = [_]f32{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_c64_ikj(&a, &b, &c, 1, 4, 1);
-    try testing.expectApproxEqAbs(c[0],  1.0, 1e-5);
-    try testing.expectApproxEqAbs(c[1],  0.0, 1e-5);
-    try testing.expectApproxEqAbs(c[2],  0.0, 1e-5);
-    try testing.expectApproxEqAbs(c[3],  1.0, 1e-5);
-    try testing.expectApproxEqAbs(c[4],  1.0, 1e-5);
-    try testing.expectApproxEqAbs(c[5],  1.0, 1e-5);
-    try testing.expectApproxEqAbs(c[6],  1.0, 1e-5);
+    matmul_c64(&a, &b, &c, 1, 4, 1);
+    try testing.expectApproxEqAbs(c[0], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(c[1], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(c[2], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(c[3], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(c[4], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(c[5], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(c[6], 1.0, 1e-5);
     try testing.expectApproxEqAbs(c[7], -1.0, 1e-5);
 }
 
-// --- i64 ---
-
-test "matmul_i64_ikj 2x2" {
+test "matmul_i64 2x2" {
     const testing = @import("std").testing;
-    // A = [[1, 2], [3, 4]], B = [[5, 6], [7, 8]]
-    // C = [[19, 22], [43, 50]]
     var a = [_]i64{ 1, 2, 3, 4 };
     var b = [_]i64{ 5, 6, 7, 8 };
     var c = [_]i64{ 0, 0, 0, 0 };
-    matmul_i64_ikj(&a, &b, &c, 2, 2, 2);
+    matmul_i64(&a, &b, &c, 2, 2, 2);
     try testing.expectEqual(c[0], 19);
     try testing.expectEqual(c[1], 22);
     try testing.expectEqual(c[2], 43);
     try testing.expectEqual(c[3], 50);
 }
 
-test "matmul_i64_ikj non-square 2x4x3" {
+test "matmul_i64 non-square 2x4x3" {
     const testing = @import("std").testing;
     var a = [_]i64{ 1, 2, 3, 4, 5, 6 };
     var b = [_]i64{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
     var c = [_]i64{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_i64_ikj(&a, &b, &c, 2, 4, 3);
+    matmul_i64(&a, &b, &c, 2, 4, 3);
     try testing.expectEqual(c[0], 38);
     try testing.expectEqual(c[1], 44);
     try testing.expectEqual(c[2], 50);
@@ -1067,12 +1074,12 @@ test "matmul_i64_ikj non-square 2x4x3" {
     try testing.expectEqual(c[7], 128);
 }
 
-test "matmul_i64_ikj odd N remainder" {
+test "matmul_i64 odd N remainder" {
     const testing = @import("std").testing;
     var a = [_]i64{ 1, 2, 3, 4 };
     var b = [_]i64{ 1, 2, 3, 4, 5, 6 };
     var c = [_]i64{ 0, 0, 0, 0, 0, 0 };
-    matmul_i64_ikj(&a, &b, &c, 2, 3, 2);
+    matmul_i64(&a, &b, &c, 2, 3, 2);
     try testing.expectEqual(c[0], 9);
     try testing.expectEqual(c[1], 12);
     try testing.expectEqual(c[2], 15);
@@ -1081,26 +1088,24 @@ test "matmul_i64_ikj odd N remainder" {
     try testing.expectEqual(c[5], 33);
 }
 
-// --- i32 ---
-
-test "matmul_i32_ikj 2x2" {
+test "matmul_i32 2x2" {
     const testing = @import("std").testing;
     var a = [_]i32{ 1, 2, 3, 4 };
     var b = [_]i32{ 5, 6, 7, 8 };
     var c = [_]i32{ 0, 0, 0, 0 };
-    matmul_i32_ikj(&a, &b, &c, 2, 2, 2);
+    matmul_i32(&a, &b, &c, 2, 2, 2);
     try testing.expectEqual(c[0], 19);
     try testing.expectEqual(c[1], 22);
     try testing.expectEqual(c[2], 43);
     try testing.expectEqual(c[3], 50);
 }
 
-test "matmul_i32_ikj non-square 2x4x3" {
+test "matmul_i32 non-square 2x4x3" {
     const testing = @import("std").testing;
     var a = [_]i32{ 1, 2, 3, 4, 5, 6 };
     var b = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
     var c = [_]i32{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    matmul_i32_ikj(&a, &b, &c, 2, 4, 3);
+    matmul_i32(&a, &b, &c, 2, 4, 3);
     try testing.expectEqual(c[0], 38);
     try testing.expectEqual(c[1], 44);
     try testing.expectEqual(c[2], 50);
@@ -1111,12 +1116,12 @@ test "matmul_i32_ikj non-square 2x4x3" {
     try testing.expectEqual(c[7], 128);
 }
 
-test "matmul_i32_ikj odd N remainder" {
+test "matmul_i32 odd N remainder" {
     const testing = @import("std").testing;
     var a = [_]i32{ 1, 2, 3, 4 };
     var b = [_]i32{ 1, 2, 3, 4, 5, 6 };
     var c = [_]i32{ 0, 0, 0, 0, 0, 0 };
-    matmul_i32_ikj(&a, &b, &c, 2, 3, 2);
+    matmul_i32(&a, &b, &c, 2, 3, 2);
     try testing.expectEqual(c[0], 9);
     try testing.expectEqual(c[1], 12);
     try testing.expectEqual(c[2], 15);
@@ -1125,59 +1130,47 @@ test "matmul_i32_ikj odd N remainder" {
     try testing.expectEqual(c[5], 33);
 }
 
-// --- i16 ---
-
-test "matmul_i16_ikj 2x2" {
+test "matmul_i16 2x2" {
     const testing = @import("std").testing;
     var a = [_]i16{ 1, 2, 3, 4 };
     var b = [_]i16{ 5, 6, 7, 8 };
     var c = [_]i16{ 0, 0, 0, 0 };
-    matmul_i16_ikj(&a, &b, &c, 2, 2, 2);
+    matmul_i16(&a, &b, &c, 2, 2, 2);
     try testing.expectEqual(c[0], 19);
     try testing.expectEqual(c[1], 22);
     try testing.expectEqual(c[2], 43);
     try testing.expectEqual(c[3], 50);
 }
 
-test "matmul_i16_ikj overflow wrapping" {
+test "matmul_i16 overflow wrapping" {
     const testing = @import("std").testing;
-    // 200 * 200 * 2 = 80000, which wraps in i16 (-32768..32767)
-    // 80000 mod 65536 = 14464, fits in i16 as 14464
     var a = [_]i16{ 200, 200, 200, 200 };
     var c = [_]i16{ 0, 0, 0, 0 };
-    matmul_i16_ikj(&a, &a, &c, 2, 2, 2);
-    // Each element = 200*200 + 200*200 = 80000, wraps to 80000 - 65536 = 14464
+    matmul_i16(&a, &a, &c, 2, 2, 2);
     try testing.expectEqual(c[0], 14464);
     try testing.expectEqual(c[1], 14464);
     try testing.expectEqual(c[2], 14464);
     try testing.expectEqual(c[3], 14464);
 }
 
-// --- i8 ---
-
-test "matmul_i8_ikj 2x2" {
+test "matmul_i8 2x2" {
     const testing = @import("std").testing;
     var a = [_]i8{ 1, 2, 3, 4 };
     var b = [_]i8{ 5, 6, 7, 8 };
     var c = [_]i8{ 0, 0, 0, 0 };
-    matmul_i8_ikj(&a, &b, &c, 2, 2, 2);
+    matmul_i8(&a, &b, &c, 2, 2, 2);
     try testing.expectEqual(c[0], 19);
     try testing.expectEqual(c[1], 22);
     try testing.expectEqual(c[2], 43);
     try testing.expectEqual(c[3], 50);
 }
 
-test "matmul_i8_ikj overflow wrapping" {
+test "matmul_i8 overflow wrapping" {
     const testing = @import("std").testing;
-    // 10*5 + 20*7 = 190, wraps in i8 (-128..127): 190 - 256 = -66
     var a = [_]i8{ 10, 20, 30, 40 };
     var b = [_]i8{ 5, 6, 7, 8 };
     var c = [_]i8{ 0, 0, 0, 0 };
-    matmul_i8_ikj(&a, &b, &c, 2, 2, 2);
-    // C[0,0] = 10*5 + 20*7 = 50 + 140 = 190 -> -66
-    // C[0,1] = 10*6 + 20*8 = 60 + 160 = 220 -> -36
-    // C[1,0] = 30*5 + 40*7 = 150 + 280 = 430 -> 430-512 = -82
-    // C[1,1] = 30*6 + 40*8 = 180 + 320 = 500 -> 500-512 = -12
+    matmul_i8(&a, &b, &c, 2, 2, 2);
     try testing.expectEqual(c[0], -66);
     try testing.expectEqual(c[1], -36);
     try testing.expectEqual(c[2], -82);
