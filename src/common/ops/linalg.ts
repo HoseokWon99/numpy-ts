@@ -15,6 +15,18 @@ import {
 } from '../dtype';
 import { Complex } from '../complex';
 import { wasmMatmul } from '../wasm/matmul';
+import { wasmInner } from '../wasm/inner';
+import { wasmDot1D } from '../wasm/dot';
+import { wasmMatvec } from '../wasm/matvec';
+import { wasmVecmat } from '../wasm/vecmat';
+import { wasmOuter } from '../wasm/outer';
+import { wasmVecdot } from '../wasm/vecdot';
+import { wasmVdotComplex } from '../wasm/vdot';
+import { wasmKron } from '../wasm/kron';
+import { wasmCross } from '../wasm/cross';
+import { wasmQr } from '../wasm/qr';
+// Note: wasmLstsq kernel is built (qr.wasm) but not wired in here because
+// JS lstsq uses SVD for rank/s output. Wire when WASM SVD is available.
 import * as shapeOps from './shape';
 import type { DType } from '../dtype';
 
@@ -292,6 +304,11 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
     if (a.shape[0] !== b.shape[0]) {
       throw new Error(`dot: incompatible shapes (${a.shape[0]},) and (${b.shape[0]},)`);
     }
+
+    // Try WASM-accelerated 1D dot
+    const wasmDotResult = wasmDot1D(a, b);
+    if (wasmDotResult !== null) return wasmDotResult;
+
     const n = a.shape[0]!;
 
     if (isComplex) {
@@ -346,6 +363,10 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
       throw new Error(`dot: incompatible shapes (${m},${k}) and (${n},)`);
     }
 
+    // Try WASM-accelerated matvec
+    const wasmMvResult = wasmMatvec(a, b);
+    if (wasmMvResult) return wasmMvResult;
+
     const resultDtype = promoteDTypes(a.dtype, b.dtype);
     const result = ArrayStorage.zeros([m!], resultDtype);
 
@@ -398,6 +419,10 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
     if (m !== k) {
       throw new Error(`dot: incompatible shapes (${m},) and (${k},${n})`);
     }
+
+    // Try WASM-accelerated vecmat
+    const wasmVmResult = wasmVecmat(a, b);
+    if (wasmVmResult) return wasmVmResult;
 
     const resultDtype = promoteDTypes(a.dtype, b.dtype);
     const result = ArrayStorage.zeros([n!], resultDtype);
@@ -994,7 +1019,31 @@ function extract2DSlice(
  * - ND @ ND (N≥3): batched matrix multiply, batch dims broadcast → ND
  */
 export function matmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
-  // Try WASM acceleration (returns null if it can't handle this case)
+  // Dispatch 1D cases to dedicated WASM kernels (faster than promoting to 2D matmul)
+  if (a.ndim === 1 && b.ndim === 1) {
+    // 1D · 1D → scalar (wrapped in 0D storage for matmul)
+    const dotResult = wasmDot1D(a, b);
+    if (dotResult !== null) {
+      const dt = promoteDTypes(a.dtype, b.dtype);
+      const scalar = ArrayStorage.zeros([], dt);
+      scalar.data[0] = dotResult;
+      return scalar;
+    }
+  } else if (a.ndim >= 2 && b.ndim === 1) {
+    // 2D · 1D → matvec (result shape removes last dim of a)
+    if (a.ndim === 2) {
+      const mvResult = wasmMatvec(a, b);
+      if (mvResult) return mvResult;
+    }
+  } else if (a.ndim === 1 && b.ndim >= 2) {
+    // 1D · 2D → vecmat (result shape removes first dim of b)
+    if (b.ndim === 2) {
+      const vmResult = wasmVecmat(a, b);
+      if (vmResult) return vmResult;
+    }
+  }
+
+  // Try WASM acceleration for 2D+ matmul (returns null if it can't handle this case)
   const wasmResult = wasmMatmul(a, b);
   if (wasmResult) return wasmResult;
 
@@ -1267,7 +1316,13 @@ export function inner(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number |
     );
   }
 
-  // Special case: both 1D -> scalar
+  // Try WASM-accelerated path (handles 1D·1D scalar and ND·MD)
+  const wasmResult = wasmInner(a, b);
+  if (wasmResult !== null) {
+    return wasmResult;
+  }
+
+  // Special case: both 1D -> scalar (JS fallback for small arrays / complex / unsupported dtype)
   if (aDim === 1 && bDim === 1) {
     return dot(a, b) as number | Complex;
   }
@@ -1434,6 +1489,10 @@ export function outer(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   // Flatten inputs to 1D
   const aFlat = a.ndim === 1 ? a : shapeOps.ravel(a);
   const bFlat = b.ndim === 1 ? b : shapeOps.ravel(b);
+
+  // Try WASM-accelerated outer product
+  const wasmResult = wasmOuter(aFlat, bFlat);
+  if (wasmResult) return wasmResult;
 
   const m = aFlat.size;
   const n = bFlat.size;
@@ -2186,6 +2245,12 @@ export function kron(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   // Promote dtypes
   const resultDtype = promoteDTypes(a.dtype, b.dtype);
 
+  // WASM fast path for 2D × 2D
+  if (aNdim === 2 && bNdim === 2) {
+    const wasmResult = wasmKron(a, b);
+    if (wasmResult) return wasmResult;
+  }
+
   // Determine output shape
   const ndim = Math.max(aNdim, bNdim);
   const outShape: number[] = new Array(ndim);
@@ -2430,6 +2495,14 @@ export function cross(
   }
 
   const otherShape = aOtherShape;
+
+  // WASM fast path: batched 3×3 cross product with last axis as vector axis
+  if (vectorDimA === 3 && vectorDimB === 3 && axisA === a.ndim - 1 && axisB === b.ndim - 1) {
+    const batchSize = otherShape.reduce((acc, d) => acc * d, 1);
+    const wasmResult = wasmCross(a, b, batchSize);
+    if (wasmResult) return wasmResult;
+  }
+
   const normalizedAxisC = axisc < 0 ? otherShape.length + 1 + axisc : axisc;
 
   // Build result shape
@@ -2945,6 +3018,12 @@ export function qr(
 
   if (a.ndim !== 2) {
     throw new Error(`qr: input must be 2D, got ${a.ndim}D`);
+  }
+
+  // WASM fast path for 'reduced' mode
+  if (mode === 'reduced') {
+    const wasmResult = wasmQr(a);
+    if (wasmResult) return wasmResult;
   }
 
   const [m, n] = a.shape;
@@ -4411,6 +4490,15 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
 
   const isComplex = isComplexDType(a.dtype) || isComplexDType(b.dtype);
 
+  // WASM path: real/integer types use dot kernel, complex uses conjugate kernel
+  if (!isComplex) {
+    const wasmResult = wasmDot1D(aFlat, bFlat);
+    if (wasmResult !== null) return wasmResult;
+  } else {
+    const wasmResult = wasmVdotComplex(aFlat, bFlat);
+    if (wasmResult !== null) return wasmResult;
+  }
+
   if (isComplex) {
     let sumRe = 0;
     let sumIm = 0;
@@ -4496,6 +4584,12 @@ export function vecdot(
   // For 1D arrays, just compute the dot product
   if (aDim === 1 && bDim === 1) {
     return dot(a, b) as number | bigint | Complex;
+  }
+
+  // Try WASM-accelerated vecdot for 2D arrays with default axis (-1)
+  if (aDim === 2 && bDim === 2 && axis === -1) {
+    const wasmResult = wasmVecdot(a, b);
+    if (wasmResult) return wasmResult;
   }
 
   // Use einsum for the general case: contract the specified axis

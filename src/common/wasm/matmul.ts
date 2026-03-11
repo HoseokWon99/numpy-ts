@@ -22,9 +22,10 @@ import {
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
+import { wasmConfig } from './config';
 
 // Minimum total elements (M*K + K*N) for WASM to be worth the copy overhead.
-const THRESHOLD = 256;
+const BASE_THRESHOLD = 256;
 
 type WasmMatmulFn = (
   aPtr: number,
@@ -159,7 +160,7 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
   }
 
   const totalElements = M * K + K * N;
-  if (totalElements < THRESHOLD) {
+  if (totalElements < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) {
     return null; // Below threshold, JS is faster
   }
 
