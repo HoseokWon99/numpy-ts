@@ -1026,7 +1026,12 @@ export function matmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     if (dotResult !== null) {
       const dt = promoteDTypes(a.dtype, b.dtype);
       const scalar = ArrayStorage.zeros([], dt);
-      scalar.data[0] = dotResult;
+      if (dotResult instanceof Complex) {
+        (scalar.data as Float64Array | Float32Array)[0] = dotResult.re;
+        (scalar.data as Float64Array | Float32Array)[1] = dotResult.im;
+      } else {
+        scalar.data[0] = dotResult;
+      }
       return scalar;
     }
   } else if (a.ndim >= 2 && b.ndim === 1) {
@@ -4526,14 +4531,14 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
     for (let i = 0; i < aSize; i++) {
       const aVal = aFlat.get(i);
       const bVal = bFlat.get(i);
-      // Complex conjugate of first argument
+      // Complex conjugate of first argument: conj(a) * b
       const aRe = aVal instanceof Complex ? aVal.re : Number(aVal);
-      const aIm = aVal instanceof Complex ? -aVal.im : 0; // Conjugate!
+      const aIm = aVal instanceof Complex ? aVal.im : 0;
       const bRe = bVal instanceof Complex ? bVal.re : Number(bVal);
       const bIm = bVal instanceof Complex ? bVal.im : 0;
-      // (aRe - aIm*i) * (bRe + bIm*i) = (aRe*bRe + aIm*bIm) + (aRe*bIm - aIm*bRe)*i
+      // conj(a)*b = (aRe - aIm*i)(bRe + bIm*i) = (aRe*bRe + aIm*bIm) + (aRe*bIm - aIm*bRe)*i
       sumRe += aRe * bRe + aIm * bIm;
-      sumIm += aRe * bIm - aIm * bRe;
+      sumIm += -aIm * bRe + aRe * bIm;
     }
     if (Math.abs(sumIm) < 1e-15) {
       return sumRe;

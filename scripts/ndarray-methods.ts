@@ -192,103 +192,10 @@ override copy(): NDArray {
 
 const ASTYPE_METHOD = `\
 override astype(dtype: DType, copy: boolean = true): NDArray {
-    const currentDtype = this.dtype as DType;
-
-    if (currentDtype === dtype && !copy) {
-      return this;
-    }
-
-    if (currentDtype === dtype && copy) {
-      return this.copy();
-    }
-
-    const shape = Array.from(this.shape);
-    const size = this.size;
-
-    const Constructor = getTypedArrayConstructor(dtype);
-    if (!Constructor) {
-      throw new Error(\`Cannot convert to dtype \${dtype}\`);
-    }
-    const newData = new Constructor(size);
-    const oldData = this.data;
-
-    if (isBigIntDType(currentDtype) && !isBigIntDType(dtype)) {
-      const typedOldData = oldData as BigInt64Array | BigUint64Array;
-      if (dtype === 'bool') {
-        for (let i = 0; i < size; i++) {
-          (newData as Uint8Array)[i] = typedOldData[i] !== BigInt(0) ? 1 : 0;
-        }
-      } else {
-        for (let i = 0; i < size; i++) {
-          (newData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = Number(
-            typedOldData[i]
-          );
-        }
-      }
-    }
-    else if (!isBigIntDType(currentDtype) && isBigIntDType(dtype)) {
-      const typedOldData = oldData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      const isSourceFloat = isFloatDType(currentDtype) || isComplexDType(currentDtype);
-      if (isSourceFloat) {
-        // Float → BigInt: NaN→0, clamp to int64/uint64 range, then BigInt
-        const isSigned = dtype === 'int64';
-        const maxVal = isSigned ? BigInt('9223372036854775807') : BigInt('18446744073709551615');
-        const minVal = isSigned ? BigInt('-9223372036854775808') : 0n;
-        for (let i = 0; i < size; i++) {
-          const v = Number(typedOldData[i]);
-          if (isNaN(v)) {
-            (newData as BigInt64Array | BigUint64Array)[i] = 0n;
-          } else if (!isFinite(v) || v >= Number(maxVal)) {
-            (newData as BigInt64Array | BigUint64Array)[i] = v < 0 ? minVal : maxVal;
-          } else if (v <= Number(minVal)) {
-            (newData as BigInt64Array | BigUint64Array)[i] = minVal;
-          } else {
-            (newData as BigInt64Array | BigUint64Array)[i] = BigInt(Math.trunc(v));
-          }
-        }
-      } else {
-        for (let i = 0; i < size; i++) {
-          (newData as BigInt64Array | BigUint64Array)[i] = BigInt(
-            Math.round(Number(typedOldData[i]))
-          );
-        }
-      }
-    }
-    else if (dtype === 'bool') {
-      const typedOldData = oldData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      for (let i = 0; i < size; i++) {
-        (newData as Uint8Array)[i] = typedOldData[i] !== 0 ? 1 : 0;
-      }
-    }
-    else if (currentDtype === 'bool' && !isBigIntDType(dtype)) {
-      const typedOldData = oldData as Uint8Array;
-      for (let i = 0; i < size; i++) {
-        (newData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = typedOldData[i]!;
-      }
-    }
-    else if (!isBigIntDType(currentDtype) && !isBigIntDType(dtype)) {
-      const typedOldData = oldData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      const needsFloatToInt = (isFloatDType(currentDtype) || isComplexDType(currentDtype)) && !isFloatDType(dtype);
-      if (needsFloatToInt) {
-        // Float → integer: use NumPy-compatible conversion (saturation/truncation)
-        for (let i = 0; i < size; i++) {
-          (newData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = _floatToInt(typedOldData[i]!, dtype);
-        }
-      } else {
-        for (let i = 0; i < size; i++) {
-          (newData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = typedOldData[i]!;
-        }
-      }
-    }
-    else {
-      const typedOldData = oldData as BigInt64Array | BigUint64Array;
-      for (let i = 0; i < size; i++) {
-        (newData as BigInt64Array | BigUint64Array)[i] = typedOldData[i]!;
-      }
-    }
-
-    const storage = ArrayStorage.fromData(newData, shape, dtype);
-    return new NDArray(storage);
+    // Delegate to parent NDArrayCore.astype (which handles complex types correctly)
+    const core = super.astype(dtype, copy);
+    if (core instanceof NDArray) return core;
+    return new NDArray((core as unknown as { _storage: ArrayStorage })._storage);
   }`;
 
 const SLICE_METHOD = `\

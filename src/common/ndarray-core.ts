@@ -389,6 +389,52 @@ export class NDArrayCore {
     if (!Constructor) {
       throw new Error(`Cannot convert to dtype ${dtype}`);
     }
+
+    const srcComplex = isComplexDType(currentDtype);
+    const dstComplex = isComplexDType(dtype);
+
+    // Complex → Complex (e.g. complex128 → complex64)
+    if (srcComplex && dstComplex) {
+      const newData = new Constructor(size * 2);
+      const oldData = this.data as Float64Array | Float32Array;
+      const typedNew = newData as Float64Array | Float32Array;
+      for (let i = 0; i < size * 2; i++) {
+        typedNew[i] = oldData[i]!;
+      }
+      const storage = ArrayStorage.fromData(newData, shape, dtype);
+      return new NDArrayCore(storage);
+    }
+
+    // Real/Int → Complex
+    if (!srcComplex && dstComplex) {
+      const newData = new Constructor(size * 2);
+      const typedNew = newData as Float64Array | Float32Array;
+      for (let i = 0; i < size; i++) {
+        typedNew[i * 2] = Number(this.data[i]!);
+        typedNew[i * 2 + 1] = 0;
+      }
+      const storage = ArrayStorage.fromData(newData, shape, dtype);
+      return new NDArrayCore(storage);
+    }
+
+    // Complex → Real/Int (take real parts)
+    if (srcComplex && !dstComplex) {
+      const newData = new Constructor(size);
+      const oldData = this.data as Float64Array | Float32Array;
+      if (isBigIntDType(dtype)) {
+        for (let i = 0; i < size; i++) {
+          (newData as BigInt64Array | BigUint64Array)[i] = BigInt(Math.trunc(oldData[i * 2]!));
+        }
+      } else {
+        for (let i = 0; i < size; i++) {
+          (newData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = oldData[i * 2]!;
+        }
+      }
+      const storage = ArrayStorage.fromData(newData, shape, dtype);
+      return new NDArrayCore(storage);
+    }
+
+    // Non-complex conversions
     const newData = new Constructor(size);
     const oldData = this.data;
 
@@ -407,7 +453,7 @@ export class NDArrayCore {
       }
     } else if (!isBigIntDType(currentDtype) && isBigIntDType(dtype)) {
       const typedOldData = oldData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      const isSourceFloat = isFloatDType(currentDtype) || isComplexDType(currentDtype);
+      const isSourceFloat = isFloatDType(currentDtype);
       if (isSourceFloat) {
         // Float → BigInt: NaN→0, clamp to int64/uint64 range, then BigInt
         const isSigned = dtype === 'int64';
@@ -444,8 +490,7 @@ export class NDArrayCore {
       }
     } else if (!isBigIntDType(currentDtype) && !isBigIntDType(dtype)) {
       const typedOldData = oldData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      const needsFloatToInt =
-        (isFloatDType(currentDtype) || isComplexDType(currentDtype)) && !isFloatDType(dtype);
+      const needsFloatToInt = isFloatDType(currentDtype) && !isFloatDType(dtype);
       if (needsFloatToInt) {
         // Float → integer: use NumPy-compatible conversion (saturation/truncation)
         for (let i = 0; i < size; i++) {
