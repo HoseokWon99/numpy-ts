@@ -2964,11 +2964,12 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
     // ========================================
     // Complex Number Benchmarks
+    // (categorized with their natural category)
     // ========================================
 
     specs.push({
-      name: `zeros [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `zeros [${sizes.medium.join('x')}] complex128`,
+      category: 'creation',
       operation: 'complex_zeros',
       setup: {
         shape: { shape: sizes.medium },
@@ -2978,8 +2979,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `ones [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `ones [${sizes.medium.join('x')}] complex128`,
+      category: 'creation',
       operation: 'complex_ones',
       setup: {
         shape: { shape: sizes.medium },
@@ -2989,8 +2990,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `add [${sizes.medium.join('x')}] + [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `add [${sizes.medium.join('x')}] complex128`,
+      category: 'arithmetic',
       operation: 'complex_add',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3002,8 +3003,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `multiply [${sizes.medium.join('x')}] * [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `multiply [${sizes.medium.join('x')}] complex128`,
+      category: 'arithmetic',
       operation: 'complex_multiply',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3014,8 +3015,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `divide [${sizes.medium.join('x')}] / [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `divide [${sizes.medium.join('x')}] complex128`,
+      category: 'arithmetic',
       operation: 'complex_divide',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3026,8 +3027,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `real [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `real [${sizes.medium.join('x')}] complex128`,
+      category: 'math',
       operation: 'complex_real',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3037,8 +3038,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `imag [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `imag [${sizes.medium.join('x')}] complex128`,
+      category: 'math',
       operation: 'complex_imag',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3048,8 +3049,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `conj [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `conj [${sizes.medium.join('x')}] complex128`,
+      category: 'math',
       operation: 'complex_conj',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3059,8 +3060,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `angle [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `angle [${sizes.medium.join('x')}] complex128`,
+      category: 'math',
       operation: 'complex_angle',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3070,8 +3071,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `abs [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `abs [${sizes.medium.join('x')}] complex128`,
+      category: 'math',
       operation: 'complex_abs',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3082,8 +3083,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `sqrt [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `sqrt [${sizes.medium.join('x')}] complex128`,
+      category: 'math',
       operation: 'complex_sqrt',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3093,8 +3094,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `sum [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `sum [${sizes.medium.join('x')}] complex128`,
+      category: 'reductions',
       operation: 'complex_sum',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3104,8 +3105,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `mean [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `mean [${sizes.medium.join('x')}] complex128`,
+      category: 'reductions',
       operation: 'complex_mean',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3115,8 +3116,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `prod [${sizes.medium.join('x')}] (complex128)`,
-      category: 'complex',
+      name: `prod [${sizes.medium.join('x')}] complex128`,
+      category: 'reductions',
       operation: 'complex_prod',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
@@ -3630,14 +3631,14 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
   // Standard mode: float64 (base) + float32
   // Full mode:     float64 (base) + float32 + complex128 + int64 + int32 + int16 + int8
 
-  type DtypeFamily = 'float' | 'int';
+  type DtypeFamily = 'float' | 'int' | 'complex';
 
   // Which dtype families each category supports
   const CATEGORY_DTYPE_SUPPORT: Record<string, DtypeFamily[]> = {
     creation: ['float', 'int'],
     arithmetic: ['float', 'int'],
     math: ['float', 'int'],
-    linalg: ['float'],
+    linalg: ['float', 'complex'],
     reductions: ['float', 'int'],
     statistics: ['float'],
     manipulation: ['float', 'int'],
@@ -3649,7 +3650,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     indexing: ['float', 'int'],
     polynomials: ['float'],
     bitwise: ['int'],
-    // Skipped entirely (no variants): random, utilities, complex, io, fft
+    // Skipped entirely (no variants): random, utilities, io, fft
   };
 
   // Variant dtypes for each family, keyed by minimum mode required
@@ -3660,6 +3661,10 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       { dtype: 'int32', minMode: 'full' },
       { dtype: 'int16', minMode: 'full' },
       { dtype: 'int8', minMode: 'full' },
+    ],
+    complex: [
+      { dtype: 'complex128', minMode: 'full' },
+      { dtype: 'complex64', minMode: 'full' },
     ],
   };
 
@@ -3727,6 +3732,32 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'sinc', // sinc of int values produces precision issues
   ]);
 
+  // Operations to skip for COMPLEX dtype variants
+  const SKIP_COMPLEX_OPERATIONS = new Set([
+    'linalg_det', // real-only decomposition
+    'linalg_slogdet', // real-only
+    'linalg_inv', // real-only solver
+    'linalg_solve', // real-only solver
+    'linalg_cholesky', // real-only decomposition
+    'linalg_eigh', // real-only eigenvalues
+    'linalg_eigvalsh', // real-only eigenvalues
+    'linalg_svd', // real-only SVD
+    'linalg_svdvals', // real-only SVD
+    'linalg_pinv', // real-only pseudo-inverse
+    'linalg_lstsq', // real-only least squares
+    'linalg_qr', // real-only QR
+    'linalg_cond', // real-only condition number
+    'linalg_matrix_rank', // real-only rank
+    'linalg_norm', // complex norm not benchmarked
+    'linalg_matrix_power', // uses matmul + copy, complex copy overhead
+    'linalg_multi_dot', // uses matmul chain
+    'einsum', // complex einsum not supported
+    'trace', // complex trace trivial
+    'transpose', // no compute
+    'matrix_transpose', // no compute
+    'diagonal', // no compute
+  ]);
+
   if (mode !== 'quick') {
     const expanded: BenchmarkCase[] = [];
 
@@ -3752,6 +3783,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       for (const family of families) {
         // Skip int variants for operations prone to overflow
         if (family === 'int' && SKIP_INT_OPERATIONS.has(spec.operation)) continue;
+        // Skip complex variants for unsupported operations
+        if (family === 'complex' && SKIP_COMPLEX_OPERATIONS.has(spec.operation)) continue;
 
         for (const variant of FAMILY_VARIANTS[family]!) {
           if (MODE_RANK[mode]! < MODE_RANK[variant.minMode]!) continue;
@@ -3760,7 +3793,12 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
           const variantSetup: BenchmarkSetup = {};
           for (const [key, entry] of Object.entries(spec.setup)) {
             if (DATA_ARRAY_KEYS.has(key)) {
-              variantSetup[key] = { ...entry, dtype: variant.dtype as DType };
+              const cloned = { ...entry, dtype: variant.dtype as DType };
+              // Complex types need fill: 'complex' since arange doesn't support complex dtypes
+              if (family === 'complex' && (entry.fill === 'arange' || !entry.fill)) {
+                cloned.fill = 'complex';
+              }
+              variantSetup[key] = cloned;
             } else {
               variantSetup[key] = { ...entry };
             }
