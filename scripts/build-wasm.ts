@@ -40,12 +40,17 @@ try {
 
 // --- Parse Zig exports ---
 
-function parseZigExports(zigSource: string): { name: string; params: string }[] {
-  const exports: { name: string; params: string }[] = [];
-  const regex = /^export fn (\w+)\(([^)]*)\)\s*\w+/gm;
+function parseZigExports(
+  zigSource: string
+): { name: string; params: string; returnType: string }[] {
+  const exports: { name: string; params: string; returnType: string }[] = [];
+  const regex = /^export fn (\w+)\(([^)]*)\)\s*(\w+)/gm;
   let match;
   while ((match = regex.exec(zigSource)) !== null) {
-    exports.push({ name: match[1]!, params: match[2]! });
+    const zigRet = match[3]!;
+    // Map Zig integer return types to TS 'number', void stays void
+    const returnType = zigRet === 'void' ? 'void' : 'number';
+    exports.push({ name: match[1]!, params: match[2]!, returnType });
   }
   return exports;
 }
@@ -105,7 +110,9 @@ function generateWasmTs(
 
   for (const exp of exports) {
     const tsParams = zigParamsToTs(exp.params);
-    lines.push(`export function ${exp.name}(${tsParams}): void {`);
+    const ret = exp.returnType;
+    const retPrefix = ret === 'void' ? '' : 'return ';
+    lines.push(`export function ${exp.name}(${tsParams}): ${ret} {`);
     lines.push(`  const i = init();`);
     const argNames = tsParams
       ? tsParams
@@ -113,7 +120,9 @@ function generateWasmTs(
           .map((p) => p.trim().split(':')[0]!.trim())
           .join(', ')
       : '';
-    lines.push(`  (i.exports['${exp.name}'] as (...args: number[]) => void)(${argNames});`);
+    lines.push(
+      `  ${retPrefix}(i.exports['${exp.name}'] as (...args: number[]) => ${ret})(${argNames});`
+    );
     lines.push(`}`);
     lines.push(``);
   }

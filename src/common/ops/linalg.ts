@@ -25,8 +25,8 @@ import { wasmVdotComplex } from '../wasm/vdot';
 import { wasmKron } from '../wasm/kron';
 import { wasmCross } from '../wasm/cross';
 import { wasmQr } from '../wasm/qr';
-// Note: wasmLstsq kernel is built (qr.wasm) but not wired in here because
-// JS lstsq uses SVD for rank/s output. Wire when WASM SVD is available.
+import { wasmCholesky } from '../wasm/cholesky';
+import { wasmSvd } from '../wasm/svd';
 import * as shapeOps from './shape';
 import type { DType } from '../dtype';
 
@@ -3202,6 +3202,23 @@ export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage 
     throw new Error(`cholesky: matrix must be square, got ${m}x${n}`);
   }
 
+  // WASM fast path
+  const wasmResult = wasmCholesky(a);
+  if (wasmResult) {
+    if (upper) {
+      // Transpose L to get U
+      const size = m!;
+      const U = ArrayStorage.zeros([size, size], 'float64');
+      for (let i = 0; i < size; i++) {
+        for (let j = i; j < size; j++) {
+          U.set([i, j], Number(wasmResult.get(j, i)));
+        }
+      }
+      return U;
+    }
+    return wasmResult;
+  }
+
   const size = m!;
   const L = ArrayStorage.zeros([size, size], 'float64');
 
@@ -3258,6 +3275,10 @@ function svdFull(a: ArrayStorage): { u: ArrayStorage; s: ArrayStorage; vt: Array
   if (a.ndim !== 2) {
     throw new Error(`svd: input must be 2D, got ${a.ndim}D`);
   }
+
+  // WASM fast path
+  const wasmResult = wasmSvd(a);
+  if (wasmResult) return wasmResult;
 
   const [m, n] = a.shape;
   const smaller = Math.min(m!, n!);

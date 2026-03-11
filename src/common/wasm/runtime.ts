@@ -18,11 +18,12 @@ let heapBase = 0;
 /**
  * Get the shared WebAssembly.Memory instance.
  * All WASM kernel modules import this same memory.
- * Starts with 16 pages (1MB) — minimum required by Zig wasm32-freestanding stack.
+ * Starts with 17 pages (~1.1MB) — enough for debug (ReleaseSmall/Safe) WASM builds
+ * which have larger binaries and declare higher minimum memory.
  */
 export function getSharedMemory(): WebAssembly.Memory {
   if (!memory) {
-    memory = new WebAssembly.Memory({ initial: 16 });
+    memory = new WebAssembly.Memory({ initial: 17 });
   }
   return memory;
 }
