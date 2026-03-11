@@ -672,7 +672,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
     // Integer dot 1D variants (full mode only)
     if (mode === 'full') {
-      for (const intDtype of ['int32', 'int16', 'int8'] as const) {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
         specs.push({
           name: `dot 1D · 1D [${sizes.small}] ${intDtype}`,
           category: 'linalg',
@@ -701,7 +701,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
     // Integer dot 2D·1D variants (full mode only)
     if (mode === 'full') {
-      for (const intDtype of ['int32', 'int16', 'int8'] as const) {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
         specs.push({
           name: `dot 2D · 1D [${m}x${n}] · [${n}] ${intDtype}`,
           category: 'linalg',
@@ -727,6 +727,23 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       iterations,
       warmup,
     });
+
+    // Integer dot 2D·2D variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `dot 2D · 2D [${m}x${n}] · [${n}x${m}] ${intDtype}`,
+          category: 'linalg',
+          operation: 'dot',
+          setup: {
+            a: { shape: [m!, n!], fill: 'arange', dtype: intDtype },
+            b: { shape: [n!, m!], fill: 'arange', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
 
     // Matrix multiplication
     specs.push({
@@ -759,39 +776,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       }
     }
 
-    // Larger matmul (not in quick mode)
-    if (mode !== 'quick' && Array.isArray(sizes.large)) {
-      const [lm, ln] = sizes.large;
-      specs.push({
-        name: `matmul [${lm}x${ln}] @ [${ln}x${lm}]`,
-        category: 'linalg',
-        operation: 'matmul',
-        setup: {
-          a: { shape: [lm!, ln!], fill: 'arange', dtype: 'float64' },
-          b: { shape: [ln!, lm!], fill: 'arange', dtype: 'float64' },
-        },
-        iterations: Math.floor(iterations / 2),
-        warmup: Math.floor(warmup / 2),
-      });
-
-      // Large integer matmul variants (full mode only)
-      if (mode === 'full') {
-        for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
-          specs.push({
-            name: `matmul [${lm}x${ln}] @ [${ln}x${lm}] ${intDtype}`,
-            category: 'linalg',
-            operation: 'matmul',
-            setup: {
-              a: { shape: [lm!, ln!], fill: 'arange', dtype: intDtype },
-              b: { shape: [ln!, lm!], fill: 'arange', dtype: intDtype },
-            },
-            iterations: Math.floor(iterations / 2),
-            warmup: Math.floor(warmup / 2),
-          });
-        }
-      }
-    }
-
     // Trace
     specs.push({
       name: `trace [${m}x${n}]`,
@@ -803,6 +787,22 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       iterations,
       warmup,
     });
+
+    // Integer trace variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `trace [${m}x${n}] ${intDtype}`,
+          category: 'linalg',
+          operation: 'trace',
+          setup: {
+            a: { shape: [m!, n!], fill: 'arange', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
 
     // Inner product
     specs.push({
@@ -818,7 +818,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     if (mode === 'full') {
-      for (const intDt of ['int32', 'int16', 'int8'] as const) {
+      for (const intDt of ['int64', 'int32', 'int16', 'int8'] as const) {
         specs.push({
           name: `inner 1D · 1D [${sizes.small}] ${intDt}`,
           category: 'linalg',
@@ -845,6 +845,23 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // Integer inner variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `inner 2D · 2D [${m}x${n}] ${intDtype}`,
+          category: 'linalg',
+          operation: 'inner',
+          setup: {
+            a: { shape: [m!, n!], fill: 'arange', dtype: intDtype },
+            b: { shape: [m!, n!], fill: 'arange', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
+
     // Outer product
     specs.push({
       name: `outer [${sizes.small}] x [${sizes.small}]`,
@@ -858,17 +875,22 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
-    // Trace
-    specs.push({
-      name: `trace [${m}x${n}]`,
-      category: 'linalg',
-      operation: 'trace',
-      setup: {
-        a: { shape: [m!, n!], fill: 'arange' },
-      },
-      iterations,
-      warmup,
-    });
+    // Integer outer variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `outer [${sizes.small}] x [${sizes.small}] ${intDtype}`,
+          category: 'linalg',
+          operation: 'outer',
+          setup: {
+            a: { shape: [sizes.small], fill: 'arange', dtype: intDtype },
+            b: { shape: [sizes.small], fill: 'arange', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
 
     // Transpose
     specs.push({
@@ -1559,6 +1581,23 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // Integer kron variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `kron [${kronSize.join('x')}] ⊗ [${kronSize.join('x')}] ${intDtype}`,
+          category: 'linalg',
+          operation: 'kron',
+          setup: {
+            a: { shape: kronSize, fill: 'arange', dtype: intDtype },
+            b: { shape: kronSize, fill: 'ones', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
+
     // New array creation benchmarks
     specs.push({
       name: `diag [${sizes.medium[0]}]`,
@@ -1811,6 +1850,22 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // Integer matrix_power variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `linalg.matrix_power [${linalgN}x${linalgN}] n=3 ${intDtype}`,
+          category: 'linalg',
+          operation: 'linalg_matrix_power',
+          setup: {
+            a: { shape: linalgSize, fill: 'arange', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
+
     specs.push({
       name: `linalg.lstsq [${linalgN}x${linalgN}]`,
       category: 'linalg',
@@ -1834,6 +1889,23 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       iterations,
       warmup,
     });
+
+    // Integer cross variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `linalg.cross [3] ${intDtype}`,
+          category: 'linalg',
+          operation: 'linalg_cross',
+          setup: {
+            a: { shape: [3], fill: 'arange', dtype: intDtype },
+            b: { shape: [3], fill: 'ones', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
 
     // New linalg functions
     specs.push({
@@ -1871,6 +1943,24 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // Integer multi_dot variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `linalg.multi_dot [${linalgN}x${linalgN}] x3 ${intDtype}`,
+          category: 'linalg',
+          operation: 'linalg_multi_dot',
+          setup: {
+            a: { shape: linalgSize, fill: 'arange', dtype: intDtype },
+            b: { shape: linalgSize, fill: 'arange', dtype: intDtype },
+            c: { shape: linalgSize, fill: 'arange', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
+
     specs.push({
       name: `vdot [1000]`,
       category: 'linalg',
@@ -1884,7 +1974,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     if (mode === 'full') {
-      for (const intDt of ['int32', 'int16', 'int8'] as const) {
+      for (const intDt of ['int64', 'int32', 'int16', 'int8'] as const) {
         specs.push({
           name: `vdot [1000] ${intDt}`,
           category: 'linalg',
@@ -1911,6 +2001,23 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // Integer vecdot variants (full mode only)
+    if (mode === 'full') {
+      for (const intDtype of ['int64', 'int32', 'int16', 'int8'] as const) {
+        specs.push({
+          name: `vecdot [${sizes.medium.join('x')}] ${intDtype}`,
+          category: 'linalg',
+          operation: 'vecdot',
+          setup: {
+            a: { shape: sizes.medium, fill: 'arange', dtype: intDtype },
+            b: { shape: sizes.medium, fill: 'ones', dtype: intDtype },
+          },
+          iterations,
+          warmup,
+        });
+      }
+    }
+
     specs.push({
       name: `matrix_transpose [${sizes.medium.join('x')}]`,
       category: 'linalg',
@@ -1935,7 +2042,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     if (mode === 'full') {
-      for (const intDt of ['int32', 'int16', 'int8'] as const) {
+      for (const intDt of ['int64', 'int32', 'int16', 'int8'] as const) {
         specs.push({
           name: `matvec [${linalgN}x${linalgN}] · [${linalgN}] ${intDt}`,
           category: 'linalg',
@@ -1963,7 +2070,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     if (mode === 'full') {
-      for (const intDt of ['int32', 'int16', 'int8'] as const) {
+      for (const intDt of ['int64', 'int32', 'int16', 'int8'] as const) {
         specs.push({
           name: `vecmat [${linalgN}] · [${linalgN}x${linalgN}] ${intDt}`,
           category: 'linalg',
