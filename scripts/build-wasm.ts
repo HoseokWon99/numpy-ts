@@ -172,7 +172,7 @@ for (const file of zigFiles) {
   console.log(`  Compiling ${file}...`);
   try {
     const zigArgs = [
-        'zig', 'build-exe',
+        'build-exe',
         zigPath,
         '-target', 'wasm32-freestanding',
         '-O', ZIG_OPT,
@@ -183,7 +183,7 @@ for (const file of zigFiles) {
         `-femit-bin=${wasmPath}`,
       ];
     if (!SAFE_MODE) zigArgs.push('-fstrip');
-    execSync(zigArgs.join(' '), { stdio: 'pipe', cwd: ZIG_DIR });
+    execFileSync('zig', zigArgs, { stdio: 'pipe', cwd: ZIG_DIR });
   } catch (err: unknown) {
     const error = err as { stderr?: Buffer };
     console.error(`  FAILED to compile ${file}:`);

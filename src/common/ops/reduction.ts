@@ -22,7 +22,24 @@ const f32acc = new Float32Array(2); // [0]=primary, [1]=secondary (for complex i
  * we promote to float64 which has 53 bits of integer precision — sufficient
  * for all practical accumulation sizes.
  */
-function accumulationDtype(dtype: DType): DType {
+/** For sum/prod: promote narrow ints to int64 (matches NumPy) */
+function intAccumulationDtype(dtype: DType): DType {
+  switch (dtype) {
+    case 'int8':
+    case 'int16':
+    case 'int32':
+      return 'int64';
+    case 'uint8':
+    case 'uint16':
+    case 'uint32':
+      return 'uint64';
+    default:
+      return dtype;
+  }
+}
+
+/** For mean/std/var: promote all ints to float64 (matches NumPy) */
+function floatAccumulationDtype(dtype: DType): DType {
   switch (dtype) {
     case 'int8':
     case 'int16':
@@ -30,6 +47,8 @@ function accumulationDtype(dtype: DType): DType {
     case 'uint8':
     case 'uint16':
     case 'uint32':
+    case 'int64':
+    case 'uint64':
       return 'float64';
     default:
       return dtype;
@@ -140,7 +159,7 @@ export function sum(
   }
 
   // Promote narrow int dtypes for accumulation (matching NumPy)
-  const outDtype = accumulationDtype(dtype);
+  const outDtype = intAccumulationDtype(dtype);
 
   // Compute output shape
   const outputShape = Array.from(shape).filter((_, i) => i !== normalizedAxis);
@@ -209,6 +228,18 @@ export function sum(
       let bufIdx = baseOffsets[outerIdx]!;
       for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
         sumVal += typedData[bufIdx]!;
+        bufIdx += axisStr;
+      }
+      resultTyped[outerIdx] = sumVal;
+    }
+  } else if (isBigIntDType(outDtype)) {
+    // Input is narrow int (int8/16/32, uint8/16/32) promoted to int64/uint64
+    const resultTyped = resultData as BigInt64Array | BigUint64Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let sumVal = BigInt(0);
+      let bufIdx = baseOffsets[outerIdx]!;
+      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+        sumVal += BigInt(Number(data[bufIdx]!));
         bufIdx += axisStr;
       }
       resultTyped[outerIdx] = sumVal;
@@ -291,17 +322,12 @@ export function mean(
 
   // For complex dtypes, mean stays complex
   // For integer dtypes, mean returns float64 (matching NumPy behavior)
-  let resultDtype: DType = dtype;
-  if (isComplexDType(dtype)) {
-    // Complex mean stays complex
-    resultDtype = dtype;
-  } else if (isBigIntDType(dtype) || dtype.startsWith('int') || dtype.startsWith('uint')) {
-    resultDtype = 'float64';
-  }
+  const resultDtype = floatAccumulationDtype(dtype);
 
   const result = ArrayStorage.zeros(Array.from(sumResult.shape), resultDtype);
   const resultData = result.data;
   const sumData = sumResult.data;
+  const sumDtype = sumResult.dtype as DType;
 
   if (isComplexDType(dtype)) {
     // Complex: divide both real and imaginary parts
@@ -312,7 +338,7 @@ export function mean(
       resultComplex[i * 2] = sumComplex[i * 2]! / divisor;
       resultComplex[i * 2 + 1] = sumComplex[i * 2 + 1]! / divisor;
     }
-  } else if (isBigIntDType(dtype)) {
+  } else if (isBigIntDType(sumDtype)) {
     // Convert BigInt sum results to float for mean
     const sumTyped = sumData as BigInt64Array | BigUint64Array;
     for (let i = 0; i < resultData.length; i++) {
@@ -650,7 +676,7 @@ export function prod(
   }
 
   // Promote narrow int dtypes for accumulation (matching NumPy)
-  const outDtype = accumulationDtype(dtype);
+  const outDtype = intAccumulationDtype(dtype);
 
   // Compute output shape
   const outputShape = Array.from(shape).filter((_, i) => i !== normalizedAxis);
@@ -725,6 +751,18 @@ export function prod(
       let bufIdx = baseOffsets[outerIdx]!;
       for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
         prodVal *= typedData[bufIdx]!;
+        bufIdx += axisStr;
+      }
+      resultTyped[outerIdx] = prodVal;
+    }
+  } else if (isBigIntDType(outDtype)) {
+    // Input is narrow int promoted to int64/uint64
+    const resultTyped = resultData as BigInt64Array | BigUint64Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let prodVal = BigInt(1);
+      let bufIdx = baseOffsets[outerIdx]!;
+      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+        prodVal *= BigInt(Number(data[bufIdx]!));
         bufIdx += axisStr;
       }
       resultTyped[outerIdx] = prodVal;
@@ -2090,8 +2128,12 @@ export function ptp(
     // For integer dtypes, wrap the subtraction in the input dtype (matching NumPy)
     const diff = maxResult - minResult;
     if (
-      dtype === 'int8' || dtype === 'int16' || dtype === 'int32' ||
-      dtype === 'uint8' || dtype === 'uint16' || dtype === 'uint32'
+      dtype === 'int8' ||
+      dtype === 'int16' ||
+      dtype === 'int32' ||
+      dtype === 'uint8' ||
+      dtype === 'uint16' ||
+      dtype === 'uint32'
     ) {
       const wrap = ArrayStorage.zeros([1], dtype);
       wrap.iset(0, diff);
