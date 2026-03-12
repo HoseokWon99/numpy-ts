@@ -213,7 +213,6 @@ export fn add_scalar_i8(a: [*]const i8, out: [*]i8, N: u32, scalar: i8) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "add_f64 basic" {

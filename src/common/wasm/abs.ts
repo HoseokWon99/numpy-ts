@@ -6,14 +6,7 @@
  * Complex types are not handled here (magnitude needs sqrt, handled in JS).
  */
 
-import {
-  abs_f64,
-  abs_f32,
-  abs_i64,
-  abs_i32,
-  abs_i16,
-  abs_i8,
-} from './bins/abs.wasm';
+import { abs_f64, abs_f32, abs_i64, abs_i32, abs_i16, abs_i8 } from './bins/abs.wasm';
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';

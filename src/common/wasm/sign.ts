@@ -6,14 +6,7 @@
  * Not defined for complex types.
  */
 
-import {
-  sign_f64,
-  sign_f32,
-  sign_i64,
-  sign_i32,
-  sign_i16,
-  sign_i8,
-} from './bins/sign.wasm';
+import { sign_f64, sign_f32, sign_i64, sign_i32, sign_i16, sign_i8 } from './bins/sign.wasm';
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';

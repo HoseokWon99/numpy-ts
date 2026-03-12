@@ -6,10 +6,7 @@
  * Returns null if WASM can't handle this case.
  */
 
-import {
-  div_f64, div_f32,
-  div_scalar_f64, div_scalar_f32,
-} from './bins/divide.wasm';
+import { div_f64, div_f32, div_scalar_f64, div_scalar_f32 } from './bins/divide.wasm';
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
@@ -21,16 +18,19 @@ type BinaryFn = (aPtr: number, bPtr: number, outPtr: number, N: number) => void;
 type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => void;
 
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
-  float64: div_f64, float32: div_f32,
+  float64: div_f64,
+  float32: div_f32,
 };
 
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
-  float64: div_scalar_f64, float32: div_scalar_f32,
+  float64: div_scalar_f64,
+  float32: div_scalar_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
-  float64: Float64Array, float32: Float32Array,
+  float64: Float64Array,
+  float32: Float32Array,
 };
 
 export function wasmDiv(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
@@ -54,7 +54,11 @@ export function wasmDiv(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   const outPtr = alloc(size * bpe);
   kernel(aPtr, bPtr, outPtr, size);
 
-  const outData = copyOut(outPtr, size, Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray);
+  const outData = copyOut(
+    outPtr,
+    size,
+    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  );
   return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }
 
@@ -76,6 +80,10 @@ export function wasmDivScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   const outPtr = alloc(size * bpe);
   kernel(aPtr, outPtr, size, scalar);
 
-  const outData = copyOut(outPtr, size, Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray);
+  const outData = copyOut(
+    outPtr,
+    size,
+    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  );
   return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

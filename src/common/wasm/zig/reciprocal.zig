@@ -32,7 +32,6 @@ export fn reciprocal_f32(a: [*]const f32, out: [*]f32, N: u32) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "reciprocal_f64 basic" {

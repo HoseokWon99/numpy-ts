@@ -57,7 +57,6 @@ export fn div_scalar_f32(a: [*]const f32, out: [*]f32, N: u32, scalar: f32) void
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "div_f64 basic" {

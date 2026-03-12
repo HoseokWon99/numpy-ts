@@ -5,9 +5,7 @@
  * Returns null if WASM can't handle this case.
  */
 
-import {
-  reciprocal_f64, reciprocal_f32,
-} from './bins/reciprocal.wasm';
+import { reciprocal_f64, reciprocal_f32 } from './bins/reciprocal.wasm';
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
@@ -18,12 +16,14 @@ const BASE_THRESHOLD = 64;
 type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 
 const kernels: Partial<Record<DType, UnaryFn>> = {
-  float64: reciprocal_f64, float32: reciprocal_f32,
+  float64: reciprocal_f64,
+  float32: reciprocal_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
-  float64: Float64Array, float32: Float32Array,
+  float64: Float64Array,
+  float32: Float32Array,
 };
 
 export function wasmReciprocal(a: ArrayStorage): ArrayStorage | null {
@@ -44,6 +44,10 @@ export function wasmReciprocal(a: ArrayStorage): ArrayStorage | null {
   const outPtr = alloc(size * bpe);
   kernel(aPtr, outPtr, size);
 
-  const outData = copyOut(outPtr, size, Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray);
+  const outData = copyOut(
+    outPtr,
+    size,
+    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  );
   return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

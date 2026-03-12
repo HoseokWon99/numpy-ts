@@ -257,7 +257,6 @@ export fn max_scalar_u8(a: [*]const u8, out: [*]u8, N: u32, scalar: u8) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "max_f64 basic" {

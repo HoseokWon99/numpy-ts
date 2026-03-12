@@ -113,7 +113,6 @@ export fn sign_i8(a: [*]const i8, out: [*]i8, N: u32) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "sign_f64 basic" {

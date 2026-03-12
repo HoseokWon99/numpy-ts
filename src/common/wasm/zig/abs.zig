@@ -98,7 +98,6 @@ export fn abs_i8(a: [*]const i8, out: [*]i8, N: u32) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "abs_f64 basic" {

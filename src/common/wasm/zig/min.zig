@@ -116,7 +116,6 @@ export fn min_scalar_i32(a: [*]const i32, out: [*]i32, N: u32, scalar: i32) void
     }
 }
 
-
 /// Element-wise minimum for u32 using 4-wide SIMD with unsigned compare+select.
 export fn min_u32(a: [*]const u32, b: [*]const u32, out: [*]u32, N: u32) void {
     const n_simd = N & ~@as(u32, 3);
@@ -258,7 +257,6 @@ export fn min_scalar_u8(a: [*]const u8, out: [*]u8, N: u32, scalar: u8) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "min_f64 basic" {

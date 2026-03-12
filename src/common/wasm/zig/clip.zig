@@ -174,7 +174,6 @@ export fn clip_u8(a: [*]const u8, out: [*]u8, N: u32, lo: u8, hi: u8) void {
 }
 
 /// --- Tests ---
-
 const testing = @import("std").testing;
 
 test "clip_f64 basic" {
