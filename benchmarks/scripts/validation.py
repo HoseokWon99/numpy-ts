@@ -117,8 +117,16 @@ def run_operation(spec):
         result = arrays["a"] + (
             arrays.get("b") if "b" in arrays else arrays.get("scalar")
         )
+    elif operation == "subtract":
+        result = arrays["a"] - (
+            arrays.get("b") if "b" in arrays else arrays.get("scalar")
+        )
     elif operation == "multiply":
         result = arrays["a"] * (
+            arrays.get("b") if "b" in arrays else arrays.get("scalar")
+        )
+    elif operation == "divide":
+        result = arrays["a"] / (
             arrays.get("b") if "b" in arrays else arrays.get("scalar")
         )
     elif operation == "mod":
@@ -129,6 +137,8 @@ def run_operation(spec):
         result = np.floor_divide(arrays["a"], divisor)
     elif operation == "reciprocal":
         result = np.reciprocal(arrays["a"])
+    elif operation == "positive":
+        result = np.positive(arrays["a"])
     elif operation == "cbrt":
         result = np.cbrt(arrays["a"])
     elif operation == "fabs":
@@ -137,6 +147,26 @@ def run_operation(spec):
         divisor = arrays.get("b") if "b" in arrays else arrays.get("scalar")
         q, r = np.divmod(arrays["a"], divisor)
         result = q  # Just return quotient for validation
+    elif operation == "square":
+        result = np.square(arrays["a"])
+    elif operation == "remainder":
+        operand = arrays.get("b") if "b" in arrays else arrays.get("scalar")
+        result = np.remainder(arrays["a"], operand)
+    elif operation == "heaviside":
+        operand = arrays.get("b") if "b" in arrays else arrays.get("scalar")
+        result = np.heaviside(arrays["a"], operand)
+    elif operation == "fmod":
+        operand = arrays.get("b") if "b" in arrays else arrays.get("scalar")
+        result = np.fmod(arrays["a"], operand)
+    elif operation == "frexp":
+        m, e = np.frexp(arrays["a"])
+        result = m  # Just return mantissa for validation
+    elif operation == "ldexp":
+        operand = arrays.get("b") if "b" in arrays else arrays.get("scalar")
+        result = np.ldexp(arrays["a"], np.asarray(operand, dtype=np.int32))
+    elif operation == "modf":
+        f, i = np.modf(arrays["a"])
+        result = f  # Just return fractional part for validation
     elif operation == "gcd":
         result = np.gcd(arrays["a"], arrays["b"])
     elif operation == "lcm":
