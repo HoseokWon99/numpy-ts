@@ -15,6 +15,27 @@ import { Complex } from '../complex';
 // stores better than function calls in hot loops.
 const f32acc = new Float32Array(2); // [0]=primary, [1]=secondary (for complex im)
 
+/**
+ * Promote narrow integer dtypes for accumulation, matching NumPy behavior.
+ * NumPy promotes int8/int16/int32 → int64, uint8/uint16/uint32 → uint64.
+ * Since JS doesn't have int64 typed arrays without BigInt overhead,
+ * we promote to float64 which has 53 bits of integer precision — sufficient
+ * for all practical accumulation sizes.
+ */
+function accumulationDtype(dtype: DType): DType {
+  switch (dtype) {
+    case 'int8':
+    case 'int16':
+    case 'int32':
+    case 'uint8':
+    case 'uint16':
+    case 'uint32':
+      return 'float64';
+    default:
+      return dtype;
+  }
+}
+
 function wrapScalarKeepdims(
   scalar: number | bigint | Complex,
   ndim: number,
@@ -118,18 +139,21 @@ export function sum(
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${ndim}`);
   }
 
+  // Promote narrow int dtypes for accumulation (matching NumPy)
+  const outDtype = accumulationDtype(dtype);
+
   // Compute output shape
   const outputShape = Array.from(shape).filter((_, i) => i !== normalizedAxis);
   if (outputShape.length === 0) {
     const scalar = sum(storage);
     if (!keepdims) return scalar;
-    const out = ArrayStorage.zeros(Array(ndim).fill(1), dtype);
+    const out = ArrayStorage.zeros(Array(ndim).fill(1), outDtype);
     out.iset(0, scalar as number | bigint | Complex);
     return out;
   }
 
-  // Create result storage
-  const result = ArrayStorage.zeros(outputShape, dtype);
+  // Create result storage with promoted dtype
+  const result = ArrayStorage.zeros(outputShape, outDtype);
   const resultData = result.data;
 
   // Perform reduction along axis
@@ -215,7 +239,7 @@ export function sum(
   if (keepdims) {
     const keepdimsShape = [...shape];
     keepdimsShape[normalizedAxis] = 1;
-    return ArrayStorage.fromData(resultData, keepdimsShape, dtype);
+    return ArrayStorage.fromData(resultData, keepdimsShape, outDtype);
   }
 
   return result;
@@ -625,16 +649,19 @@ export function prod(
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${ndim}`);
   }
 
+  // Promote narrow int dtypes for accumulation (matching NumPy)
+  const outDtype = accumulationDtype(dtype);
+
   // Compute output shape
   const outputShape = Array.from(shape).filter((_, i) => i !== normalizedAxis);
   if (outputShape.length === 0) {
     const scalar = prod(storage);
     if (!keepdims) return scalar;
-    return wrapScalarKeepdims(scalar as number | bigint | Complex, ndim, dtype);
+    return wrapScalarKeepdims(scalar as number | bigint | Complex, ndim, outDtype);
   }
 
-  // Create result storage
-  const result = ArrayStorage.zeros(outputShape, dtype);
+  // Create result storage with promoted dtype
+  const result = ArrayStorage.zeros(outputShape, outDtype);
   const resultData = result.data;
 
   // Perform reduction along axis
@@ -728,7 +755,7 @@ export function prod(
   if (keepdims) {
     const keepdimsShape = [...shape];
     keepdimsShape[normalizedAxis] = 1;
-    return ArrayStorage.fromData(resultData, keepdimsShape, dtype);
+    return ArrayStorage.fromData(resultData, keepdimsShape, outDtype);
   }
 
   return result;
@@ -2060,21 +2087,32 @@ export function ptp(
   const minResult = min(storage, axis, keepdims);
 
   if (typeof maxResult === 'number' && typeof minResult === 'number') {
-    return maxResult - minResult;
+    // For integer dtypes, wrap the subtraction in the input dtype (matching NumPy)
+    const diff = maxResult - minResult;
+    if (
+      dtype === 'int8' || dtype === 'int16' || dtype === 'int32' ||
+      dtype === 'uint8' || dtype === 'uint16' || dtype === 'uint32'
+    ) {
+      const wrap = ArrayStorage.zeros([1], dtype);
+      wrap.iset(0, diff);
+      return Number(wrap.iget(0));
+    }
+    return diff;
   }
 
-  // Both are arrays, subtract element-wise
+  // Both are arrays, subtract element-wise — use input dtype for wrapping (matching NumPy)
   const maxStorage = maxResult as ArrayStorage;
   const minStorage = minResult as ArrayStorage;
   const maxData = maxStorage.data;
   const minData = minStorage.data;
-  const resultData = new Float64Array(maxStorage.size);
+  const result = ArrayStorage.zeros([...maxStorage.shape], dtype);
+  const resultData = result.data;
 
   for (let i = 0; i < maxStorage.size; i++) {
     resultData[i] = Number(maxData[i]) - Number(minData[i]);
   }
 
-  return ArrayStorage.fromData(resultData, [...maxStorage.shape], 'float64');
+  return result;
 }
 
 /**

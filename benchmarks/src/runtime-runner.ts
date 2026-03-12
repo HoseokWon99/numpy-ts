@@ -72,11 +72,12 @@ function setupArrays(setup: BenchmarkSetup, operation?: string): Record<string, 
       arrays[key] = np.zeros(shape, dtype);
     } else if (fill === 'ones') {
       arrays[key] = np.ones(shape, dtype);
-    } else if (fill === 'complex') {
+    } else if (fill === 'complex' || fill === 'complex_small') {
       const size = shape.reduce((a: number, b: number) => a * b, 1);
       const complexValues = [];
       for (let i = 0; i < size; i++) {
-        complexValues.push(new np.Complex(i + 1, i + 1));
+        const v = fill === 'complex_small' ? (i % 10) + 1 : i + 1;
+        complexValues.push(new np.Complex(v, v));
       }
       const flat = np.array(complexValues);
       arrays[key] = flat.reshape(...shape);

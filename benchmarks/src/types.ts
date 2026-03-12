@@ -8,7 +8,7 @@ export interface BenchmarkSetup {
   [key: string]: {
     shape: number[];
     dtype?: DType;
-    fill?: 'zeros' | 'ones' | 'random' | 'arange' | 'complex' | 'invertible';
+    fill?: 'zeros' | 'ones' | 'random' | 'arange' | 'complex' | 'complex_small' | 'invertible';
     value?: number;
   };
 }

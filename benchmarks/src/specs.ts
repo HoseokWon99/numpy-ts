@@ -3635,11 +3635,11 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
   // Which dtype families each category supports
   const CATEGORY_DTYPE_SUPPORT: Record<string, DtypeFamily[]> = {
-    creation: ['float', 'int'],
-    arithmetic: ['float', 'int'],
-    math: ['float', 'int'],
+    creation: ['float', 'int', 'complex'],
+    arithmetic: ['float', 'int', 'complex'],
+    math: ['float', 'int', 'complex'],
     linalg: ['float', 'complex'],
-    reductions: ['float', 'int'],
+    reductions: ['float', 'int', 'complex'],
     statistics: ['float'],
     manipulation: ['float', 'int'],
     sorting: ['float', 'int'],
@@ -3689,73 +3689,158 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'float_power', // only for float types
   ]);
 
-  // Operations to skip for INT dtype variants only (overflow with narrow int types)
+  // Operations to skip for ALL int dtype variants
   const SKIP_INT_OPERATIONS = new Set([
-    'sum',
-    'mean',
-    'var',
-    'std',
-    'nansum',
-    'nanmean',
-    'nanvar', // accumulation overflow
-    'cumsum',
-    'cumprod', // cumulative overflow
-    'prod',
-    'nanprod', // product overflow
-    'ptp', // peak-to-peak overflow
-    'average', // weighted accumulation
+    // Linalg ops already get int variants from the linalg category — skip to avoid duplicates
     'dot',
     'inner',
     'outer',
     'matmul',
     'vecdot',
     'matvec',
-    'vecmat', // matrix ops overflow
+    'vecmat',
     'linalg_multi_dot',
     'einsum',
-    'tensordot', // more matrix ops
+    'tensordot',
+    // Truly incompatible with BigInt (int64) — would throw at runtime
+    'asarray_chkfinite', // NaN/Inf check doesn't work with BigInt
+  ]);
+
+  // Operations to skip for NARROW int types (int8/int16) only.
+  // Operations where int8/int16 variants produce different results than NumPy
+  // due to overflow affecting ordering/convolution logic.
+  const SKIP_NARROW_INT_OPERATIONS = new Set([
     'correlate',
-    'convolve', // accumulation in convolution
-    'linalg_norm', // accumulation
-    'cov',
-    'corrcoef', // statistical accumulation
-    'histogram',
-    'histogram2d',
-    'bincount', // binning with int arrays
-    'trapezoid', // numerical integration
-    'argpartition',
-    'partition', // partition indices differ with wrapped int values
-    'searchsorted', // binary search on wrapped int values gives different results
-    'unwrap', // phase unwrapping assumes continuous values, broken with int wrap
-    'asarray_chkfinite', // NaN/Inf check doesn't work with BigInt (int64)
-    'i0', // Bessel function overflow with int types
-    'sinc', // sinc of int values produces precision issues
+    'convolve',
+    'unwrap',
+    'searchsorted', // overflow affects sort order
+    'argpartition', // overflow affects element ordering
   ]);
 
   // Operations to skip for COMPLEX dtype variants
   const SKIP_COMPLEX_OPERATIONS = new Set([
-    'linalg_det', // real-only decomposition
-    'linalg_slogdet', // real-only
-    'linalg_inv', // real-only solver
-    'linalg_solve', // real-only solver
-    'linalg_cholesky', // real-only decomposition
-    'linalg_eigh', // real-only eigenvalues
-    'linalg_eigvalsh', // real-only eigenvalues
-    'linalg_svd', // real-only SVD
-    'linalg_svdvals', // real-only SVD
-    'linalg_pinv', // real-only pseudo-inverse
-    'linalg_lstsq', // real-only least squares
-    'linalg_qr', // real-only QR
-    'linalg_cond', // real-only condition number
-    'linalg_matrix_rank', // real-only rank
-    'linalg_norm', // complex norm not benchmarked
-    'linalg_matrix_power', // uses matmul + copy, complex copy overhead
-    'linalg_multi_dot', // uses matmul chain
-    'einsum', // complex einsum not supported
-    'trace', // complex trace trivial
-    'transpose', // no compute
-    'matrix_transpose', // no compute
-    'diagonal', // no compute
+    // Linalg: real-only decompositions/solvers
+    'linalg_det',
+    'linalg_slogdet',
+    'linalg_inv',
+    'linalg_solve',
+    'linalg_cholesky',
+    'linalg_eigh',
+    'linalg_eigvalsh',
+    'linalg_svd',
+    'linalg_svdvals',
+    'linalg_pinv',
+    'linalg_lstsq',
+    'linalg_qr',
+    'linalg_cond',
+    'linalg_matrix_rank',
+    'linalg_norm',
+    'linalg_matrix_power',
+    'linalg_multi_dot',
+    'einsum',
+    'trace',
+    'transpose',
+    'matrix_transpose',
+    'diagonal',
+    // Comparison/ordering: complex numbers are not orderable
+    'max',
+    'min',
+    'argmax',
+    'argmin',
+    'maximum',
+    'minimum',
+    'fmax',
+    'fmin',
+    'clip',
+    'median',
+    'percentile',
+    'quantile',
+    'nanmax',
+    'nanmin',
+    'nanpercentile',
+    'nanquantile',
+    'ptp',
+    'sort',
+    'argsort',
+    'sort_complex',
+    'partition',
+    'argpartition',
+    'searchsorted',
+    'lexsort',
+    // Real-only math
+    'sign',
+    'signbit',
+    'copysign',
+    'reciprocal',
+    'logaddexp',
+    'hypot',
+    // Boolean-result reductions
+    'all',
+    'any',
+    'count_nonzero',
+    'isfinite',
+    'isnan',
+    'isneginf',
+    'isposinf',
+    'isreal',
+    // Creation ops with incompatible fill patterns
+    'arange',
+    'linspace',
+    'logspace',
+    'geomspace',
+    'eye',
+    'identity',
+    // Manipulation that's trivial for complex (no compute difference)
+    'copy',
+    'flatten',
+    'ravel',
+    'reshape',
+    'broadcast_to',
+    'concatenate',
+    'concat',
+    'stack',
+    'hstack',
+    'vstack',
+    'block',
+    'unstack',
+    'swapaxes',
+    'flip',
+    'rot90',
+    'roll',
+    'tile',
+    'repeat',
+    'pad',
+    'take',
+    'extract',
+    'compress',
+    'where',
+    'require',
+    'item',
+    'tolist',
+    'indices',
+    'diag',
+    'tri',
+    'tril',
+    'triu',
+    'trim_zeros',
+    'nan_to_num',
+    'flatnonzero',
+    'nonzero',
+    'argwhere',
+    // Overflow-guaranteed (cumulative product of complex overflows float64 after ~50 elements)
+    'cumprod',
+    // Real-only functions
+    'arctan2', // atan2 not defined for complex
+    'i0', // Bessel function, real-only
+    'sinc', // real-only
+    'unwrap', // phase unwrapping, real-only
+    'asarray_chkfinite', // NaN/Inf check, real-only
+    // Misc incompatible
+    'diff',
+    'gradient',
+    'cross',
+    'unique_values',
+    'unique_counts',
   ]);
 
   if (mode !== 'quick') {
@@ -3766,6 +3851,9 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
       // Skip operations that are numerically unstable at lower precision
       if (SKIP_DTYPE_OPERATIONS.has(spec.operation)) continue;
+
+      // Skip handwritten complex specs — they already target complex128
+      if (spec.operation.startsWith('complex_')) continue;
 
       // Skip specs that already have an explicit non-default dtype
       const dataEntries = Object.entries(spec.setup).filter(([key]) => DATA_ARRAY_KEYS.has(key));
@@ -3785,24 +3873,45 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
         if (family === 'int' && SKIP_INT_OPERATIONS.has(spec.operation)) continue;
         // Skip complex variants for unsupported operations
         if (family === 'complex' && SKIP_COMPLEX_OPERATIONS.has(spec.operation)) continue;
+        // Skip complex variants for broadcasting specs (complex broadcasting is buggy)
+        if (family === 'complex') {
+          const shapes = dataEntries.map(([, e]) => JSON.stringify(e.shape));
+          if (new Set(shapes).size > 1) continue;
+        }
 
         for (const variant of FAMILY_VARIANTS[family]!) {
           if (MODE_RANK[mode]! < MODE_RANK[variant.minMode]!) continue;
 
+          // Skip narrow int types (int8/int16) for accumulation ops where overflow wrapping differs
+          if (
+            family === 'int' &&
+            (variant.dtype === 'int8' || variant.dtype === 'int16') &&
+            SKIP_NARROW_INT_OPERATIONS.has(spec.operation)
+          )
+            continue;
+
           // Clone setup with the new dtype on data array entries
           const variantSetup: BenchmarkSetup = {};
+          let skipVariant = false;
           for (const [key, entry] of Object.entries(spec.setup)) {
             if (DATA_ARRAY_KEYS.has(key)) {
               const cloned = { ...entry, dtype: variant.dtype as DType };
-              // Complex types need fill: 'complex' since arange doesn't support complex dtypes
-              if (family === 'complex' && (entry.fill === 'arange' || !entry.fill)) {
-                cloned.fill = 'complex';
+              if (family === 'complex') {
+                // Complex needs fill: 'complex' for all data arrays (arange/ones/zeros with
+                // complex dtype have bugs). Skip specs that use value with complex since
+                // np.full with complex is broken.
+                if (entry.value !== undefined) {
+                  skipVariant = true;
+                  break;
+                }
+                cloned.fill = 'complex_small';
               }
               variantSetup[key] = cloned;
             } else {
               variantSetup[key] = { ...entry };
             }
           }
+          if (skipVariant) continue;
 
           expanded.push({
             ...spec,

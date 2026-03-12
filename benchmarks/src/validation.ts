@@ -280,6 +280,28 @@ function checkPartitionProperty(data: any, kth: number, shape: number[]): boolea
 function arraysEqual(a: any, b: any, tolerance: number = FLOAT64_TOLERANCE): boolean {
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
+    // Complex [re, im] pair: compare using complex distance / magnitude
+    // Only apply to finite numbers (avoid matching [sign, -Infinity] from slogdet etc.)
+    if (
+      a.length === 2 &&
+      typeof a[0] === 'number' &&
+      typeof a[1] === 'number' &&
+      typeof b[0] === 'number' &&
+      typeof b[1] === 'number' &&
+      isFinite(a[0]) &&
+      isFinite(a[1]) &&
+      isFinite(b[0]) &&
+      isFinite(b[1])
+    ) {
+      const dre = a[0] - b[0];
+      const dim = a[1] - b[1];
+      const dist = Math.sqrt(dre * dre + dim * dim);
+      const magA = Math.sqrt(a[0] * a[0] + a[1] * a[1]);
+      const magB = Math.sqrt(b[0] * b[0] + b[1] * b[1]);
+      const mag = Math.max(magA, magB);
+      const relErr = mag > 0 ? dist / mag : 0;
+      return dist < tolerance || relErr < tolerance;
+    }
     return a.every((val, i) => arraysEqual(val, b[i], tolerance));
   }
 
@@ -347,12 +369,14 @@ function runNumpyTsOperation(spec: BenchmarkCase): any {
       const size = shape.reduce((a, b) => a * b, 1);
       const flat = np.arange(0, size, 1, dtype);
       arrays[key] = flat.reshape(...shape);
-    } else if (fill === 'complex') {
-      // Create complex array with [1+1j, 2+2j, 3+3j, ...]
+    } else if (fill === 'complex' || fill === 'complex_small') {
+      // Create complex array. 'complex' uses [1+1j, 2+2j, ...] (large values),
+      // 'complex_small' uses modular values [(i%10+1) + (i%10+1)j] to avoid overflow in trig/exp.
       const size = shape.reduce((a: number, b: number) => a * b, 1);
       const complexValues = [];
       for (let i = 0; i < size; i++) {
-        complexValues.push(new np.Complex(i + 1, i + 1));
+        const v = fill === 'complex_small' ? (i % 10) + 1 : i + 1;
+        complexValues.push(new np.Complex(v, v));
       }
       const flat = np.array(complexValues);
       const reshaped = flat.reshape(...shape);
@@ -1087,11 +1111,10 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
             // Convert numpy-ts result to comparable format
             let tsValue: any;
 
-            // Helper to convert Complex objects to real parts
+            // Helper to convert Complex objects to [re, im] pairs for comparison
             function complexToReal(val: any): any {
               if (val && typeof val === 'object' && 're' in val && 'im' in val) {
-                // It's a Complex object - extract real part
-                return val.re;
+                return [val.re, val.im];
               }
               if (Array.isArray(val)) {
                 return val.map(complexToReal);
@@ -1102,8 +1125,8 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
             if (typeof numpytsResult === 'number' || typeof numpytsResult === 'boolean') {
               tsValue = numpytsResult;
             } else if (numpytsResult && typeof numpytsResult === 'object' && 're' in numpytsResult && 'im' in numpytsResult) {
-              // It's a Complex scalar result - convert to real
-              tsValue = numpytsResult.re;
+              // It's a Complex scalar result - convert to [re, im] pair
+              tsValue = [numpytsResult.re, numpytsResult.im];
             } else if (Array.isArray(numpytsResult) && numpytsResult.length > 0 && numpytsResult[0] && 'shape' in numpytsResult[0]) {
               // It's a list of NDArrays (e.g., from unstack)
               tsValue = numpytsResult.map((arr: any) => ({

@@ -126,11 +126,16 @@ describe('DType Retention', () => {
   });
 
   describe('Reductions preserve dtype (except mean)', () => {
-    it('sum() preserves dtype', () => {
+    it('sum() promotes narrow ints to float64, preserves others (matching NumPy)', () => {
+      const narrowInts: DType[] = ['int8', 'int16', 'int32', 'uint8', 'uint16', 'uint32'];
       for (const dtype of numericDTypes) {
         const arr = ones([2, 3], dtype);
         const result = arr.sum(0);
-        expect(result.dtype).toBe(dtype);
+        if (narrowInts.includes(dtype)) {
+          expect(result.dtype).toBe('float64');
+        } else {
+          expect(result.dtype).toBe(dtype);
+        }
       }
     });
 
