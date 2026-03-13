@@ -5,7 +5,7 @@
  * and verify the results match exactly.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import {
   array,
   isneginf,
@@ -16,556 +16,579 @@ import {
   isrealobj,
   isscalar,
   promote_types,
+  wasmConfig,
 } from '../../src';
 import { runNumPy, arraysClose, checkNumPyAvailable, getPythonInfo } from './numpy-oracle';
 
-describe('NumPy Validation: Logic Operations', () => {
-  beforeAll(() => {
-    if (!checkNumPyAvailable()) {
-      throw new Error('Python NumPy not available');
-    }
+const WASM_MODES = [
+  { name: 'default thresholds', multiplier: 1 },
+  { name: 'forced WASM (threshold=0)', multiplier: 0 },
+] as const;
 
-    const info = getPythonInfo();
-    console.log(`\n  Using Python ${info.python} with NumPy ${info.numpy} (${info.command})\n`);
-  });
+for (const mode of WASM_MODES) {
+  describe(`NumPy Validation: Logic Operations [${mode.name}]`, () => {
+    beforeAll(() => {
+      wasmConfig.thresholdMultiplier = mode.multiplier;
+      if (!checkNumPyAvailable()) {
+        throw new Error(
+          '❌ Python NumPy not available!\n\n' +
+            '   This test suite requires Python with NumPy installed.\n\n' +
+            '   Setup options:\n' +
+            '   1. Using system Python: pip install numpy\n' +
+            '   2. Using conda: conda install numpy\n' +
+            '   3. Set custom Python: NUMPY_PYTHON="conda run -n myenv python" npm test\n\n' +
+            '   Current Python command: ' +
+            (process.env.NUMPY_PYTHON || 'python3') +
+            '\n'
+        );
+      }
 
-  describe('logical_and()', () => {
-    it('validates logical_and() with scalar', () => {
-      const arr = array([0, 1, 2, 3, 0]);
-      const result = arr.logical_and(1);
+      const info = getPythonInfo();
+      console.log(`\n  Using Python ${info.python} with NumPy ${info.numpy} (${info.command})\n`);
+    });
 
-      const npResult = runNumPy(`
+    afterEach(() => {
+      wasmConfig.thresholdMultiplier = 1;
+    });
+
+    describe('logical_and()', () => {
+      it('validates logical_and() with scalar', () => {
+        const arr = array([0, 1, 2, 3, 0]);
+        const result = arr.logical_and(1);
+
+        const npResult = runNumPy(`
 arr = np.array([0, 1, 2, 3, 0])
 result = np.logical_and(arr, 1).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates logical_and() between arrays', () => {
-      const a = array([0, 1, 0, 1]);
-      const b = array([0, 0, 1, 1]);
-      const result = a.logical_and(b);
+      it('validates logical_and() between arrays', () => {
+        const a = array([0, 1, 0, 1]);
+        const b = array([0, 0, 1, 1]);
+        const result = a.logical_and(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([0, 1, 0, 1])
 b = np.array([0, 0, 1, 1])
 result = np.logical_and(a, b).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates logical_and() with broadcasting', () => {
-      const a = array([
-        [1, 0, 1],
-        [0, 1, 0],
-      ]);
-      const b = array([1, 1, 0]);
-      const result = a.logical_and(b);
+      it('validates logical_and() with broadcasting', () => {
+        const a = array([
+          [1, 0, 1],
+          [0, 1, 0],
+        ]);
+        const b = array([1, 1, 0]);
+        const result = a.logical_and(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([[1, 0, 1], [0, 1, 0]])
 b = np.array([1, 1, 0])
 result = np.logical_and(a, b).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('logical_or()', () => {
-    it('validates logical_or() with scalar', () => {
-      const arr = array([0, 1, 0, 3, 0]);
-      const result = arr.logical_or(0);
+    describe('logical_or()', () => {
+      it('validates logical_or() with scalar', () => {
+        const arr = array([0, 1, 0, 3, 0]);
+        const result = arr.logical_or(0);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([0, 1, 0, 3, 0])
 result = np.logical_or(arr, 0).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates logical_or() between arrays', () => {
-      const a = array([0, 1, 0, 1]);
-      const b = array([0, 0, 1, 1]);
-      const result = a.logical_or(b);
+      it('validates logical_or() between arrays', () => {
+        const a = array([0, 1, 0, 1]);
+        const b = array([0, 0, 1, 1]);
+        const result = a.logical_or(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([0, 1, 0, 1])
 b = np.array([0, 0, 1, 1])
 result = np.logical_or(a, b).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('logical_not()', () => {
-    it('validates logical_not() on 1D array', () => {
-      const arr = array([0, 1, 2, 0, -1]);
-      const result = arr.logical_not();
+    describe('logical_not()', () => {
+      it('validates logical_not() on 1D array', () => {
+        const arr = array([0, 1, 2, 0, -1]);
+        const result = arr.logical_not();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([0, 1, 2, 0, -1])
 result = np.logical_not(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates logical_not() on 2D array', () => {
-      const arr = array([
-        [0, 1],
-        [2, 0],
-      ]);
-      const result = arr.logical_not();
+      it('validates logical_not() on 2D array', () => {
+        const arr = array([
+          [0, 1],
+          [2, 0],
+        ]);
+        const result = arr.logical_not();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([[0, 1], [2, 0]])
 result = np.logical_not(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('logical_xor()', () => {
-    it('validates logical_xor() with scalar', () => {
-      const arr = array([0, 1, 2, 0]);
-      const result = arr.logical_xor(1);
+    describe('logical_xor()', () => {
+      it('validates logical_xor() with scalar', () => {
+        const arr = array([0, 1, 2, 0]);
+        const result = arr.logical_xor(1);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([0, 1, 2, 0])
 result = np.logical_xor(arr, 1).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates logical_xor() between arrays', () => {
-      const a = array([0, 1, 0, 1]);
-      const b = array([0, 0, 1, 1]);
-      const result = a.logical_xor(b);
+      it('validates logical_xor() between arrays', () => {
+        const a = array([0, 1, 0, 1]);
+        const b = array([0, 0, 1, 1]);
+        const result = a.logical_xor(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([0, 1, 0, 1])
 b = np.array([0, 0, 1, 1])
 result = np.logical_xor(a, b).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('isfinite()', () => {
-    it('validates isfinite() with various values', () => {
-      const arr = array([1, 2, Infinity, -Infinity, NaN, 0]);
-      const result = arr.isfinite();
+    describe('isfinite()', () => {
+      it('validates isfinite() with various values', () => {
+        const arr = array([1, 2, Infinity, -Infinity, NaN, 0]);
+        const result = arr.isfinite();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, np.inf, -np.inf, np.nan, 0])
 result = np.isfinite(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates isfinite() with 2D array', () => {
-      const arr = array([
-        [1.0, Infinity],
-        [NaN, 2.0],
-      ]);
-      const result = arr.isfinite();
+      it('validates isfinite() with 2D array', () => {
+        const arr = array([
+          [1.0, Infinity],
+          [NaN, 2.0],
+        ]);
+        const result = arr.isfinite();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([[1.0, np.inf], [np.nan, 2.0]])
 result = np.isfinite(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('isinf()', () => {
-    it('validates isinf() with various values', () => {
-      const arr = array([1, 2, Infinity, -Infinity, NaN, 0]);
-      const result = arr.isinf();
+    describe('isinf()', () => {
+      it('validates isinf() with various values', () => {
+        const arr = array([1, 2, Infinity, -Infinity, NaN, 0]);
+        const result = arr.isinf();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, np.inf, -np.inf, np.nan, 0])
 result = np.isinf(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('isnan()', () => {
-    it('validates isnan() with various values', () => {
-      const arr = array([1, 2, Infinity, -Infinity, NaN, 0]);
-      const result = arr.isnan();
+    describe('isnan()', () => {
+      it('validates isnan() with various values', () => {
+        const arr = array([1, 2, Infinity, -Infinity, NaN, 0]);
+        const result = arr.isnan();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, np.inf, -np.inf, np.nan, 0])
 result = np.isnan(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates isnan() with multiple NaN values', () => {
-      const arr = array([NaN, 1, NaN, 2, NaN]);
-      const result = arr.isnan();
+      it('validates isnan() with multiple NaN values', () => {
+        const arr = array([NaN, 1, NaN, 2, NaN]);
+        const result = arr.isnan();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([np.nan, 1, np.nan, 2, np.nan])
 result = np.isnan(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('copysign()', () => {
-    it('validates copysign() with positive sign', () => {
-      const a = array([-1, -2, 3, -4]);
-      const result = a.copysign(1);
+    describe('copysign()', () => {
+      it('validates copysign() with positive sign', () => {
+        const a = array([-1, -2, 3, -4]);
+        const result = a.copysign(1);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([-1, -2, 3, -4], dtype=np.float64)
 result = np.copysign(a, 1)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates copysign() with negative sign', () => {
-      const a = array([1, 2, -3, 4]);
-      const result = a.copysign(-1);
+      it('validates copysign() with negative sign', () => {
+        const a = array([1, 2, -3, 4]);
+        const result = a.copysign(-1);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([1, 2, -3, 4], dtype=np.float64)
 result = np.copysign(a, -1)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates copysign() between arrays', () => {
-      const a = array([1, -2, 3, -4]);
-      const b = array([-1, 1, -1, 1]);
-      const result = a.copysign(b);
+      it('validates copysign() between arrays', () => {
+        const a = array([1, -2, 3, -4]);
+        const b = array([-1, 1, -1, 1]);
+        const result = a.copysign(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([1, -2, 3, -4], dtype=np.float64)
 b = np.array([-1, 1, -1, 1], dtype=np.float64)
 result = np.copysign(a, b)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('signbit()', () => {
-    it('validates signbit() with various values', () => {
-      const arr = array([1, -1, 0, 2, -3]);
-      const result = arr.signbit();
+    describe('signbit()', () => {
+      it('validates signbit() with various values', () => {
+        const arr = array([1, -1, 0, 2, -3]);
+        const result = arr.signbit();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, -1, 0, 2, -3], dtype=np.float64)
 result = np.signbit(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates signbit() with negative zero', () => {
-      const arr = array([-0.0, 0.0]);
-      const result = arr.signbit();
+      it('validates signbit() with negative zero', () => {
+        const arr = array([-0.0, 0.0]);
+        const result = arr.signbit();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([-0.0, 0.0], dtype=np.float64)
 result = np.signbit(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates signbit() with infinity', () => {
-      const arr = array([Infinity, -Infinity]);
-      const result = arr.signbit();
+      it('validates signbit() with infinity', () => {
+        const arr = array([Infinity, -Infinity]);
+        const result = arr.signbit();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([np.inf, -np.inf], dtype=np.float64)
 result = np.signbit(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('nextafter()', () => {
-    it('validates nextafter() towards positive infinity', () => {
-      const a = array([0, 1]);
-      const result = a.nextafter(Infinity);
+    describe('nextafter()', () => {
+      it('validates nextafter() towards positive infinity', () => {
+        const a = array([0, 1]);
+        const result = a.nextafter(Infinity);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([0, 1], dtype=np.float64)
 result = np.nextafter(a, np.inf)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates nextafter() towards negative infinity', () => {
-      const a = array([0, 1]);
-      const result = a.nextafter(-Infinity);
+      it('validates nextafter() towards negative infinity', () => {
+        const a = array([0, 1]);
+        const result = a.nextafter(-Infinity);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([0, 1], dtype=np.float64)
 result = np.nextafter(a, -np.inf)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates nextafter() between arrays', () => {
-      const a = array([1.0, 2.0, 3.0]);
-      const b = array([0.0, 3.0, 2.0]);
-      const result = a.nextafter(b);
+      it('validates nextafter() between arrays', () => {
+        const a = array([1.0, 2.0, 3.0]);
+        const b = array([0.0, 3.0, 2.0]);
+        const result = a.nextafter(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([1.0, 2.0, 3.0], dtype=np.float64)
 b = np.array([0.0, 3.0, 2.0], dtype=np.float64)
 result = np.nextafter(a, b)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates nextafter() when values are equal', () => {
-      const a = array([1.0, 2.0, 3.0]);
-      const result = a.nextafter(a);
+      it('validates nextafter() when values are equal', () => {
+        const a = array([1.0, 2.0, 3.0]);
+        const result = a.nextafter(a);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([1.0, 2.0, 3.0], dtype=np.float64)
 result = np.nextafter(a, a)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('spacing()', () => {
-    it('validates spacing() at various magnitudes', () => {
-      const arr = array([1, 10, 100, 1000]);
-      const result = arr.spacing();
+    describe('spacing()', () => {
+      it('validates spacing() at various magnitudes', () => {
+        const arr = array([1, 10, 100, 1000]);
+        const result = arr.spacing();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 10, 100, 1000], dtype=np.float64)
 result = np.spacing(arr)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates spacing() at zero', () => {
-      const arr = array([0]);
-      const result = arr.spacing();
+      it('validates spacing() at zero', () => {
+        const arr = array([0]);
+        const result = arr.spacing();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([0], dtype=np.float64)
 result = np.spacing(arr)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates spacing() with negative values', () => {
-      const arr = array([-1, -10, -100]);
-      const result = arr.spacing();
+      it('validates spacing() with negative values', () => {
+        const arr = array([-1, -10, -100]);
+        const result = arr.spacing();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([-1, -10, -100], dtype=np.float64)
 result = np.spacing(arr)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('complex scenarios', () => {
-    it('validates chained logical operations', () => {
-      const arr = array([0, 1, 2, 3, 4, 5]);
+    describe('complex scenarios', () => {
+      it('validates chained logical operations', () => {
+        const arr = array([0, 1, 2, 3, 4, 5]);
 
-      // arr > 1 AND arr < 4
-      const gt1 = arr.greater(1);
-      const lt4 = arr.less(4);
-      const result = gt1.logical_and(lt4);
+        // arr > 1 AND arr < 4
+        const gt1 = arr.greater(1);
+        const lt4 = arr.less(4);
+        const result = gt1.logical_and(lt4);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([0, 1, 2, 3, 4, 5])
 result = np.logical_and(arr > 1, arr < 4).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates logical operations with floating point', () => {
-      const arr = array([0.0, 0.1, 1.0, -0.1, 0.0]);
-      const result = arr.logical_not();
+      it('validates logical operations with floating point', () => {
+        const arr = array([0.0, 0.1, 1.0, -0.1, 0.0]);
+        const result = arr.logical_not();
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([0.0, 0.1, 1.0, -0.1, 0.0])
 result = np.logical_not(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates broadcasting in 3D', () => {
-      const a = array([[[1, 0]], [[0, 1]]]);
-      const b = array([1, 0]);
-      const result = a.logical_and(b);
+      it('validates broadcasting in 3D', () => {
+        const a = array([[[1, 0]], [[0, 1]]]);
+        const b = array([1, 0]);
+        const result = a.logical_and(b);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 a = np.array([[[1, 0]], [[0, 1]]])
 b = np.array([1, 0])
 result = np.logical_and(a, b).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
     });
-  });
 
-  describe('Additional Logic Functions', () => {
-    it('validates isneginf()', () => {
-      const arr = array([-Infinity, -1, 0, 1, Infinity, NaN]);
-      const result = isneginf(arr);
+    describe('Additional Logic Functions', () => {
+      it('validates isneginf()', () => {
+        const arr = array([-Infinity, -1, 0, 1, Infinity, NaN]);
+        const result = isneginf(arr);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([-np.inf, -1, 0, 1, np.inf, np.nan])
 result = np.isneginf(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates isposinf()', () => {
-      const arr = array([-Infinity, -1, 0, 1, Infinity, NaN]);
-      const result = isposinf(arr);
+      it('validates isposinf()', () => {
+        const arr = array([-Infinity, -1, 0, 1, Infinity, NaN]);
+        const result = isposinf(arr);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([-np.inf, -1, 0, 1, np.inf, np.nan])
 result = np.isposinf(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates isreal() always returns true', () => {
-      const arr = array([1, 2, 3, 4, 5]);
-      const result = isreal(arr);
+      it('validates isreal() always returns true', () => {
+        const arr = array([1, 2, 3, 4, 5]);
+        const result = isreal(arr);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, 3, 4, 5])
 result = np.isreal(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates iscomplex() always returns false', () => {
-      const arr = array([1, 2, 3, 4, 5]);
-      const result = iscomplex(arr);
+      it('validates iscomplex() always returns false', () => {
+        const arr = array([1, 2, 3, 4, 5]);
+        const result = iscomplex(arr);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, 3, 4, 5])
 result = np.iscomplex(arr).astype(np.uint8)
 `);
 
-      expect(result.shape).toEqual(npResult.shape);
-      expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
-    });
+        expect(result.shape).toEqual(npResult.shape);
+        expect(arraysClose(result.toArray(), npResult.value)).toBe(true);
+      });
 
-    it('validates iscomplexobj() returns false', () => {
-      const arr = array([1, 2, 3]);
-      const result = iscomplexobj(arr);
+      it('validates iscomplexobj() returns false', () => {
+        const arr = array([1, 2, 3]);
+        const result = iscomplexobj(arr);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, 3])
 result = np.iscomplexobj(arr)
 `);
 
-      expect(result).toBe(npResult.value);
-    });
+        expect(result).toBe(npResult.value);
+      });
 
-    it('validates isrealobj() returns true', () => {
-      const arr = array([1, 2, 3]);
-      const result = isrealobj(arr);
+      it('validates isrealobj() returns true', () => {
+        const arr = array([1, 2, 3]);
+        const result = isrealobj(arr);
 
-      const npResult = runNumPy(`
+        const npResult = runNumPy(`
 arr = np.array([1, 2, 3])
 result = np.isrealobj(arr)
 `);
 
-      expect(result).toBe(npResult.value);
-    });
+        expect(result).toBe(npResult.value);
+      });
 
-    it('validates isscalar() with scalars', () => {
-      expect(isscalar(5)).toBe(true);
-      expect(isscalar(3.14)).toBe(true);
-      expect(isscalar(true)).toBe(true);
-    });
+      it('validates isscalar() with scalars', () => {
+        expect(isscalar(5)).toBe(true);
+        expect(isscalar(3.14)).toBe(true);
+        expect(isscalar(true)).toBe(true);
+      });
 
-    it('validates isscalar() with non-scalars', () => {
-      expect(isscalar([1, 2, 3])).toBe(false);
-      expect(isscalar({ a: 1 })).toBe(false);
-    });
+      it('validates isscalar() with non-scalars', () => {
+        expect(isscalar([1, 2, 3])).toBe(false);
+        expect(isscalar({ a: 1 })).toBe(false);
+      });
 
-    it('validates promote_types() for int and float', () => {
-      const result = promote_types('int32', 'float32');
-      expect(result).toBe('float32');
-    });
+      it('validates promote_types() for int and float', () => {
+        const result = promote_types('int32', 'float32');
+        expect(result).toBe('float32');
+      });
 
-    it('validates promote_types() for different precisions', () => {
-      const result = promote_types('int8', 'int32');
-      expect(result).toBe('int32');
+      it('validates promote_types() for different precisions', () => {
+        const result = promote_types('int8', 'int32');
+        expect(result).toBe('int32');
+      });
     });
   });
-});
+} // end WASM_MODES loop

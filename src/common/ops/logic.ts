@@ -10,10 +10,21 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { isBigIntDType, isComplexDType, throwIfComplex, type DType } from '../dtype';
+import {
+  isBigIntDType,
+  isComplexDType,
+  isIntegerDType,
+  throwIfComplex,
+  type DType,
+} from '../dtype';
 import { elementwiseComparisonOp } from '../internal/compute';
 import { broadcastShapes } from '../internal/compute';
 import { Complex } from '../complex';
+import { wasmLogicalAnd, wasmLogicalAndScalar } from '../wasm/logical_and';
+import { wasmLogicalOr, wasmLogicalOrScalar } from '../wasm/logical_or';
+import { wasmLogicalXor, wasmLogicalXorScalar } from '../wasm/logical_xor';
+import { wasmCopysign, wasmCopysignScalar } from '../wasm/copysign';
+import { wasmLogicalNot } from '../wasm/logical_not';
 
 /**
  * Helper: Convert value to boolean (0 = false, non-zero = true)
@@ -61,11 +72,23 @@ function canUseFastPath(a: ArrayStorage, b: ArrayStorage): boolean {
  */
 export function logical_and(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
   if (typeof b === 'number') {
+    const wasm = wasmLogicalAndScalar(a, b);
+    if (wasm) return wasm;
     return logicalAndScalar(a, b);
   }
 
-  // Fast path: both contiguous, same shape
+  // Optimize single-element non-complex arrays as scalars
+  if (b.size === 1 && !isComplexDType(b.dtype)) {
+    const scalarVal = Number(b.iget(0));
+    const wasm = wasmLogicalAndScalar(a, scalarVal);
+    if (wasm) return wasm;
+    return logicalAndScalar(a, scalarVal);
+  }
+
+  // WASM fast path
   if (canUseFastPath(a, b)) {
+    const wasm = wasmLogicalAnd(a, b);
+    if (wasm) return wasm;
     return logicalAndArraysFast(a, b);
   }
 
@@ -184,17 +207,23 @@ function logicalAndScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  */
 export function logical_or(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
   if (typeof b === 'number') {
+    const wasm = wasmLogicalOrScalar(a, b);
+    if (wasm) return wasm;
     return logicalOrScalar(a, b);
   }
 
-  // Optimize single-element non-complex arrays as scalars (only when same dtype)
-  if (b.size === 1 && !isComplexDType(b.dtype) && a.dtype === b.dtype) {
+  // Optimize single-element non-complex arrays as scalars
+  if (b.size === 1 && !isComplexDType(b.dtype)) {
     const scalarVal = Number(b.iget(0));
+    const wasm = wasmLogicalOrScalar(a, scalarVal);
+    if (wasm) return wasm;
     return logicalOrScalar(a, scalarVal);
   }
 
   // Fast path: both contiguous, same shape
   if (canUseFastPath(a, b)) {
+    const wasm = wasmLogicalOr(a, b);
+    if (wasm) return wasm;
     return logicalOrArraysFast(a, b);
   }
 
@@ -311,6 +340,9 @@ function logicalOrScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  * @returns Boolean result storage
  */
 export function logical_not(a: ArrayStorage): ArrayStorage {
+  const wasm = wasmLogicalNot(a);
+  if (wasm) return wasm;
+
   const data = new Uint8Array(a.size);
   const size = a.size;
 
@@ -371,11 +403,23 @@ export function logical_not(a: ArrayStorage): ArrayStorage {
  */
 export function logical_xor(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
   if (typeof b === 'number') {
+    const wasm = wasmLogicalXorScalar(a, b);
+    if (wasm) return wasm;
     return logicalXorScalar(a, b);
+  }
+
+  // Optimize single-element non-complex arrays as scalars
+  if (b.size === 1 && !isComplexDType(b.dtype)) {
+    const scalarVal = Number(b.iget(0));
+    const wasm = wasmLogicalXorScalar(a, scalarVal);
+    if (wasm) return wasm;
+    return logicalXorScalar(a, scalarVal);
   }
 
   // Fast path: both contiguous, same shape
   if (canUseFastPath(a, b)) {
+    const wasm = wasmLogicalXor(a, b);
+    if (wasm) return wasm;
     return logicalXorArraysFast(a, b);
   }
 
@@ -518,11 +562,9 @@ export function isfinite(a: ArrayStorage): ArrayStorage {
         const im = complexData[(off + i) * 2 + 1]!;
         data[i] = Number.isFinite(re) && Number.isFinite(im) ? 1 : 0;
       }
-    } else if (isBigIntDType(a.dtype)) {
-      // BigInt values are always finite
-      for (let i = 0; i < size; i++) {
-        data[i] = 1;
-      }
+    } else if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+      // Integer and BigInt values are always finite
+      data.fill(1);
     } else {
       if (off === 0) {
         for (let i = 0; i < size; i++) {
@@ -541,10 +583,8 @@ export function isfinite(a: ArrayStorage): ArrayStorage {
         const val = a.iget(i) as Complex;
         data[i] = Number.isFinite(val.re) && Number.isFinite(val.im) ? 1 : 0;
       }
-    } else if (isBigIntDType(a.dtype)) {
-      for (let i = 0; i < size; i++) {
-        data[i] = 1;
-      }
+    } else if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+      data.fill(1);
     } else {
       for (let i = 0; i < size; i++) {
         data[i] = Number.isFinite(Number(a.iget(i))) ? 1 : 0;
@@ -580,11 +620,8 @@ export function isinf(a: ArrayStorage): ArrayStorage {
         const imInf = !Number.isFinite(im) && !Number.isNaN(im);
         data[i] = reInf || imInf ? 1 : 0;
       }
-    } else if (isBigIntDType(a.dtype)) {
-      // BigInt values are never infinite
-      for (let i = 0; i < size; i++) {
-        data[i] = 0;
-      }
+    } else if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+      // Integer and BigInt values are never infinite
     } else {
       if (off === 0) {
         for (let i = 0; i < size; i++) {
@@ -606,10 +643,8 @@ export function isinf(a: ArrayStorage): ArrayStorage {
         const imInf = !Number.isFinite(val.im) && !Number.isNaN(val.im);
         data[i] = reInf || imInf ? 1 : 0;
       }
-    } else if (isBigIntDType(a.dtype)) {
-      for (let i = 0; i < size; i++) {
-        data[i] = 0;
-      }
+    } else if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+      // Integer and BigInt values are never infinite
     } else {
       for (let i = 0; i < size; i++) {
         const val = Number(a.iget(i));
@@ -644,11 +679,8 @@ export function isnan(a: ArrayStorage): ArrayStorage {
         const im = complexData[(off + i) * 2 + 1]!;
         data[i] = Number.isNaN(re) || Number.isNaN(im) ? 1 : 0;
       }
-    } else if (isBigIntDType(a.dtype)) {
-      // BigInt values are never NaN
-      for (let i = 0; i < size; i++) {
-        data[i] = 0;
-      }
+    } else if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+      // Integer and BigInt values are never NaN — data is already zero-filled
     } else {
       for (let i = 0; i < size; i++) {
         data[i] = Number.isNaN(thisData[off + i] as number) ? 1 : 0;
@@ -660,10 +692,8 @@ export function isnan(a: ArrayStorage): ArrayStorage {
         const val = a.iget(i) as Complex;
         data[i] = Number.isNaN(val.re) || Number.isNaN(val.im) ? 1 : 0;
       }
-    } else if (isBigIntDType(a.dtype)) {
-      for (let i = 0; i < size; i++) {
-        data[i] = 0;
-      }
+    } else if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+      // Integer and BigInt values are never NaN — data is already zero-filled
     } else {
       for (let i = 0; i < size; i++) {
         data[i] = Number.isNaN(Number(a.iget(i))) ? 1 : 0;
@@ -709,11 +739,23 @@ export function copysign(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStor
     throwIfComplex(x2.dtype, 'copysign', 'copysign is only defined for real numbers.');
   }
   if (typeof x2 === 'number') {
+    const wasm = wasmCopysignScalar(x1, x2);
+    if (wasm) return wasm;
     return copysignScalar(x1, x2);
+  }
+
+  // Optimize single-element non-complex arrays as scalars
+  if (x2.size === 1 && !isComplexDType(x2.dtype)) {
+    const scalarVal = Number(x2.iget(0));
+    const wasm = wasmCopysignScalar(x1, scalarVal);
+    if (wasm) return wasm;
+    return copysignScalar(x1, scalarVal);
   }
 
   // Fast path: both contiguous, same shape
   if (canUseFastPath(x1, x2)) {
+    const wasm = wasmCopysign(x1, x2);
+    if (wasm) return wasm;
     return copysignArraysFast(x1, x2);
   }
 
@@ -1188,9 +1230,8 @@ export function isneginf(a: ArrayStorage): ArrayStorage {
   const data = new Uint8Array(a.size);
   const size = a.size;
 
-  if (isBigIntDType(a.dtype)) {
-    // BigInt cannot be -Infinity
-    // data is already zeros
+  if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+    // Integer and BigInt values cannot be -Infinity
   } else if (a.isCContiguous) {
     const thisData = a.data;
     const off = a.offset;
@@ -1224,9 +1265,8 @@ export function isposinf(a: ArrayStorage): ArrayStorage {
   const data = new Uint8Array(a.size);
   const size = a.size;
 
-  if (isBigIntDType(a.dtype)) {
-    // BigInt cannot be +Infinity
-    // data is already zeros
+  if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
+    // Integer and BigInt values cannot be +Infinity
   } else if (a.isCContiguous) {
     const thisData = a.data;
     const off = a.offset;
