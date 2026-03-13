@@ -193,3 +193,207 @@ test "copysign_scalar_i8 basic" {
     try testing.expectApproxEqAbs(out[2], 0.0, 1e-10);
     try testing.expectApproxEqAbs(out[3], -7.0, 1e-10);
 }
+
+test "copysign_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const x1 = [_]f64{ 5.0, -3.0, 0.0 };
+    const x2 = [_]f64{ -1.0, -1.0, -1.0 };
+    var out: [3]f64 = undefined;
+    copysign_f64(&x1, &x2, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -3.0, 1e-10);
+    // copysign(0, -1) = -0.0 (sign bit set)
+}
+
+test "copysign_f32 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]f32{ 1.0, -2.0, 3.0 };
+    const x2 = [_]f32{ -1.0, 1.0, 1.0 };
+    var out: [3]f64 = undefined;
+    copysign_f32(&x1, &x2, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 3.0, 1e-5);
+}
+
+test "copysign_i64 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]i64{ 5, -3, 0 };
+    const x2 = [_]i64{ -1, 2, -3 };
+    var out: [3]f64 = undefined;
+    copysign_i64(&x1, &x2, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 0.0, 1e-10);
+}
+
+test "copysign_scalar_i32 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]i32{ 5, -3, 0, 7 };
+    var out: [4]f64 = undefined;
+    copysign_scalar_i32(&x1, &out, 4, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 7.0, 1e-10);
+}
+
+test "copysign_i16 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]i16{ 100, -200, 300 };
+    const x2 = [_]i16{ -1, -1, 1 };
+    var out: [3]f64 = undefined;
+    copysign_i16(&x1, &x2, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -100.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -200.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 300.0, 1e-10);
+}
+
+test "copysign_f64 SIMD boundary N=3 remainder" {
+    const testing = @import("std").testing;
+    // N=3: 2 by SIMD (V2f64), 1 by scalar remainder
+    const x1 = [_]f64{ 10.0, 20.0, 30.0 };
+    const x2 = [_]f64{ -1.0, 1.0, -1.0 };
+    var out: [3]f64 = undefined;
+    copysign_f64(&x1, &x2, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -10.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 20.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -30.0, 1e-10);
+}
+
+test "copysign_f32 various signs" {
+    const testing = @import("std").testing;
+    const x1 = [_]f32{ 5.0, -3.0, 7.0, -1.0, 0.0 };
+    const x2 = [_]f32{ -1.0, -1.0, 1.0, 1.0, 1.0 };
+    var out: [5]f64 = undefined;
+    copysign_f32(&x1, &x2, &out, 5);
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], -3.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 7.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 0.0, 1e-5);
+}
+
+test "copysign_f64 with negative zero sign" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    // -0.0 has sign bit set, so copysign(x, -0.0) should give -|x|
+    const neg_zero: f64 = -0.0;
+    const x1 = [_]f64{ 5.0, 3.0 };
+    const x2 = [_]f64{ neg_zero, neg_zero };
+    var out: [2]f64 = undefined;
+    copysign_f64(&x1, &x2, &out, 2);
+    // Should be -5.0 and -3.0 (sign bit of -0.0 is set)
+    try testing.expect(math.signbit(out[0]));
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-10);
+    try testing.expect(math.signbit(out[1]));
+    try testing.expectApproxEqAbs(out[1], -3.0, 1e-10);
+}
+
+test "copysign_f64 positive to negative" {
+    const testing = @import("std").testing;
+    // copysign(positive, negative) -> negative
+    const x1 = [_]f64{ 1.0, 2.0, 3.0, 4.0 };
+    const x2 = [_]f64{ -5.0, -6.0, -7.0, -8.0 };
+    var out: [4]f64 = undefined;
+    copysign_f64(&x1, &x2, &out, 4);
+    try testing.expectApproxEqAbs(out[0], -1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], -4.0, 1e-10);
+}
+
+test "copysign_f64 negative to positive" {
+    const testing = @import("std").testing;
+    // copysign(negative, positive) -> positive
+    const x1 = [_]f64{ -1.0, -2.0, -3.0, -4.0 };
+    const x2 = [_]f64{ 5.0, 6.0, 7.0, 8.0 };
+    var out: [4]f64 = undefined;
+    copysign_f64(&x1, &x2, &out, 4);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 4.0, 1e-10);
+}
+
+test "copysign_i32 sign combinations" {
+    const testing = @import("std").testing;
+    // positive magnitude, negative sign
+    const x1 = [_]i32{ 10, -20, 30, -40 };
+    const x2 = [_]i32{ -1, 1, 1, -1 };
+    var out: [4]f64 = undefined;
+    copysign_i32(&x1, &x2, &out, 4);
+    try testing.expectApproxEqAbs(out[0], -10.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 20.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 30.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], -40.0, 1e-10);
+}
+
+test "copysign_i16 sign combinations" {
+    const testing = @import("std").testing;
+    const x1 = [_]i16{ 50, -60, 70, -80 };
+    const x2 = [_]i16{ 1, -1, -1, 1 };
+    var out: [4]f64 = undefined;
+    copysign_i16(&x1, &x2, &out, 4);
+    try testing.expectApproxEqAbs(out[0], 50.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -60.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -70.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 80.0, 1e-10);
+}
+
+test "copysign_i8 sign combinations" {
+    const testing = @import("std").testing;
+    const x1 = [_]i8{ 5, -3, 7, -1 };
+    const x2 = [_]i8{ -1, 1, -1, 1 };
+    var out: [4]f64 = undefined;
+    copysign_i8(&x1, &x2, &out, 4);
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -7.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 1.0, 1e-10);
+}
+
+test "copysign_scalar_f64 with negative zero" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    const x1 = [_]f64{ 5.0, 3.0, 1.0 };
+    var out: [3]f64 = undefined;
+    copysign_scalar_f64(&x1, &out, 3, -0.0);
+    // -0.0 has sign bit set, so all outputs should be negative
+    try testing.expect(math.signbit(out[0]));
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-10);
+    try testing.expect(math.signbit(out[1]));
+    try testing.expectApproxEqAbs(out[1], -3.0, 1e-10);
+    try testing.expect(math.signbit(out[2]));
+    try testing.expectApproxEqAbs(out[2], -1.0, 1e-10);
+}
+
+test "copysign_scalar_f32 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]f32{ -5.0, 3.0, -1.0 };
+    var out: [3]f64 = undefined;
+    copysign_scalar_f32(&x1, &out, 3, 1.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 3.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-5);
+}
+
+test "copysign_scalar_i64 negative scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]i64{ 5, -3, 10 };
+    var out: [3]f64 = undefined;
+    copysign_scalar_i64(&x1, &out, 3, -1);
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -10.0, 1e-10);
+}
+
+test "copysign_scalar_i16 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]i16{ -100, 200, -300 };
+    var out: [3]f64 = undefined;
+    copysign_scalar_i16(&x1, &out, 3, 1);
+    try testing.expectApproxEqAbs(out[0], 100.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 200.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 300.0, 1e-10);
+}

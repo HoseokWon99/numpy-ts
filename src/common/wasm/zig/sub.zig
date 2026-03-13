@@ -244,3 +244,133 @@ test "sub_i16 basic" {
     try testing.expectEqual(out[0], 99);
     try testing.expectEqual(out[8], 891);
 }
+
+test "sub_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{10.0};
+    const b = [_]f64{3.0};
+    var out: [1]f64 = undefined;
+    sub_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 7.0, 1e-10);
+}
+
+test "sub_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 10.0, 20.0, 30.0 };
+    const b = [_]f64{ 1.0, 2.0, 3.0 };
+    var out: [3]f64 = undefined;
+    sub_f64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 18.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 27.0, 1e-10);
+}
+
+test "sub_f64 edge values inf" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    const a = [_]f64{ math.inf(f64), 0.0, -0.0 };
+    const b = [_]f64{ 1.0, 0.0, 0.0 };
+    var out: [3]f64 = undefined;
+    sub_f64(&a, &b, &out, 3);
+    try testing.expect(math.isInf(out[0]) and out[0] > 0);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "sub_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    var a: [7]f32 = undefined;
+    var b: [7]f32 = undefined;
+    for (0..7) |i| {
+        a[i] = @as(f32, @floatFromInt(i)) * 10.0;
+        b[i] = @floatFromInt(i);
+    }
+    var out: [7]f32 = undefined;
+    sub_f32(&a, &b, &out, 7);
+    for (0..7) |i| {
+        const expected: f32 = @as(f32, @floatFromInt(i)) * 9.0;
+        try testing.expectApproxEqAbs(out[i], expected, 1e-5);
+    }
+}
+
+test "sub_i32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 10, 20, 30, 40, 50, 60, 70 };
+    const b = [_]i32{ 1, 2, 3, 4, 5, 6, 7 };
+    var out: [7]i32 = undefined;
+    sub_i32(&a, &b, &out, 7);
+    for (0..7) |i| {
+        const expected: i32 = @as(i32, @intCast(i + 1)) * 9;
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "sub_i8 SIMD boundary N=17" {
+    const testing = @import("std").testing;
+    var a: [17]i8 = undefined;
+    var b: [17]i8 = undefined;
+    for (0..17) |i| {
+        a[i] = @intCast(i + 50);
+        b[i] = @intCast(i);
+    }
+    var out: [17]i8 = undefined;
+    sub_i8(&a, &b, &out, 17);
+    for (0..17) |i| {
+        try testing.expectEqual(out[i], 50);
+    }
+}
+
+test "sub_c128 basic" {
+    const testing = @import("std").testing;
+    // (5+6i) - (1+2i) = (4+4i)
+    const a = [_]f64{ 5, 6 };
+    const b = [_]f64{ 1, 2 };
+    var out: [2]f64 = undefined;
+    sub_c128(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 4.0, 1e-10);
+}
+
+test "sub_scalar_c128 basic" {
+    const testing = @import("std").testing;
+    // (5+6i) - 3 = (2+6i)
+    const a = [_]f64{ 5, 6 };
+    var out: [2]f64 = undefined;
+    sub_scalar_c128(&a, &out, 1, 3.0);
+    try testing.expectApproxEqAbs(out[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-10);
+}
+
+test "sub_scalar_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 10, 20, 30 };
+    var out: [3]f64 = undefined;
+    sub_scalar_f64(&a, &out, 3, 5.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 15.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 25.0, 1e-10);
+}
+
+test "sub_i64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 100, 200, 300 };
+    const b = [_]i64{ 50, 100, 150 };
+    var out: [3]i64 = undefined;
+    sub_i64(&a, &b, &out, 3);
+    try testing.expectEqual(out[0], 50);
+    try testing.expectEqual(out[1], 100);
+    try testing.expectEqual(out[2], 150);
+}
+
+test "sub_scalar_i8 SIMD boundary N=17" {
+    const testing = @import("std").testing;
+    var a: [17]i8 = undefined;
+    for (0..17) |i| {
+        a[i] = @intCast(i + 20);
+    }
+    var out: [17]i8 = undefined;
+    sub_scalar_i8(&a, &out, 17, 10);
+    for (0..17) |i| {
+        const expected: i8 = @intCast(i + 10);
+        try testing.expectEqual(out[i], expected);
+    }
+}

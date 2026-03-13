@@ -1316,3 +1316,40 @@ test "matmul_i8 overflow wrapping" {
     try testing.expectEqual(c[2], -82);
     try testing.expectEqual(c[3], -12);
 }
+
+test "matmul_f64 2x3 @ 3x2" {
+    const testing = @import("std").testing;
+    // A = [[1,2,3],[4,5,6]], B = [[7,8],[9,10],[11,12]]
+    // C = [[58,64],[139,154]]
+    const a = [_]f64{ 1, 2, 3, 4, 5, 6 };
+    const b = [_]f64{ 7, 8, 9, 10, 11, 12 };
+    var c: [4]f64 = undefined;
+    matmul_f64(&a, &b, &c, 2, 2, 3);
+    try testing.expectApproxEqAbs(c[0], 58.0, 1e-10);
+    try testing.expectApproxEqAbs(c[1], 64.0, 1e-10);
+    try testing.expectApproxEqAbs(c[2], 139.0, 1e-10);
+    try testing.expectApproxEqAbs(c[3], 154.0, 1e-10);
+}
+
+test "matmul_f64 identity 3x3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    const id = [_]f64{ 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    var c: [9]f64 = undefined;
+    matmul_f64(&a, &id, &c, 3, 3, 3);
+    for (0..9) |i| {
+        try testing.expectApproxEqAbs(c[i], a[i], 1e-10);
+    }
+}
+
+test "matmul_f32 2x2 @ 2x2" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1, 2, 3, 4 };
+    const b = [_]f32{ 5, 6, 7, 8 };
+    var c: [4]f32 = undefined;
+    matmul_f32(&a, &b, &c, 2, 2, 2);
+    try testing.expectApproxEqAbs(c[0], 19.0, 1e-5);
+    try testing.expectApproxEqAbs(c[1], 22.0, 1e-5);
+    try testing.expectApproxEqAbs(c[2], 43.0, 1e-5);
+    try testing.expectApproxEqAbs(c[3], 50.0, 1e-5);
+}

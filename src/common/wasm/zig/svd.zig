@@ -308,3 +308,124 @@ test "svd_f64 5x3 reconstruction" {
         }
     }
 }
+
+test "svd_f64 1x1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{7.0};
+    var u: [1]f64 = undefined;
+    var s: [1]f64 = undefined;
+    var vt: [1]f64 = undefined;
+    var work: [64]f64 = undefined;
+    svd_f64(&a, &u, &s, &vt, &work, 1, 1);
+    try testing.expectApproxEqAbs(s[0], 7.0, 1e-10);
+    try testing.expectApproxEqAbs(@abs(u[0]), 1.0, 1e-10);
+    try testing.expectApproxEqAbs(@abs(vt[0]), 1.0, 1e-10);
+}
+
+test "svd_f64 2x2 U orthogonality" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3, 4 };
+    var u: [4]f64 = undefined;
+    var s: [2]f64 = undefined;
+    var vt: [4]f64 = undefined;
+    var work: [256]f64 = undefined;
+    svd_f64(&a, &u, &s, &vt, &work, 2, 2);
+
+    // U^T U ≈ I
+    for (0..2) |i| {
+        for (0..2) |j| {
+            var dot: f64 = 0;
+            for (0..2) |k| dot += u[k * 2 + i] * u[k * 2 + j];
+            const expected: f64 = if (i == j) 1.0 else 0.0;
+            try testing.expectApproxEqAbs(dot, expected, 1e-10);
+        }
+    }
+}
+
+test "svd_f64 2x2 Vt orthogonality" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3, 4 };
+    var u: [4]f64 = undefined;
+    var s: [2]f64 = undefined;
+    var vt: [4]f64 = undefined;
+    var work: [256]f64 = undefined;
+    svd_f64(&a, &u, &s, &vt, &work, 2, 2);
+
+    // Vt Vt^T ≈ I
+    for (0..2) |i| {
+        for (0..2) |j| {
+            var dot: f64 = 0;
+            for (0..2) |k| dot += vt[i * 2 + k] * vt[j * 2 + k];
+            const expected: f64 = if (i == j) 1.0 else 0.0;
+            try testing.expectApproxEqAbs(dot, expected, 1e-10);
+        }
+    }
+}
+
+test "svd_f64 singular values descending" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 10 };
+    var u: [9]f64 = undefined;
+    var s: [3]f64 = undefined;
+    var vt: [9]f64 = undefined;
+    var work: [512]f64 = undefined;
+    svd_f64(&a, &u, &s, &vt, &work, 3, 3);
+    // Singular values must be in descending order
+    try testing.expect(s[0] >= s[1]);
+    try testing.expect(s[1] >= s[2]);
+    try testing.expect(s[2] >= 0);
+}
+
+test "svd_f64 3x3 reconstruction" {
+    const testing = @import("std").testing;
+    const orig = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 10 };
+    var u: [9]f64 = undefined;
+    var s: [3]f64 = undefined;
+    var vt: [9]f64 = undefined;
+    var work: [512]f64 = undefined;
+    svd_f64(&orig, &u, &s, &vt, &work, 3, 3);
+
+    for (0..3) |i| {
+        for (0..3) |j| {
+            var val: f64 = 0;
+            for (0..3) |k| val += u[i * 3 + k] * s[k] * vt[k * 3 + j];
+            try testing.expectApproxEqAbs(val, orig[i * 3 + j], 1e-8);
+        }
+    }
+}
+
+test "svd_f64 2x3 wide reconstruction" {
+    const testing = @import("std").testing;
+    const orig = [_]f64{ 1, 2, 3, 4, 5, 6 };
+    var u: [4]f64 = undefined;
+    var s: [2]f64 = undefined;
+    var vt: [9]f64 = undefined;
+    var work: [256]f64 = undefined;
+    svd_f64(&orig, &u, &s, &vt, &work, 2, 3);
+
+    try testing.expect(s[0] >= s[1]);
+    try testing.expect(s[1] >= 0);
+
+    // U·diag(S)·Vt ≈ A
+    for (0..2) |i| {
+        for (0..3) |j| {
+            var val: f64 = 0;
+            for (0..2) |k| val += u[i * 2 + k] * s[k] * vt[k * 3 + j];
+            try testing.expectApproxEqAbs(val, orig[i * 3 + j], 1e-8);
+        }
+    }
+}
+
+test "svd_f64 symmetric matrix" {
+    const testing = @import("std").testing;
+    // Symmetric: A = [[2,1],[1,2]], eigenvalues 3 and 1
+    const a = [_]f64{ 2, 1, 1, 2 };
+    var u: [4]f64 = undefined;
+    var s: [2]f64 = undefined;
+    var vt: [4]f64 = undefined;
+    var work: [256]f64 = undefined;
+    svd_f64(&a, &u, &s, &vt, &work, 2, 2);
+    // Singular values should be 3 and 1
+    try testing.expectApproxEqAbs(s[0], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(s[1], 1.0, 1e-10);
+}

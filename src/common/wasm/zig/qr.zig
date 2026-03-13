@@ -217,3 +217,149 @@ test "lstsq_f64 overdetermined 3x2" {
     try testing.expectApproxEqAbs(x[0], 0.0, 1e-10);
     try testing.expectApproxEqAbs(x[1], 1.0, 1e-10);
 }
+
+test "qr_f64 1x1" {
+    const testing = @import("std").testing;
+    var a = [_]f64{5.0};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    var tau: [1]f64 = undefined;
+    var scratch: [8]f64 = undefined;
+    qr_f64(&a, &q, &r, &tau, &scratch, 1, 1);
+    // Q should be ±1, R should be ±5, Q*R = 5
+    try testing.expectApproxEqAbs(q[0] * r[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(@abs(q[0]), 1.0, 1e-10);
+}
+
+test "qr_f64 identity 3x3" {
+    const testing = @import("std").testing;
+    var a = [_]f64{ 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    var q: [9]f64 = undefined;
+    var r: [9]f64 = undefined;
+    var tau: [3]f64 = undefined;
+    var scratch: [64]f64 = undefined;
+    qr_f64(&a, &q, &r, &tau, &scratch, 3, 3);
+
+    // Q^T Q ≈ I
+    for (0..3) |i| {
+        for (0..3) |j| {
+            var dot: f64 = 0;
+            for (0..3) |k| dot += q[k * 3 + i] * q[k * 3 + j];
+            const expected: f64 = if (i == j) 1.0 else 0.0;
+            try testing.expectApproxEqAbs(dot, expected, 1e-10);
+        }
+    }
+
+    // R should be ±I (diagonal entries ±1)
+    for (0..3) |i| {
+        try testing.expectApproxEqAbs(@abs(r[i * 3 + i]), 1.0, 1e-10);
+    }
+}
+
+test "qr_f64 4x3 tall" {
+    const testing = @import("std").testing;
+    // A = [[1,2,3],[4,5,6],[7,8,9],[10,11,12]]
+    var a = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    const orig = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    var q: [12]f64 = undefined; // 4x3
+    var r: [9]f64 = undefined; // 3x3
+    var tau: [3]f64 = undefined;
+    var scratch: [128]f64 = undefined;
+    qr_f64(&a, &q, &r, &tau, &scratch, 4, 3);
+
+    // Verify Q^T Q ≈ I (3x3)
+    for (0..3) |i| {
+        for (0..3) |j| {
+            var dot: f64 = 0;
+            for (0..4) |k| dot += q[k * 3 + i] * q[k * 3 + j];
+            const expected: f64 = if (i == j) 1.0 else 0.0;
+            try testing.expectApproxEqAbs(dot, expected, 1e-10);
+        }
+    }
+
+    // Verify R is upper triangular
+    try testing.expectApproxEqAbs(r[3], 0.0, 1e-10); // R[1,0]
+    try testing.expectApproxEqAbs(r[6], 0.0, 1e-10); // R[2,0]
+    try testing.expectApproxEqAbs(r[7], 0.0, 1e-10); // R[2,1]
+
+    // Verify QR ≈ A
+    for (0..4) |i| {
+        for (0..3) |j| {
+            var val: f64 = 0;
+            for (0..3) |k| val += q[i * 3 + k] * r[k * 3 + j];
+            try testing.expectApproxEqAbs(val, orig[i * 3 + j], 1e-10);
+        }
+    }
+}
+
+test "qr_f64 2x3 wide" {
+    const testing = @import("std").testing;
+    // Wide matrix: K = min(2,3) = 2
+    var a = [_]f64{ 1, 2, 3, 4, 5, 6 };
+    const orig = [_]f64{ 1, 2, 3, 4, 5, 6 };
+    var q: [4]f64 = undefined; // 2x2
+    var r: [6]f64 = undefined; // 2x3
+    var tau: [2]f64 = undefined;
+    var scratch: [64]f64 = undefined;
+    qr_f64(&a, &q, &r, &tau, &scratch, 2, 3);
+
+    // Q^T Q ≈ I (2x2)
+    for (0..2) |i| {
+        for (0..2) |j| {
+            var dot: f64 = 0;
+            for (0..2) |k| dot += q[k * 2 + i] * q[k * 2 + j];
+            const expected: f64 = if (i == j) 1.0 else 0.0;
+            try testing.expectApproxEqAbs(dot, expected, 1e-10);
+        }
+    }
+
+    // QR ≈ A
+    for (0..2) |i| {
+        for (0..3) |j| {
+            var val: f64 = 0;
+            for (0..2) |k| val += q[i * 2 + k] * r[k * 3 + j];
+            try testing.expectApproxEqAbs(val, orig[i * 3 + j], 1e-10);
+        }
+    }
+}
+
+test "lstsq_f64 exact 2x2" {
+    const testing = @import("std").testing;
+    // A = [[1,0],[0,1]], b = [3,7] → x = [3,7]
+    var a = [_]f64{ 1, 0, 0, 1 };
+    const b = [_]f64{ 3, 7 };
+    var x: [2]f64 = undefined;
+    var scratch: [128]f64 = undefined;
+    lstsq_f64(&a, &b, &x, &scratch, 2, 2);
+    try testing.expectApproxEqAbs(x[0], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(x[1], 7.0, 1e-10);
+}
+
+test "lstsq_f64 overdetermined 4x2" {
+    const testing = @import("std").testing;
+    // Fit y = 2x + 1: A = [[1,0],[1,1],[1,2],[1,3]], b = [1,3,5,7]
+    var a = [_]f64{ 1, 0, 1, 1, 1, 2, 1, 3 };
+    const b = [_]f64{ 1, 3, 5, 7 };
+    var x: [2]f64 = undefined;
+    var scratch: [256]f64 = undefined;
+    lstsq_f64(&a, &b, &x, &scratch, 4, 2);
+    try testing.expectApproxEqAbs(x[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(x[1], 2.0, 1e-10);
+}
+
+test "lstsq_f64 3x3 exact" {
+    const testing = @import("std").testing;
+    // A = [[2,1,0],[1,3,1],[0,1,2]], b = [5,10,7] → solve exactly
+    var a = [_]f64{ 2, 1, 0, 1, 3, 1, 0, 1, 2 };
+    const b = [_]f64{ 5, 10, 7 };
+    var x: [3]f64 = undefined;
+    var scratch: [256]f64 = undefined;
+    lstsq_f64(&a, &b, &x, &scratch, 3, 3);
+    // Verify Ax ≈ b
+    const orig_a = [_]f64{ 2, 1, 0, 1, 3, 1, 0, 1, 2 };
+    for (0..3) |i| {
+        var val: f64 = 0;
+        for (0..3) |j| val += orig_a[i * 3 + j] * x[j];
+        try testing.expectApproxEqAbs(val, b[i], 1e-8);
+    }
+}

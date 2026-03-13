@@ -47,3 +47,34 @@ test "frexp_f64 basic" {
     try testing.expectApproxEqAbs(out_m[4], 0.5, 1e-10);
     try testing.expectEqual(out_e[4], 0);
 }
+
+test "frexp_f64 inf and nan" {
+    const testing = @import("std").testing;
+    const x = [_]f64{ math.inf(f64), -math.inf(f64), math.nan(f64) };
+    var out_m: [3]f64 = undefined;
+    var out_e: [3]i32 = undefined;
+    frexp_f64(&x, &out_m, &out_e, 3);
+    try testing.expect(math.isInf(out_m[0]) and out_m[0] > 0);
+    try testing.expectEqual(out_e[0], 0);
+    try testing.expect(math.isInf(out_m[1]) and out_m[1] < 0);
+    try testing.expectEqual(out_e[1], 0);
+    try testing.expect(math.isNan(out_m[2]));
+    try testing.expectEqual(out_e[2], 0);
+}
+
+test "frexp_f64 negative values" {
+    const testing = @import("std").testing;
+    const x = [_]f64{ -1.0, -0.5, -8.0 };
+    var out_m: [3]f64 = undefined;
+    var out_e: [3]i32 = undefined;
+    frexp_f64(&x, &out_m, &out_e, 3);
+    // -1.0 → (-0.5, 1)
+    try testing.expectApproxEqAbs(out_m[0], -0.5, 1e-10);
+    try testing.expectEqual(out_e[0], 1);
+    // -0.5 → (-0.5, 0)
+    try testing.expectApproxEqAbs(out_m[1], -0.5, 1e-10);
+    try testing.expectEqual(out_e[1], 0);
+    // -8.0 → (-0.5, 4)
+    try testing.expectApproxEqAbs(out_m[2], -0.5, 1e-10);
+    try testing.expectEqual(out_e[2], 4);
+}

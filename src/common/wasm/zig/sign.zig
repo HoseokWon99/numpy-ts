@@ -146,3 +146,47 @@ test "sign_i8 large" {
         try testing.expectEqual(out[idx], a[idx]);
     }
 }
+
+test "sign_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{42.0};
+    var out: [1]f64 = undefined;
+    sign_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "sign_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ -5, 0, 7, -1, 3, 0, -9 };
+    var out: [7]f32 = undefined;
+    sign_f32(&a, &out, 7);
+    try testing.expectApproxEqAbs(out[0], -1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[5], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(out[6], -1.0, 1e-5);
+}
+
+test "sign_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ -100, 0, 100 };
+    var out: [3]i64 = undefined;
+    sign_i64(&a, &out, 3);
+    try testing.expectEqual(out[0], -1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 1);
+}
+
+test "sign_i32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ -5, 0, 7, -1, 3, 0, -9 };
+    var out: [7]i32 = undefined;
+    sign_i32(&a, &out, 7);
+    try testing.expectEqual(out[0], -1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], -1);
+    try testing.expectEqual(out[4], 1);
+    try testing.expectEqual(out[5], 0);
+    try testing.expectEqual(out[6], -1);
+}

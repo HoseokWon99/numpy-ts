@@ -111,3 +111,49 @@ test "rot90_i32 3x2" {
     try testing.expectEqual(out[4], 3);
     try testing.expectEqual(out[5], 5);
 }
+
+test "rot90_f32 2x3" {
+    const testing = @import("std").testing;
+    // [[1,2,3],[4,5,6]] -> [[3,6],[2,5],[1,4]]
+    const a = [_]f32{ 1, 2, 3, 4, 5, 6 };
+    var out: [6]f32 = undefined;
+    rot90_f32(&a, &out, 2, 3);
+    try testing.expectApproxEqAbs(out[0], 3.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[5], 4.0, 1e-5);
+}
+
+test "rot90_i8 2x2" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 1, 2, 3, 4 };
+    var out: [4]i8 = undefined;
+    rot90_i8(&a, &out, 2, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 4);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 3);
+}
+
+test "rot90_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 1, 2, 3, 4 };
+    var out: [4]i64 = undefined;
+    rot90_i64(&a, &out, 2, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 4);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 3);
+}
+
+test "rot90_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 1, 2, 3, 4, 5, 6 };
+    var out: [6]i16 = undefined;
+    rot90_i16(&a, &out, 3, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 4);
+    try testing.expectEqual(out[2], 6);
+}

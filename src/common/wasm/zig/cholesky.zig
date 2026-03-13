@@ -140,3 +140,114 @@ test "cholesky_f32 2x2" {
     try testing.expectApproxEqAbs(out[2], 1.0, 1e-5);
     try testing.expectApproxEqAbs(out[3], 2.0, 1e-5);
 }
+
+test "cholesky_f64 1x1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{9.0};
+    var out: [1]f64 = undefined;
+    const rc = cholesky_f64(&a, &out, 1);
+    try testing.expectEqual(rc, 0);
+    try testing.expectApproxEqAbs(out[0], 3.0, 1e-10);
+}
+
+test "cholesky_f64 identity 3x3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    var out: [9]f64 = undefined;
+    const rc = cholesky_f64(&a, &out, 3);
+    try testing.expectEqual(rc, 0);
+    // L should be identity
+    for (0..3) |i| {
+        for (0..3) |j| {
+            const expected: f64 = if (i == j) 1.0 else 0.0;
+            try testing.expectApproxEqAbs(out[i * 3 + j], expected, 1e-10);
+        }
+    }
+}
+
+test "cholesky_f64 diagonal 3x3" {
+    const testing = @import("std").testing;
+    // A = diag(4, 9, 16) → L = diag(2, 3, 4)
+    const a = [_]f64{ 4, 0, 0, 0, 9, 0, 0, 0, 16 };
+    var out: [9]f64 = undefined;
+    const rc = cholesky_f64(&a, &out, 3);
+    try testing.expectEqual(rc, 0);
+    try testing.expectApproxEqAbs(out[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[4], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[8], 4.0, 1e-10);
+    // Off-diagonals should be zero
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[5], 0.0, 1e-10);
+}
+
+test "cholesky_f64 4x4 reconstruction" {
+    const testing = @import("std").testing;
+    // A = [[4,12,-16,0],[12,37,-43,0],[-16,-43,98,0],[0,0,0,1]]
+    // Known: L[0,0]=2, L[1,0]=6, L[1,1]=1, L[2,0]=-8, L[2,1]=5, L[2,2]=3
+    const a = [_]f64{
+        4,   12,  -16, 0,
+        12,  37,  -43, 0,
+        -16, -43, 98,  0,
+        0,   0,   0,   1,
+    };
+    var out: [16]f64 = undefined;
+    const rc = cholesky_f64(&a, &out, 4);
+    try testing.expectEqual(rc, 0);
+
+    // Verify L*L^T ≈ A
+    var recon: [16]f64 = undefined;
+    for (0..4) |i| {
+        for (0..4) |j| {
+            var s: f64 = 0;
+            for (0..4) |k| s += out[i * 4 + k] * out[j * 4 + k];
+            recon[i * 4 + j] = s;
+        }
+    }
+    for (0..16) |i| {
+        try testing.expectApproxEqAbs(recon[i], a[i], 1e-10);
+    }
+}
+
+test "cholesky_f32 3x3 reconstruction" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 25, 15, -5, 15, 18, 0, -5, 0, 11 };
+    var out: [9]f32 = undefined;
+    const rc = cholesky_f32(&a, &out, 3);
+    try testing.expectEqual(rc, 0);
+
+    var recon: [9]f32 = undefined;
+    for (0..3) |i| {
+        for (0..3) |j| {
+            var s: f32 = 0;
+            for (0..3) |k| s += out[i * 3 + k] * out[j * 3 + k];
+            recon[i * 3 + j] = s;
+        }
+    }
+    for (0..9) |i| {
+        try testing.expectApproxEqAbs(recon[i], a[i], 1e-4);
+    }
+}
+
+test "cholesky_f32 not positive-definite" {
+    const a = [_]f32{ 1, 2, 2, 1 };
+    var out: [4]f32 = undefined;
+    const rc = cholesky_f32(&a, &out, 2);
+    try @import("std").testing.expectEqual(rc, 1);
+}
+
+test "cholesky_f64 zero diagonal returns error" {
+    const a = [_]f64{ 0, 0, 0, 1 };
+    var out: [4]f64 = undefined;
+    const rc = cholesky_f64(&a, &out, 2);
+    try @import("std").testing.expectEqual(rc, 1);
+}
+
+test "cholesky_f32 1x1" {
+    const testing = @import("std").testing;
+    const a = [_]f32{16.0};
+    var out: [1]f32 = undefined;
+    const rc = cholesky_f32(&a, &out, 1);
+    try testing.expectEqual(rc, 0);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-5);
+}

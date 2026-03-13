@@ -227,3 +227,52 @@ test "tile_2d_i8 basic" {
     try testing.expectEqual(out[5], 4);
     try testing.expectEqual(out[8], 1);
 }
+
+test "tile_2d_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1, 2, 3, 4 }; // 2x2
+    var out: [16]f32 = undefined; // 4x4
+    tile_2d_f32(&a, &out, 2, 2, 2, 2);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 2.0, 1e-5);
+}
+
+test "tile_2d_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, 2, 3, 4 }; // 2x2
+    var out: [16]i32 = undefined; // 4x4
+    tile_2d_i32(&a, &out, 2, 2, 2, 2);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 2);
+    try testing.expectEqual(out[4], 3);
+}
+
+test "tile_2d_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 10, 20 }; // 1x2
+    var out: [12]i64 = undefined; // 3x4
+    tile_2d_i64(&a, &out, 1, 2, 3, 2);
+    // Row 0: [10, 20, 10, 20]
+    try testing.expectEqual(out[0], 10);
+    try testing.expectEqual(out[1], 20);
+    try testing.expectEqual(out[2], 10);
+    try testing.expectEqual(out[3], 20);
+    // Row 1 = Row 2 = same
+    try testing.expectEqual(out[4], 10);
+    try testing.expectEqual(out[8], 10);
+}
+
+test "tile_2d_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 1, 2 }; // 1x2
+    var out: [4]i16 = undefined; // 2x2
+    tile_2d_i16(&a, &out, 1, 2, 2, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 2);
+}

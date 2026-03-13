@@ -1597,8 +1597,7 @@ describe('numpy.linalg Module', () => {
       const result = linalg.matmul(aT, bT);
 
       expect(result.shape).toEqual([3, 3]);
-      // Row 0: [1,4] @ [1,3,5; 2,4,6]^T = [1,4] @ [[1,2],[3,4],[5,6]]
-      // Actually bT is [[1,3,5],[2,4,6]], so [1,4] @ [[1,3,5],[2,4,6]] = [1*1+4*2, 1*3+4*4, 1*5+4*6] = [9, 19, 29]
+      // Row 0: [1,4] @ [[1,3,5],[2,4,6]] = [1*1+4*2, 1*3+4*4, 1*5+4*6] = [9, 19, 29]
       expect(result.toArray()).toEqual([
         [9, 19, 29],
         [12, 26, 40],

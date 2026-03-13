@@ -269,3 +269,190 @@ test "add_c128 basic" {
     try testing.expectApproxEqAbs(out[0], 4.0, 1e-10);
     try testing.expectApproxEqAbs(out[1], 6.0, 1e-10);
 }
+
+test "add_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{3.0};
+    const b = [_]f64{4.0};
+    var out: [1]f64 = undefined;
+    add_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 7.0, 1e-10);
+}
+
+test "add_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, 2.0, 3.0 };
+    const b = [_]f64{ 4.0, 5.0, 6.0 };
+    var out: [3]f64 = undefined;
+    add_f64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 7.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 9.0, 1e-10);
+}
+
+test "add_f64 edge values inf nan" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    const a = [_]f64{ math.inf(f64), -math.inf(f64), 0.0, -0.0, 1.0 };
+    const b = [_]f64{ 1.0, 1.0, 0.0, 0.0, -1.0 };
+    var out: [5]f64 = undefined;
+    add_f64(&a, &b, &out, 5);
+    try testing.expect(math.isInf(out[0]) and out[0] > 0);
+    try testing.expect(math.isInf(out[1]) and out[1] < 0);
+    try testing.expectApproxEqAbs(out[2], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[4], 0.0, 1e-10);
+}
+
+test "add_f32 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1.0, 2.0, 3.0 };
+    const b = [_]f32{ 4.0, 5.0, 6.0 };
+    var out: [3]f32 = undefined;
+    add_f32(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 7.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 9.0, 1e-5);
+}
+
+test "add_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    var a: [7]f32 = undefined;
+    var b: [7]f32 = undefined;
+    for (0..7) |i| {
+        a[i] = @floatFromInt(i);
+        b[i] = @floatFromInt(i * 10);
+    }
+    var out: [7]f32 = undefined;
+    add_f32(&a, &b, &out, 7);
+    for (0..7) |i| {
+        const expected: f32 = @floatFromInt(i * 11);
+        try testing.expectApproxEqAbs(out[i], expected, 1e-5);
+    }
+}
+
+test "add_i32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, -2, 3, -4, 5, -6, 7 };
+    const b = [_]i32{ -1, 2, -3, 4, -5, 6, -7 };
+    var out: [7]i32 = undefined;
+    add_i32(&a, &b, &out, 7);
+    for (0..7) |i| {
+        try testing.expectEqual(out[i], 0);
+    }
+}
+
+test "add_i8 SIMD boundary N=17" {
+    const testing = @import("std").testing;
+    var a: [17]i8 = undefined;
+    var b: [17]i8 = undefined;
+    for (0..17) |i| {
+        a[i] = @intCast(i);
+        b[i] = @intCast(i);
+    }
+    var out: [17]i8 = undefined;
+    add_i8(&a, &b, &out, 17);
+    for (0..17) |i| {
+        const expected: i8 = @intCast(i * 2);
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "add_i16 SIMD boundary N=9" {
+    const testing = @import("std").testing;
+    var a: [9]i16 = undefined;
+    var b: [9]i16 = undefined;
+    for (0..9) |i| {
+        a[i] = @intCast(i * 100);
+        b[i] = @intCast(i * 200);
+    }
+    var out: [9]i16 = undefined;
+    add_i16(&a, &b, &out, 9);
+    for (0..9) |i| {
+        const expected: i16 = @intCast(i * 300);
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "add_scalar_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{5.0};
+    var out: [1]f64 = undefined;
+    add_scalar_f64(&a, &out, 1, 10.0);
+    try testing.expectApproxEqAbs(out[0], 15.0, 1e-10);
+}
+
+test "add_scalar_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, 2, 3, 4, 5, 6, 7 };
+    var out: [7]i32 = undefined;
+    add_scalar_i32(&a, &out, 7, 100);
+    for (0..7) |i| {
+        const expected: i32 = @as(i32, @intCast(i)) + 101;
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "add_c128 multiple complex" {
+    const testing = @import("std").testing;
+    // (1+2i) + (3+4i) = (4+6i), (5+6i) + (7+8i) = (12+14i), (9+0i) + (0+1i) = (9+1i)
+    const a = [_]f64{ 1, 2, 5, 6, 9, 0 };
+    const b = [_]f64{ 3, 4, 7, 8, 0, 1 };
+    var out: [6]f64 = undefined;
+    add_c128(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 12.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 14.0, 1e-10);
+    try testing.expectApproxEqAbs(out[4], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[5], 1.0, 1e-10);
+}
+
+test "add_scalar_c128 basic" {
+    const testing = @import("std").testing;
+    // (1+2i) + 5 = (6+2i), (3+4i) + 5 = (8+4i)
+    const a = [_]f64{ 1, 2, 3, 4 };
+    var out: [4]f64 = undefined;
+    add_scalar_c128(&a, &out, 2, 5.0);
+    try testing.expectApproxEqAbs(out[0], 6.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 8.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 4.0, 1e-10);
+}
+
+test "add_c64 multiple complex" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1, 2, 3, 4, 5, 6 };
+    const b = [_]f32{ 7, 8, 9, 10, 11, 12 };
+    var out: [6]f32 = undefined;
+    add_c64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 8.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 10.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 16.0, 1e-5);
+    try testing.expectApproxEqAbs(out[5], 18.0, 1e-5);
+}
+
+test "add_i64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 100, 200, 300 };
+    const b = [_]i64{ -50, -100, -150 };
+    var out: [3]i64 = undefined;
+    add_i64(&a, &b, &out, 3);
+    try testing.expectEqual(out[0], 50);
+    try testing.expectEqual(out[1], 100);
+    try testing.expectEqual(out[2], 150);
+}
+
+test "add_scalar_i8 SIMD boundary N=17" {
+    const testing = @import("std").testing;
+    var a: [17]i8 = undefined;
+    for (0..17) |i| {
+        a[i] = @intCast(i);
+    }
+    var out: [17]i8 = undefined;
+    add_scalar_i8(&a, &out, 17, 10);
+    for (0..17) |i| {
+        const expected: i8 = @intCast(i + 10);
+        try testing.expectEqual(out[i], expected);
+    }
+}

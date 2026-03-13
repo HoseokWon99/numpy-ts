@@ -234,3 +234,114 @@ test "div_c128 basic" {
     try testing.expectApproxEqAbs(out[2], 2.0, 1e-10);
     try testing.expectApproxEqAbs(out[3], 0.0, 1e-10);
 }
+
+test "div_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{12.0};
+    const b = [_]f64{3.0};
+    var out: [1]f64 = undefined;
+    div_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-10);
+}
+
+test "div_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 10.0, 20.0, 30.0 };
+    const b = [_]f64{ 2.0, 5.0, 6.0 };
+    var out: [3]f64 = undefined;
+    div_f64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 5.0, 1e-10);
+}
+
+test "div_f64 divide by zero produces inf" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    const a = [_]f64{ 1.0, -1.0, 0.0 };
+    const b = [_]f64{ 0.0, 0.0, 0.0 };
+    var out: [3]f64 = undefined;
+    div_f64(&a, &b, &out, 3);
+    try testing.expect(math.isInf(out[0]) and out[0] > 0);
+    try testing.expect(math.isInf(out[1]) and out[1] < 0);
+    try testing.expect(math.isNan(out[2]));
+}
+
+test "div_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    var a: [7]f32 = undefined;
+    var b: [7]f32 = undefined;
+    for (0..7) |i| {
+        a[i] = @as(f32, @floatFromInt(i + 1)) * 6.0;
+        b[i] = @floatFromInt(i + 1);
+    }
+    var out: [7]f32 = undefined;
+    div_f32(&a, &b, &out, 7);
+    for (0..7) |i| {
+        try testing.expectApproxEqAbs(out[i], 6.0, 1e-5);
+    }
+}
+
+test "div_scalar_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 10, 20, 30, 40, 50 };
+    var out: [5]f32 = undefined;
+    div_scalar_f32(&a, &out, 5, 10.0);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 5.0, 1e-5);
+}
+
+test "div_i32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 10, 20, 30 };
+    const b = [_]i32{ 3, 4, 5 };
+    var out: [3]f64 = undefined;
+    div_i32_f64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 10.0 / 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 6.0, 1e-10);
+}
+
+test "div_scalar_i32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 10, 20, 30, 40 };
+    var out: [4]f64 = undefined;
+    div_scalar_i32_f64(&a, &out, 4, 5.0);
+    try testing.expectApproxEqAbs(out[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 6.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 8.0, 1e-10);
+}
+
+test "div_i8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 10, -20, 30 };
+    const b = [_]i8{ 2, 4, -5 };
+    var out: [3]f64 = undefined;
+    div_i8_f64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -6.0, 1e-10);
+}
+
+test "div_c128 divide by identity" {
+    const testing = @import("std").testing;
+    // (3+4i)/(1+0i) = (3+4i)
+    const a = [_]f64{ 3, 4 };
+    const b = [_]f64{ 1, 0 };
+    var out: [2]f64 = undefined;
+    div_c128(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 4.0, 1e-10);
+}
+
+test "div_c64 basic" {
+    const testing = @import("std").testing;
+    // (3+4i)/(1+0i) = (3+4i)
+    const a = [_]f32{ 3, 4 };
+    const b = [_]f32{ 1, 0 };
+    var out: [2]f32 = undefined;
+    div_c64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 3.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 4.0, 1e-5);
+}

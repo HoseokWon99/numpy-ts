@@ -205,3 +205,272 @@ test "logical_xor_i8 large SIMD" {
         try testing.expectEqual(out[idx], a_bool ^ b_bool);
     }
 }
+
+test "logical_xor_i8 SIMD boundary N=17" {
+    const testing = @import("std").testing;
+    // N=17: 16 elements via SIMD + 1 remainder element
+    var a: [17]i8 = undefined;
+    var b: [17]i8 = undefined;
+    for (0..17) |idx| {
+        a[idx] = 1; // all nonzero
+        b[idx] = 1; // all nonzero
+    }
+    // Make last element (remainder) have b=0 to test scalar fallback
+    b[16] = 0;
+    var out: [17]u8 = undefined;
+    logical_xor_i8(&a, &b, &out, 17);
+    for (0..16) |idx| {
+        try testing.expectEqual(out[idx], 0); // T XOR T = 0
+    }
+    try testing.expectEqual(out[16], 1); // T XOR F = 1
+}
+
+test "logical_xor_f64 truth table" {
+    const testing = @import("std").testing;
+    // (0,0)->0, (0,nonzero)->1, (nonzero,0)->1, (nonzero,nonzero)->0
+    const a = [_]f64{ 0.0, 0.0, 5.0, 5.0 };
+    const b = [_]f64{ 0.0, 3.0, 0.0, 3.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_f64(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_f32 truth table" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 0.0, 0.0, 5.0, 5.0 };
+    const b = [_]f32{ 0.0, 3.0, 0.0, 3.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_f32(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_i64 truth table" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 0, 0, 7, 7 };
+    const b = [_]i64{ 0, 3, 0, 3 };
+    var out: [4]u8 = undefined;
+    logical_xor_i64(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_i32 truth table" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 0, 0, 7, 7 };
+    const b = [_]i32{ 0, 3, 0, 3 };
+    var out: [4]u8 = undefined;
+    logical_xor_i32(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_i16 truth table" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 0, 0, 7, 7 };
+    const b = [_]i16{ 0, 3, 0, 3 };
+    var out: [4]u8 = undefined;
+    logical_xor_i16(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_i8 truth table" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 0, 0, 7, 7 };
+    const b = [_]i8{ 0, 3, 0, 3 };
+    var out: [4]u8 = undefined;
+    logical_xor_i8(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_f64 mixed positive/negative nonzero" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ -1.0, -2.5, 0.0, 0.0 };
+    const b = [_]f64{ 1.0, -1.0, -3.0, 0.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_f64(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0); // T XOR T = 0
+    try testing.expectEqual(out[1], 0); // T XOR T = 0
+    try testing.expectEqual(out[2], 1); // F XOR T = 1
+    try testing.expectEqual(out[3], 0); // F XOR F = 0
+}
+
+test "logical_xor_i32 mixed positive/negative nonzero" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ -1, 0, 50, 0 };
+    const b = [_]i32{ 1, -1, 0, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_i32(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0); // T XOR T = 0
+    try testing.expectEqual(out[1], 1); // F XOR T = 1
+    try testing.expectEqual(out[2], 1); // T XOR F = 1
+    try testing.expectEqual(out[3], 0); // F XOR F = 0
+}
+
+test "logical_xor_f64 NaN Inf neg_zero as nonzero" {
+    const testing = @import("std").testing;
+    const inf = @as(f64, @bitCast(@as(u64, 0x7FF0000000000000)));
+    const nan = @as(f64, @bitCast(@as(u64, 0x7FF8000000000000)));
+    const neg_zero = @as(f64, @bitCast(@as(u64, 0x8000000000000000)));
+    // NaN != 0 is true, Inf != 0 is true, -0.0 == 0
+    const a = [_]f64{ nan, inf, neg_zero, inf };
+    const b = [_]f64{ 1.0, 0.0, 1.0, inf };
+    var out: [4]u8 = undefined;
+    logical_xor_f64(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0); // T XOR T = 0 (NaN != 0 is true)
+    try testing.expectEqual(out[1], 1); // T XOR F = 1
+    try testing.expectEqual(out[2], 1); // F XOR T = 1 (-0.0 == 0)
+    try testing.expectEqual(out[3], 0); // T XOR T = 0
+}
+
+test "logical_xor_f32 NaN Inf neg_zero as nonzero" {
+    const testing = @import("std").testing;
+    const inf = @as(f32, @bitCast(@as(u32, 0x7F800000)));
+    const nan = @as(f32, @bitCast(@as(u32, 0x7FC00000)));
+    const neg_zero = @as(f32, @bitCast(@as(u32, 0x80000000)));
+    const a = [_]f32{ nan, inf, neg_zero, inf };
+    const b = [_]f32{ 1.0, 0.0, 1.0, inf };
+    var out: [4]u8 = undefined;
+    logical_xor_f32(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0); // T XOR T = 0 (NaN != 0 is true)
+    try testing.expectEqual(out[1], 1); // T XOR F = 1
+    try testing.expectEqual(out[2], 1); // F XOR T = 1
+    try testing.expectEqual(out[3], 0); // T XOR T = 0
+}
+
+test "logical_xor_scalar_f64 zero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 0.0, 1.0, -2.0, 0.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_f64(&a, &out, 4, 0.0);
+    try testing.expectEqual(out[0], 0); // F XOR F = 0
+    try testing.expectEqual(out[1], 1); // T XOR F = 1
+    try testing.expectEqual(out[2], 1); // T XOR F = 1
+    try testing.expectEqual(out[3], 0); // F XOR F = 0
+}
+
+test "logical_xor_scalar_f64 nonzero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 0.0, 1.0, -2.0, 0.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_f64(&a, &out, 4, 5.0);
+    try testing.expectEqual(out[0], 1); // F XOR T = 1
+    try testing.expectEqual(out[1], 0); // T XOR T = 0
+    try testing.expectEqual(out[2], 0); // T XOR T = 0
+    try testing.expectEqual(out[3], 1); // F XOR T = 1
+}
+
+test "logical_xor_scalar_f32 zero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 0.0, 1.0, -2.0, 0.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_f32(&a, &out, 4, 0.0);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_scalar_f32 nonzero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 0.0, 1.0, -2.0, 0.0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_f32(&a, &out, 4, 5.0);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 1);
+}
+
+test "logical_xor_scalar_i64 zero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 0, 1, -2, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_i64(&a, &out, 4, 0);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_scalar_i64 nonzero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 0, 1, -2, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_i64(&a, &out, 4, 5);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 1);
+}
+
+test "logical_xor_scalar_i32 zero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 0, 1, -2, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_i32(&a, &out, 4, 0);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_scalar_i32 nonzero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 0, 1, -2, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_i32(&a, &out, 4, 5);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 1);
+}
+
+test "logical_xor_scalar_i16 zero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 0, 1, -2, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_i16(&a, &out, 4, 0);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+}
+
+test "logical_xor_scalar_i16 nonzero scalar" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 0, 1, -2, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_scalar_i16(&a, &out, 4, 5);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 1);
+}
+
+test "logical_xor_i8 mixed positive/negative" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ -128, 0, 127, 0 };
+    const b = [_]i8{ 0, -1, -1, 0 };
+    var out: [4]u8 = undefined;
+    logical_xor_i8(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 1); // T XOR F = 1
+    try testing.expectEqual(out[1], 1); // F XOR T = 1
+    try testing.expectEqual(out[2], 0); // T XOR T = 0
+    try testing.expectEqual(out[3], 0); // F XOR F = 0
+}

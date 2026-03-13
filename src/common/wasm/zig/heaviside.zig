@@ -67,3 +67,47 @@ test "heaviside_f64 binary" {
     try testing.expectApproxEqAbs(out[2], 0.7, 1e-10);
     try testing.expectApproxEqAbs(out[3], 1.0, 1e-10);
 }
+
+test "heaviside_scalar_f32 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]f32{ -2, -1, 0, 1, 2 };
+    var out: [5]f32 = undefined;
+    heaviside_scalar_f32(&x1, &out, 5, 0.5);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 0.5, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 1.0, 1e-5);
+}
+
+test "heaviside_f32 binary" {
+    const testing = @import("std").testing;
+    const x1 = [_]f32{ -1, 0, 0, 1 };
+    const x2 = [_]f32{ 99, 0.5, 0.7, 99 };
+    var out: [4]f32 = undefined;
+    heaviside_f32(&x1, &x2, &out, 4);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 0.5, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 0.7, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 1.0, 1e-5);
+}
+
+test "heaviside_scalar_f64 x2=0" {
+    const testing = @import("std").testing;
+    const x1 = [_]f64{ -1, 0, 1 };
+    var out: [3]f64 = undefined;
+    heaviside_scalar_f64(&x1, &out, 3, 0.0);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-10);
+}
+
+test "heaviside_scalar_f64 x2=1" {
+    const testing = @import("std").testing;
+    const x1 = [_]f64{ -1, 0, 1 };
+    var out: [3]f64 = undefined;
+    heaviside_scalar_f64(&x1, &out, 3, 1.0);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-10);
+}

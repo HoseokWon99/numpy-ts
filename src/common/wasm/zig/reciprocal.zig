@@ -85,3 +85,63 @@ test "reciprocal_f32 basic" {
     try testing.expectApproxEqAbs(out[1], 0.25, 1e-5);
     try testing.expectApproxEqAbs(out[4], 0.125, 1e-5);
 }
+
+test "reciprocal_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{8.0};
+    var out: [1]f64 = undefined;
+    reciprocal_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.125, 1e-10);
+}
+
+test "reciprocal_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, -2.0, 0.5 };
+    var out: [3]f64 = undefined;
+    reciprocal_f64(&a, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -0.5, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 2.0, 1e-10);
+}
+
+test "reciprocal_f64 inf for zero" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    const a = [_]f64{ 0.0, -0.0 };
+    var out: [2]f64 = undefined;
+    reciprocal_f64(&a, &out, 2);
+    try testing.expect(math.isInf(out[0]) and out[0] > 0);
+    try testing.expect(math.isInf(out[1]) and out[1] < 0);
+}
+
+test "reciprocal_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1, 2, 4, 5, 8, 10, 20 };
+    var out: [7]f32 = undefined;
+    reciprocal_f32(&a, &out, 7);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 0.5, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 0.25, 1e-5);
+}
+
+test "reciprocal_i32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, 2, 4, -5 };
+    var out: [4]f64 = undefined;
+    reciprocal_i32_f64(&a, &out, 4);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.5, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 0.25, 1e-10);
+    try testing.expectApproxEqAbs(out[3], -0.2, 1e-10);
+}
+
+test "reciprocal_i8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 1, 2, -4, 5 };
+    var out: [4]f64 = undefined;
+    reciprocal_i8_f64(&a, &out, 4);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.5, 1e-10);
+    try testing.expectApproxEqAbs(out[2], -0.25, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 0.2, 1e-10);
+}

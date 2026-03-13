@@ -209,3 +209,87 @@ test "clip_u8 unsigned values above 127" {
     try testing.expectEqual(out[4], 200); // 200 → stays 200
     try testing.expectEqual(out[5], 200); // 255 → clamped to 200
 }
+
+test "clip_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{15.0};
+    var out: [1]f64 = undefined;
+    clip_f64(&a, &out, 1, 0.0, 10.0);
+    try testing.expectApproxEqAbs(out[0], 10.0, 1e-10);
+}
+
+test "clip_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ -5.0, 5.0, 15.0 };
+    var out: [3]f64 = undefined;
+    clip_f64(&a, &out, 3, 0.0, 10.0);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 10.0, 1e-10);
+}
+
+test "clip_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ -10, -5, 0, 5, 10, 15, 20 };
+    var out: [7]f32 = undefined;
+    clip_f32(&a, &out, 7, -2.0, 12.0);
+    try testing.expectApproxEqAbs(out[0], -2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], -2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 0.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 10.0, 1e-5);
+    try testing.expectApproxEqAbs(out[5], 12.0, 1e-5);
+    try testing.expectApproxEqAbs(out[6], 12.0, 1e-5);
+}
+
+test "clip_i32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ -100, -50, 0, 50, 100, 150, 200 };
+    var out: [7]i32 = undefined;
+    clip_i32(&a, &out, 7, -20, 120);
+    try testing.expectEqual(out[0], -20);
+    try testing.expectEqual(out[1], -20);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 50);
+    try testing.expectEqual(out[4], 100);
+    try testing.expectEqual(out[5], 120);
+    try testing.expectEqual(out[6], 120);
+}
+
+test "clip_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ -100, 0, 50, 200 };
+    var out: [4]i64 = undefined;
+    clip_i64(&a, &out, 4, -10, 100);
+    try testing.expectEqual(out[0], -10);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 50);
+    try testing.expectEqual(out[3], 100);
+}
+
+test "clip_i16 SIMD boundary N=9" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ -500, -100, 0, 50, 100, 200, 300, 400, 500 };
+    var out: [9]i16 = undefined;
+    clip_i16(&a, &out, 9, -50, 250);
+    try testing.expectEqual(out[0], -50);
+    try testing.expectEqual(out[1], -50);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 50);
+    try testing.expectEqual(out[7], 250);
+    try testing.expectEqual(out[8], 250);
+}
+
+test "clip_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{ 0, 5, 50, 100, 200, 250, 300 };
+    var out: [7]u32 = undefined;
+    clip_u32(&a, &out, 7, 10, 200);
+    try testing.expectEqual(out[0], 10);
+    try testing.expectEqual(out[1], 10);
+    try testing.expectEqual(out[2], 50);
+    try testing.expectEqual(out[3], 100);
+    try testing.expectEqual(out[4], 200);
+    try testing.expectEqual(out[5], 200);
+    try testing.expectEqual(out[6], 200);
+}
