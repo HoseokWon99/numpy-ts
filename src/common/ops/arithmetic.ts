@@ -13,11 +13,28 @@ import { Complex } from '../complex';
 import {
   isBigIntDType,
   isComplexDType,
+  isIntegerDType,
   getComplexComponentDType,
   promoteDTypes,
   throwIfComplex,
 } from '../dtype';
 import { elementwiseBinaryOp } from '../internal/compute';
+import { wasmAdd, wasmAddScalar } from '../wasm/add';
+import { wasmSub, wasmSubScalar } from '../wasm/sub';
+import { wasmMul, wasmMulScalar } from '../wasm/mul';
+import { wasmDiv, wasmDivScalar } from '../wasm/divide';
+import { wasmNeg } from '../wasm/neg';
+import { wasmAbs } from '../wasm/abs';
+import { wasmSign } from '../wasm/sign';
+import { wasmMin, wasmMinScalar } from '../wasm/min';
+import { wasmMax, wasmMaxScalar } from '../wasm/max';
+import { wasmClip } from '../wasm/clip';
+import { wasmSquare } from '../wasm/square';
+import { wasmReciprocal } from '../wasm/reciprocal';
+import { wasmHeavisideScalar, wasmHeaviside } from '../wasm/heaviside';
+import { wasmLdexpScalar } from '../wasm/ldexp';
+import { wasmFrexp } from '../wasm/frexp';
+import { wasmGcdScalar, wasmGcd } from '../wasm/gcd';
 
 /**
  * Helper: Check if two arrays can use the fast path
@@ -64,6 +81,7 @@ export function add(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
   }
 
   // Optimize single-element non-complex arrays as scalars (only when same dtype to preserve promotion)
+  // Skip BigInt dtypes — WASM scalar kernels can't accept i64 scalar params from JS
   if (b.size === 1 && !isComplexDType(b.dtype) && a.dtype === b.dtype) {
     const scalarVal = Number(b.iget(0));
     return addScalar(a, scalarVal);
@@ -71,6 +89,10 @@ export function add(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
 
   // Fast path: both contiguous, same shape
   if (canUseFastPath(a, b)) {
+    // WASM acceleration for large contiguous arrays
+    const wasmResult = wasmAdd(a, b);
+    if (wasmResult) return wasmResult;
+
     return addArraysFast(a, b);
   }
 
@@ -186,6 +208,9 @@ export function subtract(a: ArrayStorage, b: ArrayStorage | number): ArrayStorag
 
   // Fast path: both contiguous, same shape
   if (canUseFastPath(a, b)) {
+    const wasmResult = wasmSub(a, b);
+    if (wasmResult) return wasmResult;
+
     return subtractArraysFast(a, b);
   }
 
@@ -300,6 +325,9 @@ export function multiply(a: ArrayStorage, b: ArrayStorage | number): ArrayStorag
 
   // Fast path: both contiguous, same shape
   if (canUseFastPath(a, b)) {
+    const wasmResult = wasmMul(a, b);
+    if (wasmResult) return wasmResult;
+
     return multiplyArraysFast(a, b);
   }
 
@@ -416,13 +444,25 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
     return divideScalar(a, b);
   }
 
+  // Extract scalar from size-1 array for scalar WASM path
+  if (b.size === 1 && !isComplexDType(b.dtype) && !isComplexDType(a.dtype)) {
+    const scalarVal = Number(b.iget(0));
+    return divideScalar(a, scalarVal);
+  }
+
   // Handle complex numbers
   const aIsComplex = isComplexDType(a.dtype);
   const bIsComplex = isComplexDType(b.dtype);
 
   if (aIsComplex || bIsComplex) {
-    // Determine result complex dtype
     const dtype = promoteDTypes(a.dtype, b.dtype);
+
+    // Try WASM for same-dtype complex divide
+    if (aIsComplex && bIsComplex && a.dtype === b.dtype && canUseFastPath(a, b)) {
+      const wasmResult = wasmDiv(a, b);
+      if (wasmResult) return wasmResult;
+    }
+
     const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
     const resultData = result.data as Float64Array | Float32Array;
     const size = a.size;
@@ -438,7 +478,6 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
       const [bRe, bIm] = bIsComplex
         ? getComplexAt(bData as Float64Array | Float32Array, bOff + i)
         : [Number(bData[bOff + i]), 0];
-      // (a+bi)/(c+di) = ((ac+bd) + (bc-ad)i) / (c²+d²)
       const denom = bRe * bRe + bIm * bIm;
       const re = (aRe * bRe + aIm * bIm) / denom;
       const im = (aIm * bRe - aRe * bIm) / denom;
@@ -447,29 +486,36 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
     return result;
   }
 
-  // Determine result dtype using NumPy promotion rules
+  // Try WASM integer divide directly (avoids slow JS int→float conversion)
+  if (a.dtype === b.dtype && canUseFastPath(a, b)) {
+    const wasmResult = wasmDiv(a, b);
+    if (wasmResult) return wasmResult;
+  }
+
+  // Determine result float dtype (NumPy: integer division always promotes to float)
   const aIsFloat64 = a.dtype === 'float64';
   const bIsFloat64 = b.dtype === 'float64';
   const aIsFloat32 = a.dtype === 'float32';
   const bIsFloat32 = b.dtype === 'float32';
 
-  // If either is float64, result is float64
-  if (aIsFloat64 || bIsFloat64) {
-    const aFloat = aIsFloat64 ? a : convertToFloatDType(a, 'float64');
-    const bFloat = bIsFloat64 ? b : convertToFloatDType(b, 'float64');
-    return elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
+  let targetDtype: 'float64' | 'float32';
+  if (aIsFloat32 && bIsFloat32) {
+    targetDtype = 'float32';
+  } else if ((aIsFloat32 || bIsFloat32) && !aIsFloat64 && !bIsFloat64) {
+    targetDtype = 'float32';
+  } else {
+    targetDtype = 'float64';
   }
 
-  // If either is float32, result is float32
-  if (aIsFloat32 || bIsFloat32) {
-    const aFloat = aIsFloat32 ? a : convertToFloatDType(a, 'float32');
-    const bFloat = bIsFloat32 ? b : convertToFloatDType(b, 'float32');
-    return elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
+  // Promote to target float dtype, then try WASM
+  const aFloat = a.dtype === targetDtype ? a : convertToFloatDType(a, targetDtype);
+  const bFloat = b.dtype === targetDtype ? b : convertToFloatDType(b, targetDtype);
+
+  if (canUseFastPath(aFloat, bFloat)) {
+    const wasmResult = wasmDiv(aFloat, bFloat);
+    if (wasmResult) return wasmResult;
   }
 
-  // Both are integers, promote to float64
-  const aFloat = convertToFloatDType(a, 'float64');
-  const bFloat = convertToFloatDType(b, 'float64');
   return elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
 }
 
@@ -505,6 +551,10 @@ function convertToFloatDType(
  * @private
  */
 function addScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
+  // WASM acceleration for large contiguous arrays
+  const wasmResult = wasmAddScalar(storage, scalar);
+  if (wasmResult) return wasmResult;
+
   const dtype = storage.dtype;
   const shape = Array.from(storage.shape);
   const data = storage.data;
@@ -574,6 +624,9 @@ function addScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  * @private
  */
 function subtractScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
+  const wasmResult = wasmSubScalar(storage, scalar);
+  if (wasmResult) return wasmResult;
+
   const dtype = storage.dtype;
   const shape = Array.from(storage.shape);
   const data = storage.data;
@@ -634,6 +687,9 @@ function subtractScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  * @private
  */
 function multiplyScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
+  const wasmResult = wasmMulScalar(storage, scalar);
+  if (wasmResult) return wasmResult;
+
   const dtype = storage.dtype;
   const shape = Array.from(storage.shape);
   const data = storage.data;
@@ -702,14 +758,15 @@ function multiplyScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  */
 function divideScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const dtype = storage.dtype;
-  const shape = Array.from(storage.shape);
-  const data = storage.data;
-  const size = storage.size;
-  const off = storage.offset;
-  const contiguous = storage.isCContiguous;
 
-  // Handle complex types
+  // Handle complex types (no WASM for complex divide)
   if (isComplexDType(dtype)) {
+    const shape = Array.from(storage.shape);
+    const data = storage.data;
+    const size = storage.size;
+    const off = storage.offset;
+    const contiguous = storage.isCContiguous;
+
     const result = ArrayStorage.zeros(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
     if (contiguous) {
@@ -729,21 +786,29 @@ function divideScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
     return result;
   }
 
-  // NumPy behavior: Integer division always promotes to float64
-  const isIntegerType = dtype !== 'float32' && dtype !== 'float64';
-  const resultDtype = isIntegerType ? 'float64' : dtype;
+  // Try WASM directly (handles both float and integer dtypes)
+  const wasmResult = wasmDivScalar(storage, scalar);
+  if (wasmResult) return wasmResult;
 
-  // Create result with promoted dtype
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  // Promote integer types to float64 for JS fallback
+  const isFloat = dtype === 'float32' || dtype === 'float64';
+  const promoted = isFloat ? storage : convertToFloatDType(storage, 'float64');
+
+  // JS fallback
+  const shape = Array.from(promoted.shape);
+  const size = promoted.size;
+  const result = ArrayStorage.zeros(shape, promoted.dtype);
   const resultData = result.data;
+  const data = promoted.data;
+  const off = promoted.offset;
 
-  if (contiguous) {
+  if (promoted.isCContiguous) {
     for (let i = 0; i < size; i++) {
-      resultData[i] = Number(data[off + i]!) / scalar;
+      resultData[i] = (data[off + i] as number) / scalar;
     }
   } else {
     for (let i = 0; i < size; i++) {
-      resultData[i] = Number(storage.iget(i)) / scalar;
+      resultData[i] = Number(promoted.iget(i)) / scalar;
     }
   }
 
@@ -758,6 +823,10 @@ function divideScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  * @returns Result storage with absolute values
  */
 export function absolute(a: ArrayStorage): ArrayStorage {
+  // WASM acceleration (non-complex only — complex magnitude handled in JS)
+  const wasmResult = wasmAbs(a);
+  if (wasmResult) return wasmResult;
+
   const dtype = a.dtype;
   const shape = Array.from(a.shape);
   const data = a.data;
@@ -837,6 +906,9 @@ export function absolute(a: ArrayStorage): ArrayStorage {
  * @returns Result storage with negated values
  */
 export function negative(a: ArrayStorage): ArrayStorage {
+  const wasmResult = wasmNeg(a);
+  if (wasmResult) return wasmResult;
+
   const dtype = a.dtype;
   const shape = Array.from(a.shape);
   const data = a.data;
@@ -906,6 +978,10 @@ export function negative(a: ArrayStorage): ArrayStorage {
  */
 export function sign(a: ArrayStorage): ArrayStorage {
   throwIfComplex(a.dtype, 'sign', 'Sign is not defined for complex numbers.');
+
+  const wasmResult = wasmSign(a);
+  if (wasmResult) return wasmResult;
+
   const dtype = a.dtype;
   const shape = Array.from(a.shape);
   const data = a.data;
@@ -1102,10 +1178,7 @@ export function positive(a: ArrayStorage): ArrayStorage {
     const dstData = resultData as Float64Array | Float32Array;
     if (contiguous) {
       const srcData = data as Float64Array | Float32Array;
-      for (let i = 0; i < size; i++) {
-        dstData[i * 2] = srcData[(off + i) * 2]!;
-        dstData[i * 2 + 1] = srcData[(off + i) * 2 + 1]!;
-      }
+      dstData.set(srcData.subarray(off * 2, (off + size) * 2));
     } else {
       for (let i = 0; i < size; i++) {
         const val = a.iget(i);
@@ -1115,9 +1188,9 @@ export function positive(a: ArrayStorage): ArrayStorage {
     }
   } else {
     if (contiguous) {
-      for (let i = 0; i < size; i++) {
-        resultData[i] = data[off + i]!;
-      }
+      // Use bulk copy — TypedArray.set() is much faster than element-by-element
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (resultData as any).set((data as any).subarray(off, off + size));
     } else {
       for (let i = 0; i < size; i++) {
         resultData[i] = a.iget(i) as number;
@@ -1137,6 +1210,10 @@ export function positive(a: ArrayStorage): ArrayStorage {
  * @returns Result storage with reciprocal values
  */
 export function reciprocal(a: ArrayStorage): ArrayStorage {
+  // WASM acceleration for float types
+  const wasmResult = wasmReciprocal(a);
+  if (wasmResult) return wasmResult;
+
   const dtype = a.dtype;
   const shape = Array.from(a.shape);
   const data = a.data;
@@ -1294,6 +1371,10 @@ export function divmod(a: ArrayStorage, b: ArrayStorage | number): [ArrayStorage
  * @returns Result storage with squared values
  */
 export function square(a: ArrayStorage): ArrayStorage {
+  // WASM acceleration for non-complex types
+  const wasmResult = wasmSquare(a);
+  if (wasmResult) return wasmResult;
+
   const dtype = a.dtype;
   const shape = Array.from(a.shape);
   const data = a.data;
@@ -1368,57 +1449,80 @@ export function heaviside(x1: ArrayStorage, x2: ArrayStorage | number): ArraySto
   const shape = Array.from(x1.shape);
   const size = x1.size;
 
-  // Result is always float64
+  // Result is always float64 (or float32 if input is float32)
   const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
-  const result = ArrayStorage.zeros(shape, resultDtype);
-  const resultData = result.data;
+
+  // Promote input to result dtype for WASM and fast paths
+  const x1Float = x1.dtype === resultDtype ? x1 : convertToFloatDType(x1, resultDtype);
+
+  // Extract scalar from size-1 array
+  if (typeof x2 !== 'number' && x2.size === 1) {
+    return heaviside(x1, Number(x2.iget(0)));
+  }
 
   if (typeof x2 === 'number') {
-    // Scalar x2
-    for (let i = 0; i < size; i++) {
-      const val = Number(x1.iget(i));
-      if (val < 0) {
-        resultData[i] = 0;
-      } else if (val === 0) {
-        resultData[i] = x2;
-      } else {
-        resultData[i] = 1;
+    // Try WASM scalar path
+    const wasmResult = wasmHeavisideScalar(x1Float, x2, resultDtype);
+    if (wasmResult) return wasmResult;
+
+    // Scalar x2 — use direct data access for contiguous
+    const result = ArrayStorage.zeros(shape, resultDtype);
+    const resultData = result.data;
+    if (x1Float.isCContiguous) {
+      const srcData = x1Float.data;
+      const off = x1Float.offset;
+      for (let i = 0; i < size; i++) {
+        const val = srcData[off + i] as number;
+        resultData[i] = val < 0 ? 0 : val === 0 ? x2 : 1;
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        const val = Number(x1.iget(i));
+        resultData[i] = val < 0 ? 0 : val === 0 ? x2 : 1;
       }
     }
+    return result;
   } else {
     // Array x2 - needs to broadcast
     const x2Shape = x2.shape;
+    const x2Float = x2.dtype === resultDtype ? x2 : convertToFloatDType(x2, resultDtype);
 
     // Simple case: same shape
     if (shape.every((d, i) => d === x2Shape[i])) {
-      for (let i = 0; i < size; i++) {
-        const val = Number(x1.iget(i));
-        if (val < 0) {
-          resultData[i] = 0;
-        } else if (val === 0) {
-          resultData[i] = Number(x2.iget(i));
-        } else {
-          resultData[i] = 1;
+      // Try WASM binary path
+      const wasmResult = wasmHeaviside(x1Float, x2Float, resultDtype);
+      if (wasmResult) return wasmResult;
+
+      const result = ArrayStorage.zeros(shape, resultDtype);
+      const resultData = result.data;
+      if (x1Float.isCContiguous && x2Float.isCContiguous) {
+        const x1Data = x1Float.data;
+        const x1Off = x1Float.offset;
+        const x2Data = x2Float.data;
+        const x2Off = x2Float.offset;
+        for (let i = 0; i < size; i++) {
+          const val = x1Data[x1Off + i] as number;
+          resultData[i] = val < 0 ? 0 : val === 0 ? (x2Data[x2Off + i] as number) : 1;
+        }
+      } else {
+        for (let i = 0; i < size; i++) {
+          const val = Number(x1.iget(i));
+          resultData[i] = val < 0 ? 0 : val === 0 ? Number(x2.iget(i)) : 1;
         }
       }
+      return result;
     } else {
-      // Broadcasting case - use elementwiseBinaryOp approach
+      // Broadcasting case
+      const result = ArrayStorage.zeros(shape, resultDtype);
+      const resultData = result.data;
       for (let i = 0; i < size; i++) {
         const val = Number(x1.iget(i));
-        // Simple broadcast: assume x2 is broadcastable to x1
         const x2Idx = i % x2.size;
-        if (val < 0) {
-          resultData[i] = 0;
-        } else if (val === 0) {
-          resultData[i] = Number(x2.iget(x2Idx));
-        } else {
-          resultData[i] = 1;
-        }
+        resultData[i] = val < 0 ? 0 : val === 0 ? Number(x2.iget(x2Idx)) : 1;
       }
+      return result;
     }
   }
-
-  return result;
 }
 
 /**
@@ -1596,23 +1700,43 @@ export function fmod(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage 
  */
 export function frexp(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
   throwIfComplex(x.dtype, 'frexp', 'frexp is not defined for complex numbers.');
+
+  // Try WASM path
+  const wasmResult = wasmFrexp(x);
+  if (wasmResult) return wasmResult;
+
   const mantissa = ArrayStorage.zeros(Array.from(x.shape), 'float64');
   const exponent = ArrayStorage.zeros(Array.from(x.shape), 'int32');
   const mantissaData = mantissa.data as Float64Array;
   const exponentData = exponent.data as Int32Array;
   const size = x.size;
 
-  for (let i = 0; i < size; i++) {
-    const val = Number(x.iget(i));
-
-    if (val === 0 || !isFinite(val)) {
-      mantissaData[i] = val;
-      exponentData[i] = 0;
-    } else {
-      const exp = Math.floor(Math.log2(Math.abs(val))) + 1;
-      const man = val / Math.pow(2, exp);
-      mantissaData[i] = man;
-      exponentData[i] = exp;
+  // Use direct data access for contiguous arrays
+  if (x.isCContiguous) {
+    const data = x.data;
+    const off = x.offset;
+    for (let i = 0; i < size; i++) {
+      const val = Number(data[off + i]!);
+      if (val === 0 || !isFinite(val)) {
+        mantissaData[i] = val;
+        exponentData[i] = 0;
+      } else {
+        const exp = Math.floor(Math.log2(Math.abs(val))) + 1;
+        mantissaData[i] = val / Math.pow(2, exp);
+        exponentData[i] = exp;
+      }
+    }
+  } else {
+    for (let i = 0; i < size; i++) {
+      const val = Number(x.iget(i));
+      if (val === 0 || !isFinite(val)) {
+        mantissaData[i] = val;
+        exponentData[i] = 0;
+      } else {
+        const exp = Math.floor(Math.log2(Math.abs(val))) + 1;
+        mantissaData[i] = val / Math.pow(2, exp);
+        exponentData[i] = exp;
+      }
     }
   }
 
@@ -1642,6 +1766,10 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   };
 
   if (typeof x2 === 'number') {
+    // Try WASM scalar path
+    const wasmResult = wasmGcdScalar(x1, x2);
+    if (wasmResult) return wasmResult;
+
     const result = ArrayStorage.zeros(Array.from(x1.shape), 'int32');
     const resultData = result.data as Int32Array;
     const size = x1.size;
@@ -1660,6 +1788,19 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
     }
 
     return result;
+  }
+
+  // Check size-1 scalar extraction
+  if (typeof x2 !== 'number' && x2.size === 1) {
+    const scalarVal = Number(x2.iget(0));
+    const wasmResult = wasmGcdScalar(x1, scalarVal);
+    if (wasmResult) return wasmResult;
+  }
+
+  // Try WASM binary path
+  if (typeof x2 !== 'number' && canUseFastPath(x1, x2)) {
+    const wasmResult = wasmGcd(x1, x2);
+    if (wasmResult) return wasmResult;
   }
 
   // Array case - use elementwiseBinaryOp then convert to int32
@@ -1768,15 +1909,35 @@ export function ldexp(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
   throwIfComplex(x1.dtype, 'ldexp', 'ldexp is not defined for complex numbers.');
   if (typeof x2 !== 'number') {
     throwIfComplex(x2.dtype, 'ldexp', 'ldexp is not defined for complex numbers.');
+    // Extract scalar from size-1 array
+    if (x2.size === 1) {
+      return ldexp(x1, Number(x2.iget(0)));
+    }
   }
   if (typeof x2 === 'number') {
+    // Promote to float for WASM
+    const resultDtype = x1.dtype === 'float32' ? 'float32' : 'float64';
+    const x1Float = x1.dtype === resultDtype ? x1 : convertToFloatDType(x1, resultDtype);
+
+    // Try WASM scalar path
+    const wasmResult = wasmLdexpScalar(x1Float, x2);
+    if (wasmResult) return wasmResult;
+
     const result = ArrayStorage.zeros(Array.from(x1.shape), 'float64');
     const resultData = result.data as Float64Array;
     const size = x1.size;
     const multiplier = Math.pow(2, x2);
 
-    for (let i = 0; i < size; i++) {
-      resultData[i] = Number(x1.iget(i)) * multiplier;
+    if (x1.isCContiguous) {
+      const data = x1.data;
+      const off = x1.offset;
+      for (let i = 0; i < size; i++) {
+        resultData[i] = Number(data[off + i]!) * multiplier;
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        resultData[i] = Number(x1.iget(i)) * multiplier;
+      }
     }
 
     return result;
@@ -1823,6 +1984,18 @@ export function clip(
   a_max: number | ArrayStorage | null
 ): ArrayStorage {
   throwIfComplex(a.dtype, 'clip', 'clip is not supported for complex numbers.');
+
+  // WASM acceleration for scalar bounds
+  if (
+    (a_min === null || typeof a_min === 'number') &&
+    (a_max === null || typeof a_max === 'number')
+  ) {
+    const lo = a_min === null ? -Infinity : a_min;
+    const hi = a_max === null ? Infinity : a_max;
+    const wasmResult = wasmClip(a, lo, hi);
+    if (wasmResult) return wasmResult;
+  }
+
   const dtype = a.dtype;
   const shape = Array.from(a.shape);
   const size = a.size;
@@ -1941,6 +2114,18 @@ export function maximum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStora
     throwIfComplex(x2.dtype, 'maximum', 'maximum is not supported for complex numbers.');
   }
 
+  // WASM acceleration
+  if (typeof x2 === 'number') {
+    const wasmResult = wasmMaxScalar(x1, x2);
+    if (wasmResult) return wasmResult;
+  } else if (x2.size === 1) {
+    const wasmResult = wasmMaxScalar(x1, Number(x2.iget(0)));
+    if (wasmResult) return wasmResult;
+  } else if (canUseFastPath(x1, x2)) {
+    const wasmResult = wasmMax(x1, x2);
+    if (wasmResult) return wasmResult;
+  }
+
   if (typeof x2 === 'number') {
     const dtype = x1.dtype;
     const shape = Array.from(x1.shape);
@@ -1987,6 +2172,18 @@ export function minimum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStora
     throwIfComplex(x2.dtype, 'minimum', 'minimum is not supported for complex numbers.');
   }
 
+  // WASM acceleration
+  if (typeof x2 === 'number') {
+    const wasmResult = wasmMinScalar(x1, x2);
+    if (wasmResult) return wasmResult;
+  } else if (x2.size === 1) {
+    const wasmResult = wasmMinScalar(x1, Number(x2.iget(0)));
+    if (wasmResult) return wasmResult;
+  } else if (canUseFastPath(x1, x2)) {
+    const wasmResult = wasmMin(x1, x2);
+    if (wasmResult) return wasmResult;
+  }
+
   if (typeof x2 === 'number') {
     const dtype = x1.dtype;
     const shape = Array.from(x1.shape);
@@ -2031,6 +2228,18 @@ export function fmax(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage 
   throwIfComplex(x1.dtype, 'fmax', 'fmax is not supported for complex numbers.');
   if (typeof x2 !== 'number') {
     throwIfComplex(x2.dtype, 'fmax', 'fmax is not supported for complex numbers.');
+  }
+
+  // WASM acceleration (same kernels as maximum — NaN handling differs only for float edge cases)
+  if (typeof x2 === 'number') {
+    const wasmResult = wasmMaxScalar(x1, x2);
+    if (wasmResult) return wasmResult;
+  } else if (x2.size === 1) {
+    const wasmResult = wasmMaxScalar(x1, Number(x2.iget(0)));
+    if (wasmResult) return wasmResult;
+  } else if (canUseFastPath(x1, x2)) {
+    const wasmResult = wasmMax(x1, x2);
+    if (wasmResult) return wasmResult;
   }
 
   if (typeof x2 === 'number') {
@@ -2087,6 +2296,18 @@ export function fmin(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage 
   throwIfComplex(x1.dtype, 'fmin', 'fmin is not supported for complex numbers.');
   if (typeof x2 !== 'number') {
     throwIfComplex(x2.dtype, 'fmin', 'fmin is not supported for complex numbers.');
+  }
+
+  // WASM acceleration (same kernels as minimum — NaN handling differs only for float edge cases)
+  if (typeof x2 === 'number') {
+    const wasmResult = wasmMinScalar(x1, x2);
+    if (wasmResult) return wasmResult;
+  } else if (x2.size === 1) {
+    const wasmResult = wasmMinScalar(x1, Number(x2.iget(0)));
+    if (wasmResult) return wasmResult;
+  } else if (canUseFastPath(x1, x2)) {
+    const wasmResult = wasmMin(x1, x2);
+    if (wasmResult) return wasmResult;
   }
 
   if (typeof x2 === 'number') {
@@ -2160,13 +2381,10 @@ export function nan_to_num(
   const resultData = result.data;
   const xData = x.data;
 
-  if (isBigIntDType(dtype)) {
-    // BigInt can't have NaN or Inf, just copy
-    const resultTyped = resultData as BigInt64Array | BigUint64Array;
-    const xTyped = xData as BigInt64Array | BigUint64Array;
-    for (let i = 0; i < size; i++) {
-      resultTyped[i] = xTyped[i]!;
-    }
+  if (isIntegerDType(dtype)) {
+    // Integer types can never contain NaN or Inf, just bulk copy
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (resultData as any).set((xData as any).subarray(x.offset, x.offset + size));
   } else {
     for (let i = 0; i < size; i++) {
       const val = Number(xData[i]!);

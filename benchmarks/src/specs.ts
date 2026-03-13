@@ -232,6 +232,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
   // ========================================
 
   if (Array.isArray(sizes.medium)) {
+    // --- add ---
     specs.push({
       name: `add [${sizes.medium.join('x')}] + scalar`,
       category: 'arithmetic',
@@ -257,6 +258,33 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // --- subtract ---
+    specs.push({
+      name: `subtract [${sizes.medium.join('x')}] - scalar`,
+      category: 'arithmetic',
+      operation: 'subtract',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 1 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `subtract [${sizes.medium.join('x')}] - [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'subtract',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      includeInQuick: true,
+      warmup,
+    });
+
+    // --- multiply ---
     specs.push({
       name: `multiply [${sizes.medium.join('x')}] * scalar`,
       category: 'arithmetic',
@@ -282,65 +310,135 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    // --- divide ---
+    specs.push({
+      name: `divide [${sizes.medium.join('x')}] / scalar`,
+      category: 'arithmetic',
+      operation: 'divide',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 3 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `divide [${sizes.medium.join('x')}] / [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'divide',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      includeInQuick: true,
+      warmup,
+    });
+
+    // --- mod ---
     specs.push({
       name: `mod [${sizes.medium.join('x')}] % scalar`,
       category: 'arithmetic',
       operation: 'mod',
       setup: {
-        a: { shape: sizes.medium, fill: 'arange' }, // arange data
-        b: { shape: [1], value: 7 }, // Scalar 7
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 7 },
       },
       iterations,
       warmup,
     });
 
+    specs.push({
+      name: `mod [${sizes.medium.join('x')}] % [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'mod',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- floor_divide ---
     specs.push({
       name: `floor_divide [${sizes.medium.join('x')}] // scalar`,
       category: 'arithmetic',
       operation: 'floor_divide',
       setup: {
-        a: { shape: sizes.medium, fill: 'arange' }, // arange data
-        b: { shape: [1], value: 3 }, // Scalar 3 (avoid zeros)
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 3 },
       },
       iterations,
       warmup,
     });
 
     specs.push({
-      name: `reciprocal [${sizes.medium.join('x')}]`,
+      name: `floor_divide [${sizes.medium.join('x')}] // [${sizes.medium.join('x')}]`,
       category: 'arithmetic',
-      operation: 'reciprocal',
+      operation: 'floor_divide',
       setup: {
-        a: { shape: sizes.medium, fill: 'ones' }, // Use ones to avoid 1/0
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- remainder ---
+    specs.push({
+      name: `remainder [${sizes.medium.join('x')}] % scalar`,
+      category: 'arithmetic',
+      operation: 'remainder',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 7 },
       },
       iterations,
       warmup,
     });
 
     specs.push({
-      name: `cbrt [${sizes.medium.join('x')}]`,
+      name: `remainder [${sizes.medium.join('x')}] % [${sizes.medium.join('x')}]`,
       category: 'arithmetic',
-      operation: 'cbrt',
+      operation: 'remainder',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- float_power ---
+    specs.push({
+      name: `float_power [${sizes.medium.join('x')}] ** scalar`,
+      category: 'arithmetic',
+      operation: 'float_power',
       setup: {
         a: { shape: sizes.medium, fill: 'arange', value: 1 },
+        b: { shape: [1], value: 2 },
       },
       iterations,
       warmup,
     });
 
     specs.push({
-      name: `fabs [${sizes.medium.join('x')}]`,
+      name: `float_power [${sizes.medium.join('x')}] ** [${sizes.medium.join('x')}]`,
       category: 'arithmetic',
-      operation: 'fabs',
+      operation: 'float_power',
       setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -100 },
+        a: { shape: sizes.medium, fill: 'arange', value: 1 },
+        b: { shape: sizes.medium, fill: 'ones' },
       },
       iterations,
       warmup,
     });
 
+    // --- divmod ---
     specs.push({
-      name: `divmod [${sizes.medium.join('x')}] % scalar`,
+      name: `divmod [${sizes.medium.join('x')}] scalar`,
       category: 'arithmetic',
       operation: 'divmod',
       setup: {
@@ -351,6 +449,19 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
+    specs.push({
+      name: `divmod [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'divmod',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- gcd ---
     specs.push({
       name: `gcd [${sizes.medium.join('x')}] scalar`,
       category: 'arithmetic',
@@ -364,6 +475,19 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `gcd [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'gcd',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: 1, dtype: 'int32' },
+        b: { shape: sizes.medium, fill: 'arange', value: 1, dtype: 'int32' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- lcm ---
+    specs.push({
       name: `lcm [${sizes.medium.join('x')}] scalar`,
       category: 'arithmetic',
       operation: 'lcm',
@@ -376,12 +500,382 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `float_power [${sizes.medium.join('x')}] ** scalar`,
+      name: `lcm [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
       category: 'arithmetic',
-      operation: 'float_power',
+      operation: 'lcm',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: 1, dtype: 'int32' },
+        b: { shape: sizes.medium, fill: 'arange', value: 1, dtype: 'int32' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- absolute ---
+    specs.push({
+      name: `absolute [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'absolute',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      includeInQuick: true,
+      warmup,
+    });
+
+    // --- negative ---
+    specs.push({
+      name: `negative [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'negative',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- positive ---
+    specs.push({
+      name: `positive [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'positive',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- sign ---
+    specs.push({
+      name: `sign [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'sign',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- square ---
+    specs.push({
+      name: `square [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'square',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- reciprocal ---
+    specs.push({
+      name: `reciprocal [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'reciprocal',
+      setup: {
+        a: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- cbrt ---
+    specs.push({
+      name: `cbrt [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'cbrt',
       setup: {
         a: { shape: sizes.medium, fill: 'arange', value: 1 },
-        b: { shape: [1], value: 2 },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- fabs ---
+    specs.push({
+      name: `fabs [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'fabs',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: -100 },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- heaviside ---
+    specs.push({
+      name: `heaviside [${sizes.medium.join('x')}] scalar`,
+      category: 'arithmetic',
+      operation: 'heaviside',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 0.5 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `heaviside [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'heaviside',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- fmod ---
+    specs.push({
+      name: `fmod [${sizes.medium.join('x')}] % scalar`,
+      category: 'arithmetic',
+      operation: 'fmod',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 7 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `fmod [${sizes.medium.join('x')}] % [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'fmod',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- frexp ---
+    specs.push({
+      name: `frexp [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'frexp',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: 1 },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- ldexp ---
+    specs.push({
+      name: `ldexp [${sizes.medium.join('x')}] scalar`,
+      category: 'arithmetic',
+      operation: 'ldexp',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: 1 },
+        b: { shape: [1], value: 3 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `ldexp [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'ldexp',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: 1 },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- modf ---
+    specs.push({
+      name: `modf [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'modf',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange', value: 1 },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- clip ---
+    specs.push({
+      name: `clip [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'clip',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- maximum ---
+    specs.push({
+      name: `maximum [${sizes.medium.join('x')}] scalar`,
+      category: 'arithmetic',
+      operation: 'maximum',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 50 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `maximum [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'maximum',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- minimum ---
+    specs.push({
+      name: `minimum [${sizes.medium.join('x')}] scalar`,
+      category: 'arithmetic',
+      operation: 'minimum',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 50 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `minimum [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'minimum',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- fmax ---
+    specs.push({
+      name: `fmax [${sizes.medium.join('x')}] scalar`,
+      category: 'arithmetic',
+      operation: 'fmax',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 50 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `fmax [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'fmax',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- fmin ---
+    specs.push({
+      name: `fmin [${sizes.medium.join('x')}] scalar`,
+      category: 'arithmetic',
+      operation: 'fmin',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: [1], value: 50 },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `fmin [${sizes.medium.join('x')}] [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'fmin',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+        b: { shape: sizes.medium, fill: 'ones' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- nan_to_num ---
+    specs.push({
+      name: `nan_to_num [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'nan_to_num',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- interp ---
+    specs.push({
+      name: `interp [${sizes.small}]`,
+      category: 'arithmetic',
+      operation: 'interp',
+      setup: {
+        x: { shape: [sizes.small], fill: 'arange' },
+        xp: { shape: [100], fill: 'arange' },
+        fp: { shape: [100], fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- unwrap ---
+    specs.push({
+      name: `unwrap [${sizes.small}]`,
+      category: 'arithmetic',
+      operation: 'unwrap',
+      setup: {
+        a: { shape: [sizes.small], fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- sinc ---
+    specs.push({
+      name: `sinc [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'sinc',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
+      },
+      iterations,
+      warmup,
+    });
+
+    // --- i0 ---
+    specs.push({
+      name: `i0 [${sizes.medium.join('x')}]`,
+      category: 'arithmetic',
+      operation: 'i0',
+      setup: {
+        a: { shape: sizes.medium, fill: 'arange' },
       },
       iterations,
       warmup,
@@ -2990,43 +3484,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `add [${sizes.medium.join('x')}] complex128`,
-      category: 'arithmetic',
-      operation: 'complex_add',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-        b: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      includeInQuick: true,
-      warmup,
-    });
-
-    specs.push({
-      name: `multiply [${sizes.medium.join('x')}] complex128`,
-      category: 'arithmetic',
-      operation: 'complex_multiply',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-        b: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `divide [${sizes.medium.join('x')}] complex128`,
-      category: 'arithmetic',
-      operation: 'complex_divide',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-        b: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
       name: `real [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_real',
@@ -3682,11 +4139,18 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'mod', // int overflow issues with narrow types
     'floor_divide', // int overflow issues
     'divmod', // int overflow issues
+    'remainder', // same semantics as mod, int overflow issues
     'gcd', // integer-only, already tests int semantics
     'lcm', // integer-only, already tests int semantics
     'fabs', // only for real float types
     'cbrt', // only for real float types
     'float_power', // only for float types
+    'heaviside', // real-only step function
+    'fmod', // real-only C-style remainder
+    'frexp', // real float decomposition
+    'ldexp', // real float composition
+    'modf', // real float decomposition
+    'interp', // special setup, not dtype-variant-friendly
   ]);
 
   // Operations to skip for ALL int dtype variants
@@ -3774,6 +4238,15 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'reciprocal',
     'logaddexp',
     'hypot',
+    'heaviside',
+    'fmod',
+    'frexp',
+    'ldexp',
+    'modf',
+    'fabs',
+    'cbrt',
+    'remainder',
+    'square', // overflow risk with complex_small fill
     // Boolean-result reductions
     'all',
     'any',
@@ -3925,6 +4398,22 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
     specs.length = 0;
     specs.push(...expanded);
+  }
+
+  // Append dtype suffix to specs with explicit non-default dtype so the
+  // visualization layer shows the correct badge instead of defaulting to float64.
+  for (const spec of specs) {
+    // Already has a dtype suffix from auto-generation? Skip.
+    if (/\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/.test(spec.name)) continue;
+    const dataEntries = Object.entries(spec.setup).filter(([key]) => DATA_ARRAY_KEYS.has(key));
+    if (dataEntries.length === 0) continue;
+    const dtypes = new Set(dataEntries.map(([, e]) => e.dtype).filter(Boolean));
+    if (dtypes.size === 1) {
+      const dtype = Array.from(dtypes)[0]!;
+      if (dtype !== 'float64') {
+        spec.name = `${spec.name} ${dtype}`;
+      }
+    }
   }
 
   return specs;

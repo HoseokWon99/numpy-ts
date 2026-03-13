@@ -164,6 +164,13 @@ function executeOperation(operation: string, arrays: Record<string, any>): any {
     const scalar = arrays['b'].size === 1 ? arrays['b'].get([0]) : arrays['b'];
     return np.float_power(arrays['a'], scalar);
   }
+  if (operation === 'square') return np.square(arrays['a']);
+  if (operation === 'remainder') return np.remainder(arrays['a'], arrays['b']);
+  if (operation === 'heaviside') return np.heaviside(arrays['a'], arrays['b']);
+  if (operation === 'fmod') return np.fmod(arrays['a'], arrays['b']);
+  if (operation === 'frexp') return np.frexp(arrays['a']);
+  if (operation === 'ldexp') return np.ldexp(arrays['a'], arrays['b']);
+  if (operation === 'modf') return np.modf(arrays['a']);
 
   // Math
   if (operation === 'sqrt') return arrays['a'].sqrt();

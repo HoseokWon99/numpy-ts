@@ -166,6 +166,22 @@ def execute_operation(operation: str, arrays: Dict[str, np.ndarray]) -> Any:
         return np.lcm(arrays["a"], arrays["b"])
     elif operation == "float_power":
         return np.float_power(arrays["a"], arrays["b"])
+    elif operation == "square":
+        return np.square(arrays["a"])
+    elif operation == "remainder":
+        return np.remainder(arrays["a"], arrays["b"])
+    elif operation == "heaviside":
+        return np.heaviside(arrays["a"], arrays["b"])
+    elif operation == "fmod":
+        return np.fmod(arrays["a"], arrays["b"])
+    elif operation == "frexp":
+        m, e = np.frexp(arrays["a"])
+        return m  # Just return mantissa for benchmarking
+    elif operation == "ldexp":
+        return np.ldexp(arrays["a"], np.asarray(arrays["b"], dtype=np.int32))
+    elif operation == "modf":
+        f, i = np.modf(arrays["a"])
+        return f  # Just return fractional part for benchmarking
 
     # Mathematical operations
     elif operation == "sqrt":

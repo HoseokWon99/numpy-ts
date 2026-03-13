@@ -141,6 +141,13 @@ function resultsMatch(numpytsResult: any, numpyResult: any, operation?: string, 
     return true;
   }
 
+  // BigInt scalars (from int64 results)
+  if (typeof numpytsResult === 'bigint' || typeof numpyResult === 'bigint') {
+    const a = typeof numpytsResult === 'bigint' ? Number(numpytsResult) : numpytsResult;
+    const b = typeof numpyResult === 'bigint' ? Number(numpyResult) : numpyResult;
+    return resultsMatch(a, b, operation, tolerance);
+  }
+
   // Both scalars
   if (typeof numpytsResult === 'number' && typeof numpyResult === 'number') {
     // Handle NaN: both NaN is considered equal
@@ -305,6 +312,13 @@ function arraysEqual(a: any, b: any, tolerance: number = FLOAT64_TOLERANCE): boo
     return a.every((val, i) => arraysEqual(val, b[i], tolerance));
   }
 
+  // Compare BigInt values (from int64 results)
+  if (typeof a === 'bigint' || typeof b === 'bigint') {
+    const na = typeof a === 'bigint' ? Number(a) : a;
+    const nb = typeof b === 'bigint' ? Number(b) : b;
+    return arraysEqual(na, nb, tolerance);
+  }
+
   // Compare numbers with tolerance
   if (typeof a === 'number' && typeof b === 'number') {
     if (isNaN(a) && isNaN(b)) return true;
@@ -424,16 +438,24 @@ function runNumpyTsOperation(spec: BenchmarkCase): any {
     // Arithmetic
     case 'add':
       return arrays.b !== undefined ? arrays.a.add(arrays.b) : arrays.a.add(arrays.scalar);
+    case 'subtract':
+      return arrays.b !== undefined
+        ? arrays.a.subtract(arrays.b)
+        : arrays.a.subtract(arrays.scalar);
     case 'multiply':
       return arrays.b !== undefined
         ? arrays.a.multiply(arrays.b)
         : arrays.a.multiply(arrays.scalar);
+    case 'divide':
+      return arrays.b !== undefined ? arrays.a.divide(arrays.b) : arrays.a.divide(arrays.scalar);
     case 'mod':
       return np.mod(arrays.a, arrays.b || arrays.scalar);
     case 'floor_divide':
       return np.floor_divide(arrays.a, arrays.b || arrays.scalar);
     case 'reciprocal':
       return np.reciprocal(arrays.a);
+    case 'positive':
+      return np.positive(arrays.a);
 
     // Math
     case 'sqrt':
@@ -655,6 +677,24 @@ function runNumpyTsOperation(spec: BenchmarkCase): any {
       return np.lcm(arrays.a, arrays.b);
     case 'float_power':
       return np.float_power(arrays.a, arrays.b);
+    case 'square':
+      return np.square(arrays.a);
+    case 'remainder':
+      return np.remainder(arrays.a, arrays.b);
+    case 'heaviside':
+      return np.heaviside(arrays.a, arrays.b);
+    case 'fmod':
+      return np.fmod(arrays.a, arrays.b);
+    case 'frexp': {
+      const [mantissa] = np.frexp(arrays.a);
+      return mantissa;
+    }
+    case 'ldexp':
+      return np.ldexp(arrays.a, arrays.b);
+    case 'modf': {
+      const [fractional] = np.modf(arrays.a);
+      return fractional;
+    }
 
     // Additional linalg
     case 'einsum':
@@ -1206,8 +1246,14 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
             } else {
               failed++;
               console.error(`  ❌ ${spec.name}: Results don't match`);
-              console.error(`     numpy-ts: ${JSON.stringify(tsValue).substring(0, 100)}`);
-              console.error(`     NumPy:    ${JSON.stringify(numpyResult).substring(0, 100)}`);
+              const bigIntReplacer = (_k: string, v: unknown) =>
+                typeof v === 'bigint' ? Number(v) : v;
+              console.error(
+                `     numpy-ts: ${JSON.stringify(tsValue, bigIntReplacer).substring(0, 100)}`
+              );
+              console.error(
+                `     NumPy:    ${JSON.stringify(numpyResult, bigIntReplacer).substring(0, 100)}`
+              );
             }
           } catch (err) {
             failed++;
