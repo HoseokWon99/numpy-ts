@@ -31,7 +31,7 @@ let source = '';
 
 try {
   // Try staged (:0 = index)
-  gitJson = execSync(`git show :${relPath}`, { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  gitJson = execSync(`git show :${relPath}`, { cwd: root, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] });
   // Check if staged differs from HEAD (i.e. something is actually staged)
   try {
     execSync(`git diff --cached --quiet -- ${relPath}`, { cwd: root, stdio: 'pipe' });
@@ -54,7 +54,7 @@ try {
 
 if (!gitJson) {
   try {
-    gitJson = execSync(`git show HEAD:${relPath}`, { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    gitJson = execSync(`git show HEAD:${relPath}`, { cwd: root, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] });
     source = 'HEAD';
   } catch {
     console.error(`No git version of ${relPath} found (not staged or committed).`);
@@ -159,9 +159,13 @@ if (added.length > 0) {
 // Removed benchmarks (in git but not in local)
 const removed = [...oldMap.keys()].filter(k => !newMap.has(k));
 if (removed.length > 0) {
+  const REMOVED_LIMIT = 5;
   console.log(`REMOVED (${removed.length}):`);
-  for (const name of removed) {
+  for (const name of removed.slice(0, REMOVED_LIMIT)) {
     console.log(`           ${name}`);
+  }
+  if (removed.length > REMOVED_LIMIT) {
+    console.log(`           ... and ${removed.length - REMOVED_LIMIT} more`);
   }
   console.log();
 }
