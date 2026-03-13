@@ -113,3 +113,62 @@ test "repeat_i8 basic" {
     try testing.expectEqual(out[7], 7);
     try testing.expectEqual(out[8], 7);
 }
+
+test "repeat_f64 single rep" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, 2.0, 3.0 };
+    var out: [3]f64 = undefined;
+    repeat_f64(&a, &out, 3, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 3.0, 1e-10);
+}
+
+test "repeat_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 10.0, 20.0 };
+    var out: [6]f32 = undefined;
+    repeat_f32(&a, &out, 2, 3);
+    try testing.expectApproxEqAbs(out[0], 10.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 10.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 10.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 20.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 20.0, 1e-5);
+    try testing.expectApproxEqAbs(out[5], 20.0, 1e-5);
+}
+
+test "repeat_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, -2, 3 };
+    var out: [6]i32 = undefined;
+    repeat_i32(&a, &out, 3, 2);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], -2);
+    try testing.expectEqual(out[3], -2);
+    try testing.expectEqual(out[4], 3);
+    try testing.expectEqual(out[5], 3);
+}
+
+test "repeat_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 100, 200 };
+    var out: [8]i16 = undefined;
+    repeat_i16(&a, &out, 2, 4);
+    for (0..4) |i| {
+        try testing.expectEqual(out[i], 100);
+    }
+    for (4..8) |i| {
+        try testing.expectEqual(out[i], 200);
+    }
+}
+
+test "repeat_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{42};
+    var out: [3]i64 = undefined;
+    repeat_i64(&a, &out, 1, 3);
+    try testing.expectEqual(out[0], 42);
+    try testing.expectEqual(out[1], 42);
+    try testing.expectEqual(out[2], 42);
+}

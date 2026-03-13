@@ -150,3 +150,81 @@ test "neg_c64 basic" {
     try testing.expectApproxEqAbs(out[2], -3.0, 1e-5);
     try testing.expectApproxEqAbs(out[3], -4.0, 1e-5);
 }
+
+test "neg_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{42.0};
+    var out: [1]f64 = undefined;
+    neg_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], -42.0, 1e-10);
+}
+
+test "neg_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, -2.0, 0.0 };
+    var out: [3]f64 = undefined;
+    neg_f64(&a, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 0.0, 1e-10);
+}
+
+test "neg_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    var a: [7]f32 = undefined;
+    for (0..7) |i| {
+        a[i] = @floatFromInt(i + 1);
+    }
+    var out: [7]f32 = undefined;
+    neg_f32(&a, &out, 7);
+    for (0..7) |i| {
+        const expected: f32 = -@as(f32, @floatFromInt(i + 1));
+        try testing.expectApproxEqAbs(out[i], expected, 1e-5);
+    }
+}
+
+test "neg_i32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, -2, 3, -4, 5, -6, 7 };
+    var out: [7]i32 = undefined;
+    neg_i32(&a, &out, 7);
+    try testing.expectEqual(out[0], -1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[6], -7);
+}
+
+test "neg_i16 SIMD boundary N=9" {
+    const testing = @import("std").testing;
+    var a: [9]i16 = undefined;
+    for (0..9) |i| {
+        a[i] = @intCast(i + 1);
+    }
+    var out: [9]i16 = undefined;
+    neg_i16(&a, &out, 9);
+    for (0..9) |i| {
+        const expected: i16 = -@as(i16, @intCast(i + 1));
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "neg_i64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 100, -200, 300 };
+    var out: [3]i64 = undefined;
+    neg_i64(&a, &out, 3);
+    try testing.expectEqual(out[0], -100);
+    try testing.expectEqual(out[1], 200);
+    try testing.expectEqual(out[2], -300);
+}
+
+test "neg_c128 multiple" {
+    const testing = @import("std").testing;
+    // -(1+2i) = (-1-2i), -(3+4i) = (-3-4i), -(0+0i) = (0+0i)
+    const a = [_]f64{ 1, 2, 3, 4, 0, 0 };
+    var out: [6]f64 = undefined;
+    neg_c128(&a, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], -2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[4], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[5], 0.0, 1e-10);
+}

@@ -124,3 +124,50 @@ test "logical_not_i32 basic" {
     try testing.expectEqual(out[3], 1);
     try testing.expectEqual(out[4], 0);
 }
+
+test "logical_not_f64 edge zero types" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ -0.0, 0.0, 1e-300 };
+    var out: [3]u8 = undefined;
+    logical_not_f64(&a, &out, 3);
+    try testing.expectEqual(out[0], 1); // -0.0 == 0
+    try testing.expectEqual(out[1], 1); // 0.0 == 0
+    try testing.expectEqual(out[2], 0); // tiny but nonzero
+}
+
+test "logical_not_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 0.0, 1.0, -1.0, 0.0, 0.5 };
+    var out: [5]u8 = undefined;
+    logical_not_f32(&a, &out, 5);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 1);
+    try testing.expectEqual(out[4], 0);
+}
+
+test "logical_not_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 0, 1, -1, 0, 100 };
+    var out: [5]u8 = undefined;
+    logical_not_i64(&a, &out, 5);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 0);
+    try testing.expectEqual(out[3], 1);
+    try testing.expectEqual(out[4], 0);
+}
+
+test "logical_not_i16 SIMD boundary N=9" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 0, 1, 0, -1, 0, 5, 0, -3, 7 };
+    var out: [9]u8 = undefined;
+    logical_not_i16(&a, &out, 9);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 1);
+    try testing.expectEqual(out[3], 0);
+    try testing.expectEqual(out[4], 1);
+    try testing.expectEqual(out[8], 0);
+}

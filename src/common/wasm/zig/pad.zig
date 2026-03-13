@@ -218,3 +218,67 @@ test "pad_2d_i8 basic" {
         try testing.expectEqual(out[c], 0);
     }
 }
+
+test "pad_2d_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1.0, 2.0, 3.0, 4.0 }; // 2x2
+    var out: [16]f32 = undefined; // 4x4
+    pad_2d_f32(&a, &out, 2, 2, 1);
+    // All edges should be zero
+    for (0..4) |c| {
+        try testing.expectApproxEqAbs(out[c], 0.0, 1e-5); // row 0
+    }
+    try testing.expectApproxEqAbs(out[5], 1.0, 1e-5);
+    try testing.expectApproxEqAbs(out[6], 2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[9], 3.0, 1e-5);
+    try testing.expectApproxEqAbs(out[10], 4.0, 1e-5);
+}
+
+test "pad_2d_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, 2, 3, 4 }; // 2x2
+    var out: [16]i32 = undefined; // 4x4
+    pad_2d_i32(&a, &out, 2, 2, 1);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[5], 1);
+    try testing.expectEqual(out[6], 2);
+    try testing.expectEqual(out[9], 3);
+    try testing.expectEqual(out[10], 4);
+    try testing.expectEqual(out[15], 0);
+}
+
+test "pad_2d_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 1, 2, 3, 4 }; // 2x2
+    var out: [16]i64 = undefined; // 4x4
+    pad_2d_i64(&a, &out, 2, 2, 1);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[5], 1);
+    try testing.expectEqual(out[6], 2);
+    try testing.expectEqual(out[15], 0);
+}
+
+test "pad_2d_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 1, 2, 3, 4, 5, 6 }; // 2x3
+    var out: [20]i16 = undefined; // 4x5
+    pad_2d_i16(&a, &out, 2, 3, 1);
+    for (0..5) |c| {
+        try testing.expectEqual(out[c], 0);
+    }
+    try testing.expectEqual(out[6], 1);
+    try testing.expectEqual(out[7], 2);
+    try testing.expectEqual(out[8], 3);
+}
+
+test "pad_2d_f64 pad_width=2" {
+    const testing = @import("std").testing;
+    const a = [_]f64{5.0}; // 1x1
+    var out: [25]f64 = undefined; // 5x5
+    pad_2d_f64(&a, &out, 1, 1, 2);
+    // center should be 5.0
+    try testing.expectApproxEqAbs(out[12], 5.0, 1e-10);
+    // corners should be 0
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[24], 0.0, 1e-10);
+}

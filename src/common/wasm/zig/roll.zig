@@ -220,3 +220,57 @@ test "roll_i8 zero shift" {
     try testing.expectEqual(out[0], 1);
     try testing.expectEqual(out[4], 5);
 }
+
+test "roll_f64 full cycle shift" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3, 4, 5 };
+    var out: [5]f64 = undefined;
+    roll_f64(&a, &out, 5, 5);
+    // shift by N = no change
+    for (0..5) |i| {
+        try testing.expectApproxEqAbs(out[i], a[i], 1e-10);
+    }
+}
+
+test "roll_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1, 2, 3, 4, 5, 6, 7 };
+    var out: [7]f32 = undefined;
+    roll_f32(&a, &out, 7, 3);
+    // [5,6,7,1,2,3,4]
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 7.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 1.0, 1e-5);
+}
+
+test "roll_i8 negative shift large" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 1, 2, 3, 4, 5 };
+    var out: [5]i8 = undefined;
+    roll_i8(&a, &out, 5, -1);
+    // [2,3,4,5,1]
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 3);
+    try testing.expectEqual(out[4], 1);
+}
+
+test "roll_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 10, 20, 30, 40, 50, 60, 70, 80, 90 };
+    var out: [9]i16 = undefined;
+    roll_i16(&a, &out, 9, 4);
+    try testing.expectEqual(out[0], 60);
+    try testing.expectEqual(out[4], 10);
+    try testing.expectEqual(out[8], 50);
+}
+
+test "roll_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 10, 20, 30 };
+    var out: [3]i64 = undefined;
+    roll_i64(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 30);
+    try testing.expectEqual(out[1], 10);
+    try testing.expectEqual(out[2], 20);
+}

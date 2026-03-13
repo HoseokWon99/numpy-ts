@@ -88,3 +88,50 @@ test "flip_i8 basic" {
     try testing.expectEqual(out[16], 1);
     try testing.expectEqual(out[8], 9);
 }
+
+test "flip_f64 single element" {
+    const testing = @import("std").testing;
+    const a = [_]f64{42.0};
+    var out: [1]f64 = undefined;
+    flip_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 42.0, 1e-10);
+}
+
+test "flip_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1, 2, 3, 4, 5, 6, 7 };
+    var out: [7]f32 = undefined;
+    flip_f32(&a, &out, 7);
+    try testing.expectApproxEqAbs(out[0], 7.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], 4.0, 1e-5);
+    try testing.expectApproxEqAbs(out[6], 1.0, 1e-5);
+}
+
+test "flip_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 100, 200, 300 };
+    var out: [3]i64 = undefined;
+    flip_i64(&a, &out, 3);
+    try testing.expectEqual(out[0], 300);
+    try testing.expectEqual(out[1], 200);
+    try testing.expectEqual(out[2], 100);
+}
+
+test "flip_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 10, 20, 30, 40, 50, 60, 70, 80, 90 };
+    var out: [9]i16 = undefined;
+    flip_i16(&a, &out, 9);
+    try testing.expectEqual(out[0], 90);
+    try testing.expectEqual(out[4], 50);
+    try testing.expectEqual(out[8], 10);
+}
+
+test "flip_f64 two elements" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, 2.0 };
+    var out: [2]f64 = undefined;
+    flip_f64(&a, &out, 2);
+    try testing.expectApproxEqAbs(out[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 1.0, 1e-10);
+}

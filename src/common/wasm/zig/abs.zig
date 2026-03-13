@@ -131,3 +131,62 @@ test "abs_i8 basic" {
     try testing.expectEqual(out[1], 2);
     try testing.expectEqual(out[16], 17);
 }
+
+test "abs_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{-42.0};
+    var out: [1]f64 = undefined;
+    abs_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 42.0, 1e-10);
+}
+
+test "abs_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ -1.5, 2.5, -3.5 };
+    var out: [3]f64 = undefined;
+    abs_f64(&a, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 1.5, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 2.5, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 3.5, 1e-10);
+}
+
+test "abs_f64 negative zero" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ -0.0, 0.0 };
+    var out: [2]f64 = undefined;
+    abs_f64(&a, &out, 2);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "abs_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ -1, 2, -3, 4, -5, 6, -7 };
+    var out: [7]f32 = undefined;
+    abs_f32(&a, &out, 7);
+    for (0..7) |i| {
+        const expected: f32 = @floatFromInt(i + 1);
+        try testing.expectApproxEqAbs(out[i], expected, 1e-5);
+    }
+}
+
+test "abs_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ -100, 200, -300 };
+    var out: [3]i64 = undefined;
+    abs_i64(&a, &out, 3);
+    try testing.expectEqual(out[0], 100);
+    try testing.expectEqual(out[1], 200);
+    try testing.expectEqual(out[2], 300);
+}
+
+test "abs_i16 SIMD boundary N=9" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ -1, 2, -3, 4, -5, 6, -7, 8, -9 };
+    var out: [9]i16 = undefined;
+    abs_i16(&a, &out, 9);
+    for (0..9) |i| {
+        const expected: i16 = @intCast(i + 1);
+        try testing.expectEqual(out[i], expected);
+    }
+}

@@ -50,3 +50,35 @@ test "ldexp_scalar_f64 basic" {
     try testing.expectApproxEqAbs(out[3], -8.0, 1e-10);
     try testing.expectApproxEqAbs(out[4], 24.0, 1e-10);
 }
+
+test "ldexp_scalar_f64 negative exp" {
+    const testing = @import("std").testing;
+    const x1 = [_]f64{ 8.0, 16.0, 4.0 };
+    var out: [3]f64 = undefined;
+    ldexp_scalar_f64(&x1, &out, 3, -1.0); // divide by 2
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 8.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 2.0, 1e-10);
+}
+
+test "ldexp_scalar_f64 exp=0" {
+    const testing = @import("std").testing;
+    const x1 = [_]f64{ 1.0, 2.0, 3.0 };
+    var out: [3]f64 = undefined;
+    ldexp_scalar_f64(&x1, &out, 3, 0.0); // multiply by 1
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 3.0, 1e-10);
+}
+
+test "ldexp_scalar_f32 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]f32{ 1.0, 2.0, 0.5, -1.0, 3.0 };
+    var out: [5]f32 = undefined;
+    ldexp_scalar_f32(&x1, &out, 5, 2.0); // multiply by 4
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 8.0, 1e-5);
+    try testing.expectApproxEqAbs(out[2], 2.0, 1e-5);
+    try testing.expectApproxEqAbs(out[3], -4.0, 1e-5);
+    try testing.expectApproxEqAbs(out[4], 12.0, 1e-5);
+}

@@ -86,3 +86,94 @@ test "vdot_c64 conjugate" {
     try testing.expectApproxEqAbs(out[0], 11.0, 1e-5);
     try testing.expectApproxEqAbs(out[1], -2.0, 1e-5);
 }
+
+test "vdot_c128 pure real vectors" {
+    const testing = @import("std").testing;
+    // conj(2+0i)*(3+0i) + conj(4+0i)*(5+0i) = 2*3 + 4*5 = 26 + 0i
+    const a = [_]f64{ 2, 0, 4, 0 };
+    const b = [_]f64{ 3, 0, 5, 0 };
+    var out: [2]f64 = undefined;
+    vdot_c128(&a, &b, &out, 2);
+    try testing.expectApproxEqAbs(out[0], 26.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "vdot_c128 pure imaginary vectors" {
+    const testing = @import("std").testing;
+    // conj(a)*b = (a_re*b_re + a_im*b_im) + (a_re*b_im - a_im*b_re)*i
+    // = (0*0 + 2*3) + (0*3 - 2*0)*i = 6 + 0i
+    const a = [_]f64{ 0, 2 };
+    const b = [_]f64{ 0, 3 };
+    var out: [2]f64 = undefined;
+    vdot_c128(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 6.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "vdot_c128 self conjugate dot gives real result" {
+    const testing = @import("std").testing;
+    // conj(a) · a = sum |a_k|^2 (always real)
+    // a = [(1+2i), (3+4i)]
+    // |1+2i|^2 = 5, |3+4i|^2 = 25, total = 30
+    const a = [_]f64{ 1, 2, 3, 4 };
+    var out: [2]f64 = undefined;
+    vdot_c128(&a, &a, &out, 2);
+    try testing.expectApproxEqAbs(out[0], 30.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "vdot_c64 two elements" {
+    const testing = @import("std").testing;
+    // Same as c128 two elements test but with f32
+    // conj(1+2i)*(3+4i) + conj(5+6i)*(7+8i) = (11-2i) + (83-2i) = 94-4i
+    const a = [_]f32{ 1, 2, 5, 6 };
+    const b = [_]f32{ 3, 4, 7, 8 };
+    var out: [2]f32 = undefined;
+    vdot_c64(&a, &b, &out, 2);
+    try testing.expectApproxEqAbs(out[0], 94.0, 1e-3);
+    try testing.expectApproxEqAbs(out[1], -4.0, 1e-3);
+}
+
+test "vdot_c64 self conjugate dot gives real result" {
+    const testing = @import("std").testing;
+    // a = [(1+1i), (2+2i), (3+3i)]
+    // |1+1i|^2=2, |2+2i|^2=8, |3+3i|^2=18, total=28
+    const a = [_]f32{ 1, 1, 2, 2, 3, 3 };
+    var out: [2]f32 = undefined;
+    vdot_c64(&a, &a, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 28.0, 1e-3);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-3);
+}
+
+test "vdot_c128 zero vector" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3, 4 };
+    const b = [_]f64{ 0, 0, 0, 0 };
+    var out: [2]f64 = undefined;
+    vdot_c128(&a, &b, &out, 2);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "vdot_c128 single real element" {
+    const testing = @import("std").testing;
+    // conj(5+0i)*(3+0i) = 15+0i
+    const a = [_]f64{ 5, 0 };
+    const b = [_]f64{ 3, 0 };
+    var out: [2]f64 = undefined;
+    vdot_c128(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 15.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+}
+
+test "vdot_c64 pure imaginary" {
+    const testing = @import("std").testing;
+    // conj(a)*b = (a_re*b_re + a_im*b_im) + (a_re*b_im - a_im*b_re)*i
+    // = (0*0 + -3*4) + (0*4 - -3*0)*i = -12 + 0i
+    const a = [_]f32{ 0, 3 };
+    const b = [_]f32{ 0, 4 };
+    var out: [2]f32 = undefined;
+    vdot_c64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 12.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-5);
+}

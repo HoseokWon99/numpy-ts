@@ -296,3 +296,163 @@ test "mul_scalar_f32 basic" {
     try testing.expectApproxEqAbs(out[0], 3.0, 1e-5);
     try testing.expectApproxEqAbs(out[4], 15.0, 1e-5);
 }
+
+test "mul_f64 SIMD boundary N=1" {
+    const testing = @import("std").testing;
+    const a = [_]f64{3.0};
+    const b = [_]f64{4.0};
+    var out: [1]f64 = undefined;
+    mul_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 12.0, 1e-10);
+}
+
+test "mul_f64 SIMD boundary N=3" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 2.0, 3.0, 4.0 };
+    const b = [_]f64{ 5.0, 6.0, 7.0 };
+    var out: [3]f64 = undefined;
+    mul_f64(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], 10.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 18.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 28.0, 1e-10);
+}
+
+test "mul_f64 edge values" {
+    const testing = @import("std").testing;
+    const math = @import("std").math;
+    const a = [_]f64{ math.inf(f64), 0.0, -1.0 };
+    const b = [_]f64{ 2.0, 5.0, -1.0 };
+    var out: [3]f64 = undefined;
+    mul_f64(&a, &b, &out, 3);
+    try testing.expect(math.isInf(out[0]));
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-10);
+}
+
+test "mul_f32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    var a: [7]f32 = undefined;
+    var b: [7]f32 = undefined;
+    for (0..7) |i| {
+        a[i] = @floatFromInt(i + 1);
+        b[i] = 2.0;
+    }
+    var out: [7]f32 = undefined;
+    mul_f32(&a, &b, &out, 7);
+    for (0..7) |i| {
+        const expected: f32 = @as(f32, @floatFromInt(i + 1)) * 2.0;
+        try testing.expectApproxEqAbs(out[i], expected, 1e-5);
+    }
+}
+
+test "mul_i32 SIMD boundary N=7" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, -2, 3, -4, 5, -6, 7 };
+    const b = [_]i32{ -1, 2, -3, 4, -5, 6, -7 };
+    var out: [7]i32 = undefined;
+    mul_i32(&a, &b, &out, 7);
+    try testing.expectEqual(out[0], -1);
+    try testing.expectEqual(out[1], -4);
+    try testing.expectEqual(out[2], -9);
+    try testing.expectEqual(out[6], -49);
+}
+
+test "mul_i16 SIMD boundary N=9" {
+    const testing = @import("std").testing;
+    var a: [9]i16 = undefined;
+    var b: [9]i16 = undefined;
+    for (0..9) |i| {
+        a[i] = @intCast(i + 1);
+        b[i] = 3;
+    }
+    var out: [9]i16 = undefined;
+    mul_i16(&a, &b, &out, 9);
+    for (0..9) |i| {
+        const expected: i16 = @intCast((i + 1) * 3);
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "mul_i8 SIMD boundary N=17" {
+    const testing = @import("std").testing;
+    var a: [17]i8 = undefined;
+    var b: [17]i8 = undefined;
+    for (0..17) |i| {
+        a[i] = 2;
+        b[i] = @intCast(i);
+    }
+    var out: [17]i8 = undefined;
+    mul_i8(&a, &b, &out, 17);
+    for (0..17) |i| {
+        const expected: i8 = @truncate(@as(i32, @intCast(i)) * 2);
+        try testing.expectEqual(out[i], expected);
+    }
+}
+
+test "mul_scalar_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1, 2, 3 };
+    var out: [3]f64 = undefined;
+    mul_scalar_f64(&a, &out, 3, 5.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 10.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 15.0, 1e-10);
+}
+
+test "mul_scalar_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, -2, 3, -4, 5 };
+    var out: [5]i32 = undefined;
+    mul_scalar_i32(&a, &out, 5, -3);
+    try testing.expectEqual(out[0], -3);
+    try testing.expectEqual(out[1], 6);
+    try testing.expectEqual(out[2], -9);
+}
+
+test "mul_c128 three elements" {
+    const testing = @import("std").testing;
+    // (0+1i)*(0+1i) = -1+0i
+    const a = [_]f64{ 0, 1, 1, 0, 2, 3 };
+    const b = [_]f64{ 0, 1, 1, 0, 4, 5 };
+    var out: [6]f64 = undefined;
+    mul_c128(&a, &b, &out, 3);
+    try testing.expectApproxEqAbs(out[0], -1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], 0.0, 1e-10);
+    // (2+3i)*(4+5i) = 8+10i+12i-15 = -7+22i
+    try testing.expectApproxEqAbs(out[4], -7.0, 1e-10);
+    try testing.expectApproxEqAbs(out[5], 22.0, 1e-10);
+}
+
+test "mul_c64 basic" {
+    const testing = @import("std").testing;
+    // (1+2i)*(3+4i) = -5+10i
+    const a = [_]f32{ 1, 2 };
+    const b = [_]f32{ 3, 4 };
+    var out: [2]f32 = undefined;
+    mul_c64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], -5.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 10.0, 1e-5);
+}
+
+test "mul_scalar_c128 basic" {
+    const testing = @import("std").testing;
+    // (1+2i)*3 = (3+6i)
+    const a = [_]f64{ 1, 2 };
+    var out: [2]f64 = undefined;
+    mul_scalar_c128(&a, &out, 1, 3.0);
+    try testing.expectApproxEqAbs(out[0], 3.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-10);
+}
+
+test "mul_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 3, -4, 5 };
+    const b = [_]i64{ 2, 3, -4 };
+    var out: [3]i64 = undefined;
+    mul_i64(&a, &b, &out, 3);
+    try testing.expectEqual(out[0], 6);
+    try testing.expectEqual(out[1], -12);
+    try testing.expectEqual(out[2], -20);
+}
