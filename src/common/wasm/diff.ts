@@ -30,6 +30,9 @@ const BASE_THRESHOLD = 64;
 type DiffFn = (aPtr: number, outPtr: number, N: number) => void;
 type Diff2DFn = (aPtr: number, outPtr: number, rows: number, cols: number) => void;
 
+// uint types are excluded: diff does subtraction, so reusing signed kernels produces
+// wrong results for values > signed max (e.g. uint8 128 read as i8 -128).
+// JS fallback reads TypedArray values as correctly unsigned.
 const kernels1D: Partial<Record<DType, DiffFn>> = {
   float64: diff_f64,
   float32: diff_f32,

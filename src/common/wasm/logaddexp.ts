@@ -42,26 +42,21 @@ const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float32: logaddexp_scalar_f32,
 };
 
+// uint types excluded: signed kernels misinterpret values > signed max, and output
+// dtype would be wrong (numpy promotes uint8/16 to float32, not float64).
+// JS fallback handles uint with correct unsigned reads and correct output dtype.
 const intBinaryKernels: Partial<Record<DType, BinaryFn>> = {
   int64: logaddexp_i64,
-  uint64: logaddexp_i64,
   int32: logaddexp_i32,
-  uint32: logaddexp_i32,
   int16: logaddexp_i16,
-  uint16: logaddexp_i16,
   int8: logaddexp_i8,
-  uint8: logaddexp_i8,
 };
 
 const intScalarKernels: Partial<Record<DType, ScalarFn>> = {
   int64: logaddexp_scalar_i64,
-  uint64: logaddexp_scalar_i64,
   int32: logaddexp_scalar_i32,
-  uint32: logaddexp_scalar_i32,
   int16: logaddexp_scalar_i16,
-  uint16: logaddexp_scalar_i16,
   int8: logaddexp_scalar_i8,
-  uint8: logaddexp_scalar_i8,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;

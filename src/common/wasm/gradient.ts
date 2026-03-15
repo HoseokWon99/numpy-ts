@@ -22,6 +22,9 @@ const BASE_THRESHOLD = 64;
 
 type GradFn = (aPtr: number, outPtr: number, N: number, h: number) => void;
 
+// uint types are excluded: gradient does arithmetic (central differences / division),
+// so reusing signed kernels produces wrong results for values > signed max.
+// JS fallback reads TypedArray values as correctly unsigned.
 const kernels: Partial<Record<DType, GradFn>> = {
   float64: gradient_f64,
   float32: gradient_f32,
