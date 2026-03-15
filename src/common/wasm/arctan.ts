@@ -7,7 +7,7 @@
  * in JS and run through the f64 SIMD kernel (matches NumPy's promotion).
  */
 
-import { arctan_f64, arctan_f32 } from './bins/arctan.wasm';
+import { arctan_f64, arctan_f32, arctan_i64 } from './bins/arctan.wasm';
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, isBigIntDType, type DType, type TypedArray } from '../dtype';
@@ -60,7 +60,23 @@ export function wasmArctan(a: ArrayStorage): ArrayStorage | null {
     return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
   }
 
-  // Integer path: convert to float64, run SIMD f64 kernel
+  // int64 native path — avoid costly BigInt→Number conversion in JS
+  if (dtype === 'int64') {
+    ensureMemory(size * 16);
+    resetAllocator();
+    const aOff = a.offset;
+    const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+    const aPtr = copyIn(aData);
+    const outPtr = alloc(size * 8);
+    arctan_i64(aPtr, outPtr, size);
+    const outData = copyOut(
+      outPtr, size,
+      Float64Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+    );
+    return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
+  }
+
+  // Other integer path: convert to float64, run f64 kernel
   // (NumPy promotes int→float64 for arctan)
   const bpe = 8; // f64
   ensureMemory(size * bpe * 2);
