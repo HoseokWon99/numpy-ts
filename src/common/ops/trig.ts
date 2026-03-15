@@ -12,6 +12,11 @@ import { ArrayStorage } from '../storage';
 import { elementwiseUnaryOp } from '../internal/compute';
 import { isBigIntDType, isComplexDType, throwIfComplex, type DType } from '../dtype';
 import { Complex } from '../complex';
+import { wasmSin } from '../wasm/sin';
+import { wasmCos } from '../wasm/cos';
+import { wasmTan } from '../wasm/tan';
+import { wasmArctan } from '../wasm/arctan';
+import { wasmHypot, wasmHypotScalar } from '../wasm/hypot';
 
 /**
  * Sine of each element (element-wise)
@@ -57,6 +62,9 @@ export function sin(a: ArrayStorage): ArrayStorage {
 
     return result;
   }
+
+  const wasmResult = wasmSin(a);
+  if (wasmResult) return wasmResult;
 
   return elementwiseUnaryOp(a, Math.sin, false);
 }
@@ -105,6 +113,9 @@ export function cos(a: ArrayStorage): ArrayStorage {
 
     return result;
   }
+
+  const wasmResult = wasmCos(a);
+  if (wasmResult) return wasmResult;
 
   return elementwiseUnaryOp(a, Math.cos, false);
 }
@@ -155,6 +166,9 @@ export function tan(a: ArrayStorage): ArrayStorage {
 
     return result;
   }
+
+  const wasmResult = wasmTan(a);
+  if (wasmResult) return wasmResult;
 
   return elementwiseUnaryOp(a, Math.tan, false);
 }
@@ -388,6 +402,9 @@ export function arctan(a: ArrayStorage): ArrayStorage {
     return result;
   }
 
+  const wasmResult = wasmArctan(a);
+  if (wasmResult) return wasmResult;
+
   return elementwiseUnaryOp(a, Math.atan, false);
 }
 
@@ -556,6 +573,9 @@ export function hypot(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
  * @private
  */
 function hypotArray(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
+  const wasmResult = wasmHypot(x1, x2);
+  if (wasmResult) return wasmResult;
+
   const shape = Array.from(x1.shape);
   const size = x1.size;
   const dtype1 = x1.dtype;
@@ -608,6 +628,9 @@ function hypotArray(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
  * @private
  */
 function hypotScalar(storage: ArrayStorage, x2: number): ArrayStorage {
+  const wasmResult = wasmHypotScalar(storage, x2);
+  if (wasmResult) return wasmResult;
+
   const dtype = storage.dtype;
   const shape = Array.from(storage.shape);
   const size = storage.size;

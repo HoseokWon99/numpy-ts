@@ -11,6 +11,8 @@
 import { ArrayStorage } from '../storage';
 import { elementwiseUnaryOp } from '../internal/compute';
 import { isComplexDType, type DType } from '../dtype';
+import { wasmSinh } from '../wasm/sinh';
+import { wasmTanh } from '../wasm/tanh';
 
 /**
  * Hyperbolic sine of each element (element-wise)
@@ -42,6 +44,9 @@ export function sinh(a: ArrayStorage): ArrayStorage {
 
     return result;
   }
+
+  const wasmResult = wasmSinh(a);
+  if (wasmResult) return wasmResult;
 
   return elementwiseUnaryOp(a, Math.sinh, false);
 }
@@ -111,6 +116,9 @@ export function tanh(a: ArrayStorage): ArrayStorage {
 
     return result;
   }
+
+  const wasmResult = wasmTanh(a);
+  if (wasmResult) return wasmResult;
 
   return elementwiseUnaryOp(a, Math.tanh, false);
 }
