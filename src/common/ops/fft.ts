@@ -18,6 +18,17 @@
 import { ArrayStorage } from '../storage';
 import { Complex } from '../complex';
 import type { DType } from '../dtype';
+import {
+  fft_batch_c128,
+  ifft_batch_c128,
+  fft_scratch_size,
+  fft2_c128,
+  ifft2_c128,
+  fft2_scratch_size,
+} from '../wasm/bins/fft.wasm';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from '../wasm/runtime';
+import type { TypedArray } from '../dtype';
+import { wasmConfig } from '../wasm/config';
 
 /**
  * Cooley-Tukey FFT algorithm (radix-2)
@@ -417,6 +428,48 @@ function fftnd(
     result = padOrTruncate(result, outShape, axesList);
   }
 
+  // WASM fast path for 2D FFT: single call handles both axes (row FFT + transpose + col FFT)
+  if (
+    axesList.length === 2 &&
+    result.ndim === 2 &&
+    norm === 'backward' &&
+    result.isCContiguous
+  ) {
+    const rows = result.shape[axesList[0]!]!;
+    const cols = result.shape[axesList[1]!]!;
+    const isStandardAxes = axesList[0] === 0 && axesList[1] === 1;
+
+    if (
+      isStandardAxes &&
+      rows >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier &&
+      cols >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier
+    ) {
+      const totalDataLen = rows * cols * 2;
+      const scratchN = fft2_scratch_size(rows, cols);
+      const totalBytes = totalDataLen * 8;
+      const scratchBytes = scratchN * 8;
+
+      ensureMemory(totalBytes * 2 + scratchBytes);
+      resetAllocator();
+
+      const srcData = result.data as Float64Array;
+      const inPtr = copyIn(srcData.subarray(0, totalDataLen) as unknown as TypedArray);
+      const outPtr = alloc(totalBytes);
+      const scratchPtr = alloc(scratchBytes);
+
+      const kernel = inverse ? ifft2_c128 : fft2_c128;
+      kernel(inPtr, outPtr, scratchPtr, rows, cols);
+
+      const outData = copyOut(
+        outPtr,
+        totalDataLen,
+        Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+      );
+
+      return ArrayStorage.fromData(outData as unknown as Float64Array, [rows, cols], 'complex128');
+    }
+  }
+
   // Apply FFT along each axis
   for (const axis of axesList) {
     result = fft1dAlongAxis(result, axis, inverse, norm);
@@ -597,6 +650,8 @@ function truncateAxis(a: ArrayStorage, axis: number, newSize: number): ArrayStor
 /**
  * Apply 1D FFT along a specific axis
  */
+const FFT_WASM_THRESHOLD = 32;
+
 function fft1dAlongAxis(
   a: ArrayStorage,
   axis: number,
@@ -616,7 +671,124 @@ function fft1dAlongAxis(
   const outerSize = shape.slice(0, axis).reduce((acc, s) => acc * s, 1);
   const innerSize = shape.slice(axis + 1).reduce((acc, s) => acc * s, 1);
 
-  // Temporary arrays for FFT
+  // WASM fast path: when innerSize === 1, rows are contiguous interleaved complex data.
+  // Batch all rows into a single WASM call to avoid per-row copy overhead.
+  if (
+    innerSize === 1 &&
+    n >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier
+  ) {
+    const totalDataLen = outerSize * n * 2; // all rows, interleaved re,im
+    const scratchN = fft_scratch_size(n);
+    const totalBytes = totalDataLen * 8;
+    const scratchBytes = scratchN * 8;
+
+    ensureMemory(totalBytes * 2 + scratchBytes); // input + output + scratch
+    resetAllocator();
+
+    const allData = srcData.subarray(0, totalDataLen);
+    const inPtr = copyIn(allData as unknown as TypedArray);
+    const outPtr = alloc(totalBytes);
+    const scratchPtr = alloc(scratchBytes);
+
+    // WASM kernel uses 'backward' convention: forward=no scaling, inverse=1/n
+    const kernel = inverse ? ifft_batch_c128 : fft_batch_c128;
+    kernel(inPtr, outPtr, scratchPtr, n, outerSize);
+
+    const outData = copyOut(
+      outPtr,
+      totalDataLen,
+      Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    );
+    resultData.set(outData as unknown as Float64Array);
+
+    // Apply normalization adjustments for non-backward modes
+    if (norm === 'ortho') {
+      const scale = inverse ? Math.sqrt(n) : 1 / Math.sqrt(n);
+      for (let i = 0; i < totalDataLen; i++) resultData[i] = resultData[i]! * scale;
+    } else if (norm === 'forward' && !inverse) {
+      const scale = 1 / n;
+      for (let i = 0; i < totalDataLen; i++) resultData[i] = resultData[i]! * scale;
+    } else if (norm === 'forward' && inverse) {
+      // WASM applied 1/n, but forward+inverse wants no scaling → undo it
+      for (let i = 0; i < totalDataLen; i++) resultData[i] = resultData[i]! * n;
+    }
+
+    return result;
+  }
+
+  // WASM path for non-last axis: gather columns → batch FFT → scatter back.
+  // This avoids the JS FFT for the strided axis.
+  if (
+    innerSize > 1 &&
+    n >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier
+  ) {
+    const totalRows = outerSize * innerSize; // total number of 1D FFTs to perform
+    const batchDataLen = totalRows * n * 2; // all rows, interleaved
+    const scratchN = fft_scratch_size(n);
+    const batchBytes = batchDataLen * 8;
+    const scratchBytes = scratchN * 8;
+
+    ensureMemory(batchBytes * 2 + scratchBytes);
+    resetAllocator();
+
+    // Gather: extract strided columns into contiguous batch buffer
+    const gathered = new Float64Array(batchDataLen);
+    let row = 0;
+    for (let outer = 0; outer < outerSize; outer++) {
+      for (let inner = 0; inner < innerSize; inner++) {
+        const rowOff = row * n * 2;
+        for (let k = 0; k < n; k++) {
+          const srcIdx = ((outer * n + k) * innerSize + inner) * 2;
+          gathered[rowOff + k * 2] = srcData[srcIdx]!;
+          gathered[rowOff + k * 2 + 1] = srcData[srcIdx + 1]!;
+        }
+        row++;
+      }
+    }
+
+    const inPtr = copyIn(gathered as unknown as TypedArray);
+    const outPtr = alloc(batchBytes);
+    const scratchPtr = alloc(scratchBytes);
+
+    const kernel = inverse ? ifft_batch_c128 : fft_batch_c128;
+    kernel(inPtr, outPtr, scratchPtr, n, totalRows);
+
+    const outData = copyOut(
+      outPtr,
+      batchDataLen,
+      Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    ) as unknown as Float64Array;
+
+    // Scatter: write back from contiguous batch to strided positions
+    row = 0;
+    for (let outer = 0; outer < outerSize; outer++) {
+      for (let inner = 0; inner < innerSize; inner++) {
+        const rowOff = row * n * 2;
+        for (let k = 0; k < n; k++) {
+          const dstIdx = ((outer * n + k) * innerSize + inner) * 2;
+          resultData[dstIdx] = outData[rowOff + k * 2]!;
+          resultData[dstIdx + 1] = outData[rowOff + k * 2 + 1]!;
+        }
+        row++;
+      }
+    }
+
+    // Apply normalization adjustments for non-backward modes
+    const totalDataLen = outerSize * n * innerSize * 2;
+    if (norm === 'ortho') {
+      const scale = inverse ? Math.sqrt(n) : 1 / Math.sqrt(n);
+      for (let i = 0; i < totalDataLen; i++) resultData[i] = resultData[i]! * scale;
+    } else if (norm === 'forward' && !inverse) {
+      const scale = 1 / n;
+      for (let i = 0; i < totalDataLen; i++) resultData[i] = resultData[i]! * scale;
+    } else if (norm === 'forward' && inverse) {
+      for (let i = 0; i < totalDataLen; i++) resultData[i] = resultData[i]! * n;
+    }
+
+    return result;
+  }
+
+  // JS fallback for small sizes
   const real = new Float64Array(n);
   const imag = new Float64Array(n);
 
@@ -636,13 +808,11 @@ function fft1dAlongAxis(
       if (norm === 'ortho') {
         const scale = 1 / Math.sqrt(n);
         if (!inverse) {
-          // For forward FFT with ortho, we don't apply 1/n in fftCore, so apply 1/sqrt(n)
           for (let k = 0; k < n; k++) {
             real[k] = real[k]! * scale;
             imag[k] = imag[k]! * scale;
           }
         } else {
-          // For inverse FFT with ortho, fftCore already applied 1/n, so multiply by sqrt(n)
           const adjustScale = Math.sqrt(n);
           for (let k = 0; k < n; k++) {
             real[k] = real[k]! * adjustScale;
@@ -650,7 +820,6 @@ function fft1dAlongAxis(
           }
         }
       } else if (norm === 'forward' && !inverse) {
-        // Forward norm: apply 1/n for forward FFT
         const scale = 1 / n;
         for (let k = 0; k < n; k++) {
           real[k] = real[k]! * scale;
@@ -659,7 +828,6 @@ function fft1dAlongAxis(
       } else if (norm === 'backward' && inverse) {
         // Backward norm (default): fftCore already applies 1/n for inverse, which is correct
       } else if (norm === 'forward' && inverse) {
-        // Forward norm with inverse: no scaling (undo the 1/n from fftCore)
         for (let k = 0; k < n; k++) {
           real[k] = real[k]! * n;
           imag[k] = imag[k]! * n;
