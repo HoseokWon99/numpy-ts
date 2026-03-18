@@ -2,12 +2,31 @@
  * Python NumPy validation tests for exponential operations
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { array, exp, exp2, expm1, log, log2, log10, log1p, logaddexp, logaddexp2 } from '../../src';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import {
+  array,
+  exp,
+  exp2,
+  expm1,
+  log,
+  log2,
+  log10,
+  log1p,
+  logaddexp,
+  logaddexp2,
+  wasmConfig,
+} from '../../src';
 import { runNumPy, arraysClose, checkNumPyAvailable } from './numpy-oracle';
 
-describe('NumPy Validation: Exponential Operations', () => {
+const WASM_MODES = [
+  { name: 'default thresholds', multiplier: 1 },
+  { name: 'forced WASM (threshold=0)', multiplier: 0 },
+] as const;
+
+for (const mode of WASM_MODES) {
+describe(`NumPy Validation: Exponential Operations [${mode.name}]`, () => {
   beforeAll(() => {
+    wasmConfig.thresholdMultiplier = mode.multiplier;
     if (!checkNumPyAvailable()) {
       throw new Error(
         '❌ Python NumPy not available!\n\n' +
@@ -21,6 +40,10 @@ describe('NumPy Validation: Exponential Operations', () => {
           '\n'
       );
     }
+  });
+
+  afterEach(() => {
+    wasmConfig.thresholdMultiplier = mode.multiplier;
   });
 
   describe('exp', () => {
@@ -241,3 +264,4 @@ result = np.exp(np.log(np.array([1, 2, 10, 100])))
     });
   });
 });
+}

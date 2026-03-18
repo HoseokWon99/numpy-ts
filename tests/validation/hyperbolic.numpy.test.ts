@@ -2,12 +2,19 @@
  * Python NumPy validation tests for hyperbolic operations
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { array, sinh, cosh, tanh, arcsinh, arccosh, arctanh } from '../../src';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { array, sinh, cosh, tanh, arcsinh, arccosh, arctanh, wasmConfig } from '../../src';
 import { runNumPy, arraysClose, checkNumPyAvailable } from './numpy-oracle';
 
-describe('NumPy Validation: Hyperbolic Operations', () => {
+const WASM_MODES = [
+  { name: 'default thresholds', multiplier: 1 },
+  { name: 'forced WASM (threshold=0)', multiplier: 0 },
+] as const;
+
+for (const mode of WASM_MODES) {
+describe(`NumPy Validation: Hyperbolic Operations [${mode.name}]`, () => {
   beforeAll(() => {
+    wasmConfig.thresholdMultiplier = mode.multiplier;
     if (!checkNumPyAvailable()) {
       throw new Error(
         '❌ Python NumPy not available!\n\n' +
@@ -21,6 +28,10 @@ describe('NumPy Validation: Hyperbolic Operations', () => {
           '\n'
       );
     }
+  });
+
+  afterEach(() => {
+    wasmConfig.thresholdMultiplier = mode.multiplier;
   });
 
   describe('sinh', () => {
@@ -334,3 +345,4 @@ result = np.arctanh(np.tanh(original))
     });
   });
 });
+}
