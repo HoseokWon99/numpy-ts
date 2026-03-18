@@ -29,8 +29,14 @@ const WASM_MODES = [
 
 const INT_DTYPES = ['int32', 'int16', 'int8', 'uint32', 'uint16', 'uint8'] as const;
 const NP_DTYPE: Record<string, string> = {
-  int64: 'np.int64', int32: 'np.int32', int16: 'np.int16', int8: 'np.int8',
-  uint64: 'np.uint64', uint32: 'np.uint32', uint16: 'np.uint16', uint8: 'np.uint8',
+  int64: 'np.int64',
+  int32: 'np.int32',
+  int16: 'np.int16',
+  int8: 'np.int8',
+  uint64: 'np.uint64',
+  uint32: 'np.uint32',
+  uint16: 'np.uint16',
+  uint8: 'np.uint8',
 };
 
 for (const mode of WASM_MODES) {

@@ -120,7 +120,9 @@ result = np.diff(np.array([[1, 2, 3], [4, 5, 6]]), axis=-1)
     describe('diff (multi-dtype)', () => {
       const DIFF_DTYPES = ['float64', 'float32', 'int32'] as const;
       const NP_DTYPE: Record<string, string> = {
-        float64: 'np.float64', float32: 'np.float32', int32: 'np.int32',
+        float64: 'np.float64',
+        float32: 'np.float32',
+        int32: 'np.int32',
       };
 
       for (const dtype of DIFF_DTYPES) {
@@ -130,7 +132,9 @@ result = np.diff(np.array([[1, 2, 3], [4, 5, 6]]), axis=-1)
 result = np.diff(np.array([1, 3, 6, 10, 15], dtype=${NP_DTYPE[dtype]}))
 `);
           expect(jsResult.shape).toEqual(pyResult.shape);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });
@@ -258,7 +262,9 @@ result = np.gradient(np.array([[1, 2, 4], [4, 8, 12]]), axis=1)
     describe('gradient (multi-dtype)', () => {
       const GRAD_DTYPES = ['float64', 'float32', 'int32'] as const;
       const NP_DTYPE: Record<string, string> = {
-        float64: 'np.float64', float32: 'np.float32', int32: 'np.int32',
+        float64: 'np.float64',
+        float32: 'np.float32',
+        int32: 'np.int32',
       };
 
       for (const dtype of GRAD_DTYPES) {
@@ -268,7 +274,9 @@ result = np.gradient(np.array([[1, 2, 4], [4, 8, 12]]), axis=1)
 result = np.gradient(np.array([1, 2, 4, 7, 11], dtype=${NP_DTYPE[dtype]}))
 `);
           expect(jsResult.shape).toEqual(pyResult.shape);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-5 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-5 : undefined)
+          ).toBe(true);
         });
       }
     });

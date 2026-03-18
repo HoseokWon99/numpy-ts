@@ -193,8 +193,10 @@ result = np.logical_xor(a, b).astype(np.uint8)
     describe('logical ops (multi-dtype)', () => {
       const LOGIC_DTYPES = ['float64', 'float32', 'int32', 'int8'] as const;
       const NP_DTYPE: Record<string, string> = {
-        float64: 'np.float64', float32: 'np.float32',
-        int32: 'np.int32', int8: 'np.int8',
+        float64: 'np.float64',
+        float32: 'np.float32',
+        int32: 'np.int32',
+        int8: 'np.int8',
       };
 
       for (const dtype of LOGIC_DTYPES) {

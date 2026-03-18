@@ -151,7 +151,11 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
     const outData = copyOut(
       outPtr,
       size,
-      Float64Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      Float64Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
     return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
   }

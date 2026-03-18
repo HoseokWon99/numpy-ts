@@ -12,9 +12,14 @@ const WASM_MODES = [
 ] as const;
 
 const NP_DTYPE: Record<string, string> = {
-  float64: 'np.float64', float32: 'np.float32',
-  int32: 'np.int32', int16: 'np.int16', int8: 'np.int8',
-  uint32: 'np.uint32', uint16: 'np.uint16', uint8: 'np.uint8',
+  float64: 'np.float64',
+  float32: 'np.float32',
+  int32: 'np.int32',
+  int16: 'np.int16',
+  int8: 'np.int8',
+  uint32: 'np.uint32',
+  uint16: 'np.uint16',
+  uint8: 'np.uint8',
 };
 
 const ALL_DTYPES = Object.keys(NP_DTYPE);
@@ -91,7 +96,9 @@ result = np.array([[1, 2], [3, 4]]) + np.array([[5, 6], [7, 8]])
 result = np.add(np.array([1, 2, 3, 4, 5], dtype=${NP_DTYPE[dtype]}), ${NP_DTYPE[dtype]}(2))
 `);
           expect(jsResult.shape).toEqual(pyResult.shape);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });
@@ -126,7 +133,9 @@ result = np.array([10, 20, 30]) - np.array([1, 2, 3])
 result = np.subtract(np.array([10, 8, 6, 4, 2], dtype=${NP_DTYPE[dtype]}), ${NP_DTYPE[dtype]}(1))
 `);
           expect(jsResult.shape).toEqual(pyResult.shape);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });
@@ -179,7 +188,9 @@ result = np.array([[1, 2], [3, 4]]) * np.array([[2, 3], [4, 5]])
 result = np.multiply(np.array([1, 2, 3, 4, 5], dtype=${NP_DTYPE[dtype]}), ${NP_DTYPE[dtype]}(3))
 `);
           expect(jsResult.shape).toEqual(pyResult.shape);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });
@@ -214,7 +225,9 @@ result = np.array([10, 20, 30]) / np.array([2, 4, 5])
 result = np.divide(np.array([10, 20, 30], dtype=${NP_DTYPE[dtype]}), ${NP_DTYPE[dtype]}(5))
 `);
           expect(jsResult.shape).toEqual(pyResult.shape);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });

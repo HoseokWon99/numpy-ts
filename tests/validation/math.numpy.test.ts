@@ -24,9 +24,14 @@ const WASM_MODES = [
 ] as const;
 
 const NP_DTYPE: Record<string, string> = {
-  float64: 'np.float64', float32: 'np.float32',
-  int32: 'np.int32', int16: 'np.int16', int8: 'np.int8',
-  uint32: 'np.uint32', uint16: 'np.uint16', uint8: 'np.uint8',
+  float64: 'np.float64',
+  float32: 'np.float32',
+  int32: 'np.int32',
+  int16: 'np.int16',
+  int8: 'np.int8',
+  uint32: 'np.uint32',
+  uint16: 'np.uint16',
+  uint8: 'np.uint8',
 };
 
 const MATH_DTYPES = Object.keys(NP_DTYPE);
@@ -109,7 +114,9 @@ result = np.sqrt(np.array([1, 4, 9], dtype=np.float32))
           const pyResult = runNumPy(`
 result = np.sqrt(np.array([1, 4, 9, 16], dtype=${NP_DTYPE[dtype]}))
 `);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });
@@ -181,13 +188,24 @@ result = np.power(np.array([1, 2, 3, 0]), 0)
     });
 
     describe('power (multi-dtype)', () => {
-      for (const dtype of ['float64', 'float32', 'int32', 'int16', 'int8', 'uint32', 'uint16', 'uint8']) {
+      for (const dtype of [
+        'float64',
+        'float32',
+        'int32',
+        'int16',
+        'int8',
+        'uint32',
+        'uint16',
+        'uint8',
+      ]) {
         it(`matches NumPy for ${dtype}`, () => {
           const jsResult = power(array([1, 2, 3, 4], dtype as any), 2);
           const pyResult = runNumPy(`
 result = np.power(np.array([1, 2, 3, 4], dtype=${NP_DTYPE[dtype]}), 2)
 `);
-          expect(arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)).toBe(true);
+          expect(
+            arraysClose(jsResult.toArray(), pyResult.value, dtype === 'float32' ? 1e-6 : undefined)
+          ).toBe(true);
         });
       }
     });
