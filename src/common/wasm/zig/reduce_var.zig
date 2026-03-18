@@ -78,70 +78,28 @@ export fn reduce_var_i64(a: [*]const i64, N: u32) f64 {
     return sq_total / @as(f64, @floatFromInt(N));
 }
 
-/// Returns the variance of i32 elements. Promotes to f64 for accuracy.
-export fn reduce_var_i32(a: [*]const i32, N: u32) f64 {
-    if (N == 0) return 0;
-    // Pass 1: compute mean
-    var total: f64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        total += @as(f64, @floatFromInt(a[i]));
-    }
-    const mean = total / @as(f64, @floatFromInt(N));
-    // Pass 2: sum of squared differences
-    var sq_total: f64 = 0;
-    i = 0;
-    while (i < N) : (i += 1) {
-        const diff = @as(f64, @floatFromInt(a[i])) - mean;
-        sq_total += diff * diff;
-    }
-    return sq_total / @as(f64, @floatFromInt(N));
-}
-
-/// Returns the variance of i16 elements. Promotes to f64 for accuracy.
-export fn reduce_var_i16(a: [*]const i16, N: u32) f64 {
-    if (N == 0) return 0;
-    // Pass 1: compute mean
-    var total: f64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        total += @as(f64, @floatFromInt(a[i]));
-    }
-    const mean = total / @as(f64, @floatFromInt(N));
-    // Pass 2: sum of squared differences
-    var sq_total: f64 = 0;
-    i = 0;
-    while (i < N) : (i += 1) {
-        const diff = @as(f64, @floatFromInt(a[i])) - mean;
-        sq_total += diff * diff;
-    }
-    return sq_total / @as(f64, @floatFromInt(N));
-}
-
-/// Returns the variance of i8 elements. Promotes to f64 for accuracy.
-export fn reduce_var_i8(a: [*]const i8, N: u32) f64 {
-    if (N == 0) return 0;
-    // Pass 1: compute mean
-    var total: f64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        total += @as(f64, @floatFromInt(a[i]));
-    }
-    const mean = total / @as(f64, @floatFromInt(N));
-    // Pass 2: sum of squared differences
-    var sq_total: f64 = 0;
-    i = 0;
-    while (i < N) : (i += 1) {
-        const diff = @as(f64, @floatFromInt(a[i])) - mean;
-        sq_total += diff * diff;
-    }
-    return sq_total / @as(f64, @floatFromInt(N));
-}
-
-// --- Unsigned variants ---
-
 /// Returns the variance of u64 elements. Promotes to f64 for accuracy.
 export fn reduce_var_u64(a: [*]const u64, N: u32) f64 {
+    if (N == 0) return 0;
+    // Pass 1: compute mean
+    var total: f64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        total += @as(f64, @floatFromInt(a[i]));
+    }
+    const mean = total / @as(f64, @floatFromInt(N));
+    // Pass 2: sum of squared differences
+    var sq_total: f64 = 0;
+    i = 0;
+    while (i < N) : (i += 1) {
+        const diff = @as(f64, @floatFromInt(a[i])) - mean;
+        sq_total += diff * diff;
+    }
+    return sq_total / @as(f64, @floatFromInt(N));
+}
+
+/// Returns the variance of i32 elements. Promotes to f64 for accuracy.
+export fn reduce_var_i32(a: [*]const i32, N: u32) f64 {
     if (N == 0) return 0;
     // Pass 1: compute mean
     var total: f64 = 0;
@@ -180,8 +138,48 @@ export fn reduce_var_u32(a: [*]const u32, N: u32) f64 {
     return sq_total / @as(f64, @floatFromInt(N));
 }
 
+/// Returns the variance of i16 elements. Promotes to f64 for accuracy.
+export fn reduce_var_i16(a: [*]const i16, N: u32) f64 {
+    if (N == 0) return 0;
+    // Pass 1: compute mean
+    var total: f64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        total += @as(f64, @floatFromInt(a[i]));
+    }
+    const mean = total / @as(f64, @floatFromInt(N));
+    // Pass 2: sum of squared differences
+    var sq_total: f64 = 0;
+    i = 0;
+    while (i < N) : (i += 1) {
+        const diff = @as(f64, @floatFromInt(a[i])) - mean;
+        sq_total += diff * diff;
+    }
+    return sq_total / @as(f64, @floatFromInt(N));
+}
+
 /// Returns the variance of u16 elements. Promotes to f64 for accuracy.
 export fn reduce_var_u16(a: [*]const u16, N: u32) f64 {
+    if (N == 0) return 0;
+    // Pass 1: compute mean
+    var total: f64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        total += @as(f64, @floatFromInt(a[i]));
+    }
+    const mean = total / @as(f64, @floatFromInt(N));
+    // Pass 2: sum of squared differences
+    var sq_total: f64 = 0;
+    i = 0;
+    while (i < N) : (i += 1) {
+        const diff = @as(f64, @floatFromInt(a[i])) - mean;
+        sq_total += diff * diff;
+    }
+    return sq_total / @as(f64, @floatFromInt(N));
+}
+
+/// Returns the variance of i8 elements. Promotes to f64 for accuracy.
+export fn reduce_var_i8(a: [*]const i8, N: u32) f64 {
     if (N == 0) return 0;
     // Pass 1: compute mean
     var total: f64 = 0;

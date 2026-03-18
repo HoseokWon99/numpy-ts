@@ -72,22 +72,22 @@ export fn reduce_prod_i16(a: [*]const i16, N: u32) i64 {
     return total;
 }
 
+/// Returns the product of u16 elements. Promotes to u64 output to avoid overflow.
+export fn reduce_prod_u16(a: [*]const u16, N: u32) u64 {
+    var total: u64 = 1;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        total *%= @as(u64, a[i]);
+    }
+    return total;
+}
+
 /// Returns the product of i8 elements. Promotes to i64 output to avoid overflow.
 export fn reduce_prod_i8(a: [*]const i8, N: u32) i64 {
     var total: i64 = 1;
     var i: u32 = 0;
     while (i < N) : (i += 1) {
         total *%= @as(i64, a[i]);
-    }
-    return total;
-}
-
-/// Returns the product of u64 elements. Promotes to u64 output to avoid overflow.
-export fn reduce_prod_u16(a: [*]const u16, N: u32) u64 {
-    var total: u64 = 1;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        total *%= @as(u64, a[i]);
     }
     return total;
 }
@@ -150,8 +150,40 @@ export fn reduce_prod_strided_i64(a: [*]const i64, out: [*]i64, outer: u32, axis
     }
 }
 
+/// Returns the product of u64 elements in a strided layout.
+export fn reduce_prod_strided_u64(a: [*]const u64, out: [*]u64, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| out[ob + i] = a[base + i];
+        for (1..A) |ax| {
+            for (0..I) |i| out[ob + i] *%= a[base + ax * I + i];
+        }
+    }
+}
+
 /// Returns the product of i32 elements in a strided layout. Uses 4-wide SIMD accumulation.
 export fn reduce_prod_strided_i32(a: [*]const i32, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| out[ob + i] = a[base + i];
+        for (1..A) |ax| {
+            for (0..I) |i| out[ob + i] *%= a[base + ax * I + i];
+        }
+    }
+}
+
+/// Returns the product of u32 elements in a strided layout.
+export fn reduce_prod_strided_u32(a: [*]const u32, out: [*]u32, outer: u32, axis: u32, inner: u32) void {
     const O = @as(usize, outer);
     const A = @as(usize, axis);
     const I = @as(usize, inner);
@@ -183,55 +215,6 @@ export fn reduce_prod_strided_i16(a: [*]const i16, out: [*]i64, outer: u32, axis
     }
 }
 
-/// Returns the product of i8 elements in a strided layout.
-/// Promotes to i64 output to avoid overflow.
-export fn reduce_prod_strided_i8(a: [*]const i8, out: [*]i64, outer: u32, axis: u32, inner: u32) void {
-    const O = @as(usize, outer);
-    const A = @as(usize, axis);
-    const I = @as(usize, inner);
-    const S = A * I;
-    for (0..O) |o| {
-        const base = o * S;
-        const ob = o * I;
-        for (0..I) |i| out[ob + i] = @as(i64, a[base + i]);
-        for (1..A) |ax| {
-            for (0..I) |i| out[ob + i] *%= @as(i64, a[base + ax * I + i]);
-        }
-    }
-}
-
-/// Returns the product of u64 elements in a strided layout.
-export fn reduce_prod_strided_u64(a: [*]const u64, out: [*]u64, outer: u32, axis: u32, inner: u32) void {
-    const O = @as(usize, outer);
-    const A = @as(usize, axis);
-    const I = @as(usize, inner);
-    const S = A * I;
-    for (0..O) |o| {
-        const base = o * S;
-        const ob = o * I;
-        for (0..I) |i| out[ob + i] = a[base + i];
-        for (1..A) |ax| {
-            for (0..I) |i| out[ob + i] *%= a[base + ax * I + i];
-        }
-    }
-}
-
-/// Returns the product of u32 elements in a strided layout.
-export fn reduce_prod_strided_u32(a: [*]const u32, out: [*]u32, outer: u32, axis: u32, inner: u32) void {
-    const O = @as(usize, outer);
-    const A = @as(usize, axis);
-    const I = @as(usize, inner);
-    const S = A * I;
-    for (0..O) |o| {
-        const base = o * S;
-        const ob = o * I;
-        for (0..I) |i| out[ob + i] = a[base + i];
-        for (1..A) |ax| {
-            for (0..I) |i| out[ob + i] *%= a[base + ax * I + i];
-        }
-    }
-}
-
 /// Returns the product of u16 elements in a strided layout.
 /// Promotes to u64 output to avoid overflow.
 export fn reduce_prod_strided_u16(a: [*]const u16, out: [*]u64, outer: u32, axis: u32, inner: u32) void {
@@ -245,6 +228,23 @@ export fn reduce_prod_strided_u16(a: [*]const u16, out: [*]u64, outer: u32, axis
         for (0..I) |i| out[ob + i] = @as(u64, a[base + i]);
         for (1..A) |ax| {
             for (0..I) |i| out[ob + i] *%= @as(u64, a[base + ax * I + i]);
+        }
+    }
+}
+
+/// Returns the product of i8 elements in a strided layout.
+/// Promotes to i64 output to avoid overflow.
+export fn reduce_prod_strided_i8(a: [*]const i8, out: [*]i64, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| out[ob + i] = @as(i64, a[base + i]);
+        for (1..A) |ax| {
+            for (0..I) |i| out[ob + i] *%= @as(i64, a[base + ax * I + i]);
         }
     }
 }
