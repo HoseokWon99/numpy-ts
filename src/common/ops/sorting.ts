@@ -9,6 +9,7 @@ import { ArrayStorage } from '../storage';
 import { isBigIntDType, isComplexDType, type DType } from '../dtype';
 import { Complex } from '../complex';
 import { computeStrides, precomputeAxisOffsets } from '../internal/indexing';
+import { wasmReduceCountNz } from '../wasm/reduce_count_nz';
 
 /**
  * Check if a value at index i is non-zero (truthy)
@@ -1632,6 +1633,10 @@ export function count_nonzero(storage: ArrayStorage, axis?: number): ArrayStorag
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array count_nonzero
+    const wasmResult = wasmReduceCountNz(storage);
+    if (wasmResult !== null) return wasmResult;
+
     // Count all non-zero elements
     let count = 0;
     if (contiguous) {

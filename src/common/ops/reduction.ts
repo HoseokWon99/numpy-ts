@@ -6,9 +6,23 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { isBigIntDType, isComplexDType, throwIfComplex, type DType } from '../dtype';
+import { isBigIntDType, isComplexDType, isFloatDType, throwIfComplex, type DType } from '../dtype';
 import { computeStrides, precomputeAxisOffsets } from '../internal/indexing';
 import { Complex } from '../complex';
+import { wasmReduceSum, wasmReduceSumStrided } from '../wasm/reduce_sum';
+import { wasmReduceMax, wasmReduceMaxStrided } from '../wasm/reduce_max';
+import { wasmReduceMin, wasmReduceMinStrided } from '../wasm/reduce_min';
+import { wasmReduceArgmax } from '../wasm/reduce_argmax';
+import { wasmReduceArgmin } from '../wasm/reduce_argmin';
+import { wasmReduceMean, wasmReduceMeanStrided } from '../wasm/reduce_mean';
+import { wasmReduceVar } from '../wasm/reduce_var';
+import { wasmReduceNansum } from '../wasm/reduce_nansum';
+import { wasmReduceNanmin } from '../wasm/reduce_nanmin';
+import { wasmReduceNanmax } from '../wasm/reduce_nanmax';
+import { wasmReduceProd, wasmReduceProdStrided } from '../wasm/reduce_prod';
+import { wasmReduceQuantile } from '../wasm/reduce_quantile';
+import { wasmReduceAny } from '../wasm/reduce_any';
+import { wasmReduceAll } from '../wasm/reduce_all';
 
 // Reusable Float32Array accumulators — writing to f32acc[0] implicitly rounds
 // to float32 precision (same as Math.fround) but V8 optimizes typed-array
@@ -85,6 +99,10 @@ export function sum(
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array sum (non-complex)
+    const wasmSum = wasmReduceSum(storage);
+    if (wasmSum !== null) return wasmSum;
+
     // Sum all elements - return scalar (or Complex for complex arrays)
     if (isComplexDType(dtype)) {
       let totalRe = 0;
@@ -179,6 +197,33 @@ export function sum(
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
 
+  // WASM strided fast path: accumulate in f64, convert to output dtype after
+  if (contiguous && !isComplexDType(dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceSumStrided(storage, wasmOuter, axisSize, innerSize);
+    if (wasmResult) {
+      const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
+      if (outDtype === 'float64') {
+        return ArrayStorage.fromData(wasmResult.data, outShape, outDtype);
+      }
+      if (outDtype === 'float32') {
+        const f32 = new Float32Array(wasmResult.data.length);
+        const f64 = wasmResult.data as Float64Array;
+        for (let i = 0; i < f64.length; i++) f32[i] = f64[i]!;
+        return ArrayStorage.fromData(f32, outShape, outDtype);
+      }
+      // int64/uint64 output
+      const f64Data = wasmResult.data as Float64Array;
+      for (let i = 0; i < f64Data.length; i++)
+        resultData[i] =
+          resultData instanceof BigInt64Array || resultData instanceof BigUint64Array
+            ? (BigInt(Math.round(f64Data[i]!)) as bigint)
+            : f64Data[i]!;
+      return keepdims ? ArrayStorage.fromData(resultData, outShape, outDtype) : result;
+    }
+  }
+
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
     inputStrides,
@@ -233,16 +278,18 @@ export function sum(
       resultTyped[outerIdx] = sumVal;
     }
   } else if (isBigIntDType(outDtype)) {
-    // Input is narrow int (int8/16/32, uint8/16/32) promoted to int64/uint64
+    // Input is narrow int (int8/16/32, uint8/16/32) promoted to int64/uint64.
+    // Accumulate as Number (53-bit precision, sufficient for practical axis sizes)
+    // then convert to BigInt once — avoids per-element BigInt(Number()) overhead.
     const resultTyped = resultData as BigInt64Array | BigUint64Array;
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
-      let sumVal = BigInt(0);
+      let sumVal = 0;
       let bufIdx = baseOffsets[outerIdx]!;
       for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
-        sumVal += BigInt(Number(data[bufIdx]!));
+        sumVal += Number(data[bufIdx]!);
         bufIdx += axisStr;
       }
-      resultTyped[outerIdx] = sumVal;
+      resultTyped[outerIdx] = BigInt(Math.round(sumVal));
     }
   } else if (dtype === 'float32') {
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
@@ -290,6 +337,10 @@ export function mean(
   const shape = storage.shape;
 
   if (axis === undefined) {
+    // WASM fast path for full-array mean (non-complex)
+    const wasmResult = wasmReduceMean(storage);
+    if (wasmResult !== null) return wasmResult;
+
     const sumResult = sum(storage);
     if (sumResult instanceof Complex) {
       return new Complex(sumResult.re / storage.size, sumResult.im / storage.size);
@@ -304,6 +355,20 @@ export function mean(
   }
   if (normalizedAxis < 0 || normalizedAxis >= shape.length) {
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${shape.length}`);
+  }
+
+  // WASM strided fast path for contiguous non-complex mean
+  if (storage.isCContiguous && !isComplexDType(dtype)) {
+    const axisSize = shape[normalizedAxis]!;
+    const outputShape = keepdims
+      ? shape.map((s, i) => (i === normalizedAxis ? 1 : s))
+      : Array.from(shape).filter((_, i) => i !== normalizedAxis);
+    const outerSize = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceMeanStrided(storage, outerSize, axisSize, innerSize);
+    if (wasmResult) {
+      return ArrayStorage.fromData(wasmResult.data, outputShape, 'float64');
+    }
   }
 
   const sumResult = sum(storage, axis, keepdims);
@@ -466,6 +531,10 @@ export function max(
   }
 
   if (axis === undefined) {
+    // WASM fast path for full-array max (non-complex)
+    const wasmResult = wasmReduceMax(storage);
+    if (wasmResult !== null) return wasmResult;
+
     // Max of all elements - return scalar
     if (size === 0) {
       throw new Error('max of empty array');
@@ -523,6 +592,17 @@ export function max(
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
+
+  // WASM strided fast path for max (output dtype matches input dtype)
+  if (storage.isCContiguous && !isComplexDType(dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceMaxStrided(storage, wasmOuter, axisSize, innerSize);
+    if (wasmResult) {
+      const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
+      return ArrayStorage.fromData(wasmResult.data, outShape, dtype);
+    }
+  }
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -594,6 +674,10 @@ export function prod(
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array product (non-complex)
+    const wasmProd = wasmReduceProd(storage);
+    if (wasmProd !== null) return wasmProd;
+
     // Product of all elements - return scalar (or Complex for complex arrays)
     if (isComplexDType(dtype)) {
       let prodRe = 1;
@@ -693,6 +777,18 @@ export function prod(
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
+
+  // WASM strided fast path for prod
+  if (contiguous && !isComplexDType(dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceProdStrided(storage, wasmOuter, axisSize, innerSize);
+    if (wasmResult) {
+      const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
+      // WASM output dtype matches outDtype for prod (native or promoted)
+      return ArrayStorage.fromData(wasmResult.data, outShape, outDtype);
+    }
+  }
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -912,6 +1008,10 @@ export function min(
   }
 
   if (axis === undefined) {
+    // WASM fast path for full-array min (non-complex)
+    const wasmResult = wasmReduceMin(storage);
+    if (wasmResult !== null) return wasmResult;
+
     // Min of all elements - return scalar
     if (size === 0) {
       throw new Error('min of empty array');
@@ -969,6 +1069,17 @@ export function min(
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
+
+  // WASM strided fast path for min (output dtype matches input dtype)
+  if (storage.isCContiguous && !isComplexDType(dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceMinStrided(storage, wasmOuter, axisSize, innerSize);
+    if (wasmResult) {
+      const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
+      return ArrayStorage.fromData(wasmResult.data, outShape, dtype);
+    }
+  }
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -1049,6 +1160,10 @@ export function argmin(storage: ArrayStorage, axis?: number): ArrayStorage | num
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array argmin (non-complex)
+    const wasmResult = wasmReduceArgmin(storage);
+    if (wasmResult !== null) return wasmResult;
+
     if (size === 0) {
       throw new Error('argmin of empty array');
     }
@@ -1226,6 +1341,10 @@ export function argmax(storage: ArrayStorage, axis?: number): ArrayStorage | num
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array argmax (non-complex)
+    const wasmResult = wasmReduceArgmax(storage);
+    if (wasmResult !== null) return wasmResult;
+
     if (size === 0) {
       throw new Error('argmax of empty array');
     }
@@ -1409,6 +1528,10 @@ export function variance(
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array variance (non-complex)
+    const wasmResult = wasmReduceVar(storage);
+    if (wasmResult !== null) return wasmResult;
+
     // Variance of all elements - return scalar
     if (isComplexDType(dtype)) {
       const meanComplex = meanResult as Complex;
@@ -1580,6 +1703,10 @@ export function all(
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array all
+    const wasmAll = wasmReduceAll(storage);
+    if (wasmAll !== null) return wasmAll === 1;
+
     // Test all elements
     if (contiguous) {
       for (let i = 0; i < size; i++) {
@@ -1672,6 +1799,10 @@ export function any(
   const contiguous = storage.isCContiguous;
 
   if (axis === undefined) {
+    // WASM fast path for full-array any
+    const wasmAny = wasmReduceAny(storage);
+    if (wasmAny !== null) return wasmAny === 1;
+
     // Test all elements
     if (contiguous) {
       for (let i = 0; i < size; i++) {
@@ -2201,6 +2332,10 @@ export function quantile(
   const inputStrides = storage.strides;
 
   if (axis === undefined) {
+    // WASM fast path for full-array quantile
+    const wasmQ = wasmReduceQuantile(storage, q);
+    if (wasmQ !== null) return wasmQ;
+
     // Compute quantile over all elements
     const values: number[] = [];
     const contiguous = storage.isCContiguous;
@@ -2527,7 +2662,16 @@ export function nansum(
   const off = storage.offset;
   const inputStrides = storage.strides;
 
+  // Integer types can't have NaN — delegate to regular sum (which has WASM)
+  if (!isComplex && !isFloatDType(dtype)) {
+    return sum(storage, axis, keepdims);
+  }
+
   if (axis === undefined) {
+    // WASM fast path for float nansum
+    const wasmResult = wasmReduceNansum(storage);
+    if (wasmResult !== null) return wasmResult;
+
     if (isComplex) {
       const complexData = data as Float64Array | Float32Array;
       let totalRe = 0;
@@ -2668,6 +2812,12 @@ export function nanprod(
 ): ArrayStorage | number | Complex {
   const dtype = storage.dtype;
   const isComplex = isComplexDType(dtype);
+
+  // Integer types can't have NaN — delegate to regular prod (which has WASM)
+  if (!isComplex && !isFloatDType(dtype)) {
+    return prod(storage, axis, keepdims);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -2821,6 +2971,12 @@ export function nanmean(
 ): ArrayStorage | number | Complex {
   const dtype = storage.dtype;
   const isComplex = isComplexDType(dtype);
+
+  // Integer types can't have NaN — delegate to regular mean (which has WASM)
+  if (!isComplex && !isFloatDType(dtype)) {
+    return mean(storage, axis, keepdims);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -2983,6 +3139,12 @@ export function nanvar(
   keepdims: boolean = false
 ): ArrayStorage | number {
   const dtype = storage.dtype as DType;
+
+  // Integer types can't have NaN — delegate to regular variance (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return variance(storage, axis, ddof, keepdims);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -3290,6 +3452,11 @@ export function nanmin(
   const off = storage.offset;
   const inputStrides = storage.strides;
 
+  // Integer types can't have NaN — delegate to regular min (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return min(storage, axis, keepdims);
+  }
+
   // Complex nanmin uses lexicographic ordering, skipping NaN values
   if (isComplexDType(dtype)) {
     const complexData = data as Float64Array | Float32Array;
@@ -3409,6 +3576,10 @@ export function nanmin(
   }
 
   if (axis === undefined) {
+    // WASM fast path for full-array nanmin (non-complex)
+    const wasmResult = wasmReduceNanmin(storage);
+    if (wasmResult !== null) return wasmResult;
+
     let minVal = Infinity;
     const contiguous = storage.isCContiguous;
     if (contiguous) {
@@ -3495,6 +3666,11 @@ export function nanmax(
   const data = storage.data;
   const off = storage.offset;
   const inputStrides = storage.strides;
+
+  // Integer types can't have NaN — delegate to regular max (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return max(storage, axis, keepdims);
+  }
 
   // Complex nanmax uses lexicographic ordering, skipping NaN values
   if (isComplexDType(dtype)) {
@@ -3615,6 +3791,10 @@ export function nanmax(
   }
 
   if (axis === undefined) {
+    // WASM fast path for full-array nanmax (non-complex)
+    const wasmResult = wasmReduceNanmax(storage);
+    if (wasmResult !== null) return wasmResult;
+
     let maxVal = -Infinity;
     const contiguous = storage.isCContiguous;
     if (contiguous) {
@@ -3692,6 +3872,12 @@ export function nanmax(
  */
 export function nanargmin(storage: ArrayStorage, axis?: number): ArrayStorage | number {
   const dtype = storage.dtype as DType;
+
+  // Integer types can't have NaN — delegate to regular argmin (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return argmin(storage, axis);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -3854,6 +4040,12 @@ export function nanargmin(storage: ArrayStorage, axis?: number): ArrayStorage | 
  */
 export function nanargmax(storage: ArrayStorage, axis?: number): ArrayStorage | number {
   const dtype = storage.dtype as DType;
+
+  // Integer types can't have NaN — delegate to regular argmax (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return argmax(storage, axis);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -4015,6 +4207,12 @@ export function nanargmax(storage: ArrayStorage, axis?: number): ArrayStorage | 
  */
 export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
   const dtype = storage.dtype as DType;
+
+  // Integer types can't have NaN — delegate to regular cumsum (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return cumsum(storage, axis);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -4208,6 +4406,12 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
  */
 export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   const dtype = storage.dtype as DType;
+
+  // Integer types can't have NaN — delegate to regular cumprod (which has WASM)
+  if (!isComplexDType(dtype) && !isFloatDType(dtype)) {
+    return cumprod(storage, axis);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -4422,6 +4626,12 @@ export function nanmedian(
   keepdims: boolean = false
 ): ArrayStorage | number {
   throwIfComplex(storage.dtype, 'nanmedian', 'Complex numbers are not orderable.');
+
+  // Integer types can't have NaN — delegate to regular median (which has WASM)
+  if (!isFloatDType(storage.dtype)) {
+    return median(storage, axis, keepdims);
+  }
+
   const shape = storage.shape;
   const ndim = shape.length;
   const data = storage.data;
@@ -4537,6 +4747,12 @@ export function nanquantile(
   keepdims: boolean = false
 ): ArrayStorage | number {
   throwIfComplex(storage.dtype, 'nanquantile', 'Complex numbers are not orderable.');
+
+  // Integer types can't have NaN — delegate to regular quantile (which has WASM)
+  if (!isFloatDType(storage.dtype)) {
+    return quantile(storage, q, axis, keepdims);
+  }
+
   if (q < 0 || q > 1) {
     throw new Error('Quantile must be between 0 and 1');
   }
