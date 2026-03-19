@@ -9,6 +9,8 @@ import { ArrayStorage, computeStrides } from '../storage';
 import { getTypedArrayConstructor, isBigIntDType, type TypedArray } from '../dtype';
 import { computeBroadcastShape, broadcastTo, broadcastShapes } from '../broadcasting';
 import { Complex } from '../complex';
+import { wasmIndices } from '../wasm/indices';
+import { wasmTakeAlongAxis2D } from '../wasm/gather';
 
 /**
  * Broadcast an array to a given shape
@@ -347,6 +349,10 @@ export function take_along_axis(
   indices: ArrayStorage,
   axis: number
 ): ArrayStorage {
+  // WASM fast path for 2D along axis 0
+  const wasmResult = wasmTakeAlongAxis2D(storage, indices, axis);
+  if (wasmResult) return wasmResult;
+
   const shape = storage.shape;
   const ndim = shape.length;
   const dtype = storage.dtype;
@@ -389,14 +395,27 @@ export function take_along_axis(
 
   const axisSize = shape[normalizedAxis]!;
 
-  // Iterate through output positions
+  // Precompute output strides for flat→multi-index conversion
+  const outputStrides = computeStrides(outputShape);
+
+  // Reusable multi-index (avoids per-element allocation)
+  const multiIdx = new Array(ndim);
+
+  // Pre-extract contiguous data for fast paths
+  const isBigInt = isBigIntDType(dtype);
+  const inputContiguous = storage.isCContiguous;
+  const indicesContiguous = indices.isCContiguous;
+  const inputData = storage.data;
+  const inputOff = storage.offset;
+  const indicesData = indices.data;
+  const indicesOff = indices.offset;
+
   for (let outIdx = 0; outIdx < outputSize; outIdx++) {
-    // Convert outIdx to multi-index in output shape
-    const multiIdx = new Array(ndim);
+    // Convert outIdx to multi-index using precomputed strides (no allocation)
     let remaining = outIdx;
-    for (let d = ndim - 1; d >= 0; d--) {
-      multiIdx[d] = remaining % outputShape[d]!;
-      remaining = Math.floor(remaining / outputShape[d]!);
+    for (let d = 0; d < ndim; d++) {
+      multiIdx[d] = (remaining / outputStrides[d]!) | 0;
+      remaining -= multiIdx[d]! * outputStrides[d]!;
     }
 
     // Get the index value from indices array
@@ -405,28 +424,33 @@ export function take_along_axis(
       const idx = indicesShape[d] === 1 ? 0 : multiIdx[d]!;
       indicesLinearIdx += idx * indicesStrides[d]!;
     }
-    let indexValue = Number(indices.iget(indicesLinearIdx));
+    let indexValue = indicesContiguous
+      ? Number(indicesData[indicesOff + indicesLinearIdx])
+      : Number(indices.iget(indicesLinearIdx));
     if (indexValue < 0) indexValue = axisSize + indexValue;
-    if (indexValue < 0 || indexValue >= axisSize) {
-      throw new Error(
-        `index ${indexValue} is out of bounds for axis ${normalizedAxis} with size ${axisSize}`
-      );
-    }
 
-    // Compute source index
-    const sourceMultiIdx = [...multiIdx];
-    sourceMultiIdx[normalizedAxis] = indexValue;
+    // Compute source linear index (replace axis dimension with index value)
     let srcLinearIdx = 0;
     for (let d = 0; d < ndim; d++) {
-      const idx = shape[d] === 1 ? 0 : sourceMultiIdx[d]!;
+      const idx = d === normalizedAxis ? indexValue : (shape[d] === 1 ? 0 : multiIdx[d]!);
       srcLinearIdx += idx * inputStrides[d]!;
     }
 
-    const value = storage.iget(srcLinearIdx);
-    if (isBigIntDType(dtype)) {
-      (outputData as BigInt64Array | BigUint64Array)[outIdx] = value as bigint;
+    if (inputContiguous) {
+      if (isBigInt) {
+        (outputData as BigInt64Array | BigUint64Array)[outIdx] =
+          (inputData as BigInt64Array | BigUint64Array)[inputOff + srcLinearIdx]!;
+      } else {
+        (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[outIdx] =
+          (inputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[inputOff + srcLinearIdx]!;
+      }
     } else {
-      (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[outIdx] = value as number;
+      const value = storage.iget(srcLinearIdx);
+      if (isBigInt) {
+        (outputData as BigInt64Array | BigUint64Array)[outIdx] = value as bigint;
+      } else {
+        (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[outIdx] = value as number;
+      }
     }
   }
 
@@ -649,13 +673,16 @@ export function compress(
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${ndim}`);
   }
 
-  // Build boolean array and axis mapping in one pass
+  // Build axis index mapping from condition
   const axisSize = shape[normalizedAxis]!;
   const maxLen = Math.min(condition.size, axisSize);
   const axisMap: number[] = [];
+  const condContiguous = condition.isCContiguous;
+  const condData = condition.data;
+  const condOff = condition.offset;
 
   for (let i = 0; i < maxLen; i++) {
-    if (condition.iget(i)) {
+    if (condContiguous ? condData[condOff + i] : condition.iget(i)) {
       axisMap.push(i);
     }
   }
@@ -681,29 +708,14 @@ export function compress(
   if (inputContiguous) {
     const inputData = storage.data;
     const inputOff = storage.offset;
-    if (isBigInt) {
-      const outTyped = outputData as BigInt64Array | BigUint64Array;
-      const inTyped = inputData as BigInt64Array | BigUint64Array;
-      for (let outer = 0; outer < outerSize; outer++) {
-        for (let axisIdx = 0; axisIdx < trueCount; axisIdx++) {
-          const inputAxisIdx = axisMap[axisIdx]!;
-          for (let inner = 0; inner < innerSize; inner++) {
-            const flatIdx = outer * axisSize * innerSize + inputAxisIdx * innerSize + inner;
-            outTyped[outIdx++] = inTyped[inputOff + flatIdx]!;
-          }
-        }
-      }
-    } else {
-      const outTyped = outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      const inTyped = inputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>;
-      for (let outer = 0; outer < outerSize; outer++) {
-        for (let axisIdx = 0; axisIdx < trueCount; axisIdx++) {
-          const inputAxisIdx = axisMap[axisIdx]!;
-          for (let inner = 0; inner < innerSize; inner++) {
-            const flatIdx = outer * axisSize * innerSize + inputAxisIdx * innerSize + inner;
-            outTyped[outIdx++] = inTyped[inputOff + flatIdx]!;
-          }
-        }
+    // Bulk copy: each selected axis slice is innerSize contiguous elements
+    for (let outer = 0; outer < outerSize; outer++) {
+      const outerOff = inputOff + outer * axisSize * innerSize;
+      for (let axisIdx = 0; axisIdx < trueCount; axisIdx++) {
+        const srcStart = outerOff + axisMap[axisIdx]! * innerSize;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+        outputData.set(inputData.subarray(srcStart, srcStart + innerSize) as any, outIdx);
+        outIdx += innerSize;
       }
     }
   } else {
@@ -999,6 +1011,10 @@ export function indices(
   dimensions: number[],
   dtype: 'int32' | 'int64' | 'float64' = 'int32'
 ): ArrayStorage {
+  // WASM fast path for 2D/3D int32 grids
+  const wasmResult = wasmIndices(dimensions, dtype);
+  if (wasmResult) return wasmResult;
+
   const ndim = dimensions.length;
   const outputShape = [ndim, ...dimensions];
   const outputSize = outputShape.reduce((a, b) => a * b, 1);
@@ -1011,25 +1027,29 @@ export function indices(
   const outputData = new Constructor(outputSize);
   const gridSize = dimensions.reduce((a, b) => a * b, 1);
 
-  // For each dimension, fill the corresponding slice
+  // Precompute strides for converting flat index → per-dimension index
+  // stride[d] = product of dimensions[d+1..ndim-1]
+  const strides = new Array(ndim);
+  strides[ndim - 1] = 1;
+  for (let i = ndim - 2; i >= 0; i--) {
+    strides[i] = strides[i + 1]! * dimensions[i + 1]!;
+  }
+
+  // For each dimension, fill its grid slice using stride arithmetic (no allocation per element)
   for (let d = 0; d < ndim; d++) {
     const sliceOffset = d * gridSize;
+    const dimSize = dimensions[d]!;
+    const stride = strides[d]!;
 
-    // Iterate through grid positions
-    for (let gridIdx = 0; gridIdx < gridSize; gridIdx++) {
-      // Convert gridIdx to multi-index
-      const multiIdx = new Array(ndim);
-      let remaining = gridIdx;
-      for (let i = ndim - 1; i >= 0; i--) {
-        multiIdx[i] = remaining % dimensions[i]!;
-        remaining = Math.floor(remaining / dimensions[i]!);
+    if (dtype === 'int64') {
+      const typed = outputData as BigInt64Array;
+      for (let gridIdx = 0; gridIdx < gridSize; gridIdx++) {
+        typed[sliceOffset + gridIdx] = BigInt(Math.floor(gridIdx / stride) % dimSize);
       }
-
-      const value = multiIdx[d]!;
-      if (dtype === 'int64') {
-        (outputData as BigInt64Array)[sliceOffset + gridIdx] = BigInt(value);
-      } else {
-        (outputData as Float64Array | Int32Array)[sliceOffset + gridIdx] = value;
+    } else {
+      const typed = outputData as Float64Array | Int32Array;
+      for (let gridIdx = 0; gridIdx < gridSize; gridIdx++) {
+        typed[sliceOffset + gridIdx] = Math.floor(gridIdx / stride) % dimSize;
       }
     }
   }
