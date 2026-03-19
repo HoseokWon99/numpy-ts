@@ -592,3 +592,449 @@ pub fn complexHeapSortStableSlices(comptime T: type, a: [*]const T, out: [*]u32,
         complexHeapSortStable(T, a + off * 2, sliceOut, sliceSize);
     }
 }
+
+// --- Tests ---
+
+const testing = @import("std").testing;
+
+fn isSorted(comptime T: type, a: []const T) bool {
+    if (a.len <= 1) return true;
+    var i: usize = 1;
+    while (i < a.len) : (i += 1) {
+        if (lessThan(T, a[i], a[i - 1])) return false;
+    }
+    return true;
+}
+
+fn isStablySorted(comptime T: type, a: []const T, out: []const u32) bool {
+    if (out.len <= 1) return true;
+    var i: usize = 1;
+    while (i < out.len) : (i += 1) {
+        if (!stableLess(T, @ptrCast(a.ptr), out[i - 1], out[i]) and
+            stableLess(T, @ptrCast(a.ptr), out[i], out[i - 1])) return false;
+    }
+    return true;
+}
+
+// --- lessThan ---
+
+test "lessThan: f64 normal values" {
+    try testing.expect(lessThan(f64, 1.0, 2.0));
+    try testing.expect(!lessThan(f64, 2.0, 1.0));
+    try testing.expect(!lessThan(f64, 1.0, 1.0));
+}
+
+test "lessThan: f64 NaN sorts to end" {
+    const nan = @as(f64, @bitCast(@as(u64, 0x7FF8000000000000)));
+    try testing.expect(!lessThan(f64, nan, 1.0)); // NaN is NOT less than anything
+    try testing.expect(lessThan(f64, 1.0, nan)); // anything IS less than NaN
+    try testing.expect(!lessThan(f64, nan, nan)); // NaN vs NaN → false
+}
+
+test "lessThan: i32 signed" {
+    try testing.expect(lessThan(i32, -5, 3));
+    try testing.expect(!lessThan(i32, 3, -5));
+    try testing.expect(!lessThan(i32, 0, 0));
+}
+
+test "lessThan: u8 unsigned" {
+    try testing.expect(lessThan(u8, 0, 255));
+    try testing.expect(!lessThan(u8, 128, 127));
+}
+
+// --- stableLess ---
+
+test "stableLess: breaks ties by index" {
+    const a = [_]f64{ 3.0, 1.0, 3.0, 1.0 };
+    try testing.expect(stableLess(f64, &a, 1, 3)); // same value 1.0, idx 1 < 3
+    try testing.expect(!stableLess(f64, &a, 3, 1)); // same value 1.0, idx 3 > 1
+    try testing.expect(stableLess(f64, &a, 1, 0)); // 1.0 < 3.0
+}
+
+test "stableLess: NaN stable tiebreaker" {
+    const nan = @as(f64, @bitCast(@as(u64, 0x7FF8000000000000)));
+    const a = [_]f64{ nan, nan };
+    try testing.expect(stableLess(f64, &a, 0, 1)); // both NaN, idx 0 < 1
+    try testing.expect(!stableLess(f64, &a, 1, 0));
+}
+
+// --- indirectLess ---
+
+test "indirectLess: basic" {
+    const a = [_]i32{ 10, 5, 20 };
+    try testing.expect(indirectLess(i32, &a, 1, 0)); // a[1]=5 < a[0]=10
+    try testing.expect(!indirectLess(i32, &a, 2, 0)); // a[2]=20 > a[0]=10
+    try testing.expect(!indirectLess(i32, &a, 0, 0)); // equal → false (no tiebreaker)
+}
+
+// --- heapSort ---
+
+test "heapSort: f64 with NaN" {
+    var a = [_]f64{ 3.0, @as(f64, @bitCast(@as(u64, 0x7FF8000000000000))), 1.0, 2.0 };
+    heapSort(f64, &a, 4);
+    try testing.expectApproxEqAbs(a[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(a[1], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(a[2], 3.0, 1e-10);
+    try testing.expect(a[3] != a[3]); // NaN at end
+}
+
+test "heapSort: i32 with negatives" {
+    var a = [_]i32{ 5, -3, 0, -100, 42, 7 };
+    heapSort(i32, &a, 6);
+    try testing.expect(isSorted(i32, &a));
+    try testing.expectEqual(a[0], -100);
+    try testing.expectEqual(a[5], 42);
+}
+
+test "heapSort: u16 already sorted" {
+    var a = [_]u16{ 1, 2, 3, 4, 5 };
+    heapSort(u16, &a, 5);
+    try testing.expect(isSorted(u16, &a));
+}
+
+test "heapSort: i8 reverse sorted" {
+    var a = [_]i8{ 127, 50, 0, -50, -128 };
+    heapSort(i8, &a, 5);
+    try testing.expect(isSorted(i8, &a));
+    try testing.expectEqual(a[0], -128);
+    try testing.expectEqual(a[4], 127);
+}
+
+test "heapSort: single element" {
+    var a = [_]f64{42.0};
+    heapSort(f64, &a, 1);
+    try testing.expectApproxEqAbs(a[0], 42.0, 1e-10);
+}
+
+test "heapSort: empty" {
+    var a = [_]i32{};
+    heapSort(i32, &a, 0);
+}
+
+test "heapSort: all equal" {
+    var a = [_]u32{ 7, 7, 7, 7 };
+    heapSort(u32, &a, 4);
+    for (a) |v| try testing.expectEqual(v, 7);
+}
+
+// --- heapSortStable ---
+
+test "heapSortStable: preserves order for equal f64" {
+    const a = [_]f64{ 3.0, 1.0, 3.0, 1.0, 2.0 };
+    var out: [5]u32 = undefined;
+    initIndices(&out, 5);
+    heapSortStable(f64, &a, &out, 5);
+    // 1.0 at indices 1,3 → stable: 1 before 3
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 3);
+    // 2.0 at index 4
+    try testing.expectEqual(out[2], 4);
+    // 3.0 at indices 0,2 → stable: 0 before 2
+    try testing.expectEqual(out[3], 0);
+    try testing.expectEqual(out[4], 2);
+}
+
+test "heapSortStable: i32 basic" {
+    const a = [_]i32{ 30, -10, 20, 0 };
+    var out: [4]u32 = undefined;
+    initIndices(&out, 4);
+    heapSortStable(i32, &a, &out, 4);
+    try testing.expectEqual(a[out[0]], -10);
+    try testing.expectEqual(a[out[3]], 30);
+}
+
+// --- quickselect ---
+
+test "quickselect: f64 kth=2" {
+    var a = [_]f64{ 3.0, 1.0, 4.0, 1.5, 2.0 };
+    quickselect(f64, &a, 0, 4, 2);
+    try testing.expectApproxEqAbs(a[2], 2.0, 1e-10);
+    // Elements before kth should be <= a[kth]
+    for (0..2) |i| try testing.expect(a[i] <= a[2]);
+    for (3..5) |i| try testing.expect(a[i] >= a[2]);
+}
+
+test "quickselect: i32 kth=0 (minimum)" {
+    var a = [_]i32{ 5, 3, -1, 4, 2 };
+    quickselect(i32, &a, 0, 4, 0);
+    try testing.expectEqual(a[0], -1);
+}
+
+test "quickselect: u8 kth=N-1 (maximum)" {
+    var a = [_]u8{ 50, 10, 40, 20, 30 };
+    quickselect(u8, &a, 0, 4, 4);
+    try testing.expectEqual(a[4], 50);
+}
+
+test "quickselect: already sorted data" {
+    var a = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    quickselect(i32, &a, 0, 7, 4);
+    try testing.expectEqual(a[4], 5);
+}
+
+test "quickselect: reverse sorted data" {
+    var a = [_]i32{ 8, 7, 6, 5, 4, 3, 2, 1 };
+    quickselect(i32, &a, 0, 7, 3);
+    try testing.expectEqual(a[3], 4);
+}
+
+test "quickselect: f64 with NaN" {
+    const nan = @as(f64, @bitCast(@as(u64, 0x7FF8000000000000)));
+    var a = [_]f64{ nan, 2.0, 1.0, nan, 3.0 };
+    quickselect(f64, &a, 0, 4, 2);
+    try testing.expectApproxEqAbs(a[2], 3.0, 1e-10);
+}
+
+// --- quickselectIndirect ---
+
+test "quickselectIndirect: f64 kth=2" {
+    const a = [_]f64{ 3.0, 1.0, 4.0, 1.5, 2.0 };
+    var out = [_]u32{ 0, 1, 2, 3, 4 };
+    quickselectIndirect(f64, &a, &out, 0, 4, 2);
+    try testing.expectEqual(a[out[2]], 2.0);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "quickselectIndirect: i32 kth=0" {
+    const a = [_]i32{ 10, -5, 3, 7, -2 };
+    var out = [_]u32{ 0, 1, 2, 3, 4 };
+    quickselectIndirect(i32, &a, &out, 0, 4, 0);
+    try testing.expectEqual(a[out[0]], -5);
+}
+
+// --- radixSort ---
+
+test "radixSort: u8 basic" {
+    var a = [_]u8{ 255, 0, 128, 1, 127, 64, 200, 50 };
+    var scratch: [8]u8 = undefined;
+    radixSort(u8, &a, 8, &scratch);
+    try testing.expect(isSorted(u8, &a));
+    try testing.expectEqual(a[0], 0);
+    try testing.expectEqual(a[7], 255);
+}
+
+test "radixSort: i8 signed" {
+    var a = [_]i8{ 0, -1, 1, -128, 127, -50, 50 };
+    var scratch: [7]i8 = undefined;
+    radixSort(i8, &a, 7, &scratch);
+    try testing.expect(isSorted(i8, &a));
+    try testing.expectEqual(a[0], -128);
+    try testing.expectEqual(a[6], 127);
+}
+
+test "radixSort: u16 basic" {
+    var a = [_]u16{ 65535, 0, 256, 255, 1, 32768, 100, 50000 };
+    var scratch: [8]u16 = undefined;
+    radixSort(u16, &a, 8, &scratch);
+    try testing.expect(isSorted(u16, &a));
+    try testing.expectEqual(a[0], 0);
+    try testing.expectEqual(a[7], 65535);
+}
+
+test "radixSort: i16 signed" {
+    var a = [_]i16{ 0, -1, 1, -32768, 32767, -100, 100, 0 };
+    var scratch: [8]i16 = undefined;
+    radixSort(i16, &a, 8, &scratch);
+    try testing.expect(isSorted(i16, &a));
+    try testing.expectEqual(a[0], -32768);
+    try testing.expectEqual(a[7], 32767);
+}
+
+test "radixSort: i32 signed" {
+    var a = [_]i32{ 1000, -500, 0, 2147483647, -2147483648, 42, -42, 100 };
+    var scratch: [8]i32 = undefined;
+    radixSort(i32, &a, 8, &scratch);
+    try testing.expect(isSorted(i32, &a));
+    try testing.expectEqual(a[0], -2147483648);
+    try testing.expectEqual(a[7], 2147483647);
+}
+
+test "radixSort: u32 basic" {
+    var a = [_]u32{ 4294967295, 0, 1, 1000000, 256, 65536 };
+    var scratch: [6]u32 = undefined;
+    radixSort(u32, &a, 6, &scratch);
+    try testing.expect(isSorted(u32, &a));
+}
+
+test "radixSort: all equal" {
+    var a = [_]u8{ 42, 42, 42, 42 };
+    var scratch: [4]u8 = undefined;
+    radixSort(u8, &a, 4, &scratch);
+    for (a) |v| try testing.expectEqual(v, 42);
+}
+
+test "radixSort: single element" {
+    var a = [_]i16{-7};
+    var scratch: [1]i16 = undefined;
+    radixSort(i16, &a, 1, &scratch);
+    try testing.expectEqual(a[0], -7);
+}
+
+test "radixSort: already sorted" {
+    var a = [_]u16{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    var scratch: [8]u16 = undefined;
+    radixSort(u16, &a, 8, &scratch);
+    try testing.expect(isSorted(u16, &a));
+}
+
+test "radixSort: reverse sorted" {
+    var a = [_]i8{ 100, 50, 0, -50, -100 };
+    var scratch: [5]i8 = undefined;
+    radixSort(i8, &a, 5, &scratch);
+    try testing.expect(isSorted(i8, &a));
+}
+
+// --- heapSortSlices ---
+
+test "heapSortSlices: f64 two slices" {
+    var a = [_]f64{ 3.0, 1.0, 2.0, 6.0, 4.0, 5.0 };
+    heapSortSlices(f64, &a, 3, 2);
+    // First slice sorted
+    try testing.expectApproxEqAbs(a[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(a[2], 3.0, 1e-10);
+    // Second slice sorted
+    try testing.expectApproxEqAbs(a[3], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(a[5], 6.0, 1e-10);
+}
+
+test "heapSortSlices: i16 uses radix sort path" {
+    // 20 elements per slice triggers radix sort (threshold >= 16)
+    var a = [_]i16{ 100, -50, 32, -128, 0, 500, -1, 7, 32, 100, -50, 200, 3, -200, 50, 1, -1, 0, 127, -128 };
+    heapSortSlices(i16, &a, 20, 1);
+    try testing.expect(isSorted(i16, &a));
+    try testing.expectEqual(a[0], -200);
+    try testing.expectEqual(a[19], 500);
+}
+
+test "heapSortSlices: u8 radix sort multiple slices" {
+    var a = [_]u8{ 50, 10, 30, 20, 40, 255, 0, 128, 64, 200, 1, 99, 50, 75, 33, 44, 88, 12, 7, 250, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0, 100, 200, 150, 175, 125, 225, 25, 75, 50, 99 };
+    heapSortSlices(u8, &a, 20, 2);
+    // First 20 elements sorted
+    try testing.expect(isSorted(u8, a[0..20]));
+    // Second 20 elements sorted
+    try testing.expect(isSorted(u8, a[20..40]));
+}
+
+// --- heapSortStableSlices ---
+
+test "heapSortStableSlices: two slices stable" {
+    const a = [_]f64{ 2.0, 1.0, 2.0, 5.0, 3.0, 5.0 };
+    var out: [6]u32 = undefined;
+    heapSortStableSlices(f64, &a, &out, 3, 2);
+    // First slice: [2.0, 1.0, 2.0] → indices [1, 0, 2] (stable: 0 before 2 for equal 2.0)
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+    try testing.expectEqual(out[2], 2);
+    // Second slice: [5.0, 3.0, 5.0] → indices [1, 0, 2]
+    try testing.expectEqual(out[3], 1);
+    try testing.expectEqual(out[4], 0);
+    try testing.expectEqual(out[5], 2);
+}
+
+// --- quickselectSlices ---
+
+test "quickselectSlices: two slices" {
+    var a = [_]i32{ 5, 3, 1, 4, 2, 10, 6, 8, 7, 9 };
+    quickselectSlices(i32, &a, 5, 2, 2);
+    // kth=2 in first slice: a[2] should be 3
+    try testing.expectEqual(a[2], 3);
+    // kth=2 in second slice: a[7] should be 8
+    try testing.expectEqual(a[7], 8);
+}
+
+// --- quickselectIndirectSlices ---
+
+test "quickselectIndirectSlices: two slices" {
+    const a = [_]f64{ 5.0, 3.0, 1.0, 4.0, 2.0, 10.0, 6.0, 8.0, 7.0, 9.0 };
+    var out: [10]u32 = undefined;
+    quickselectIndirectSlices(f64, &a, &out, 5, 2, 2);
+    // kth=2 in first slice: value at out[2] should be 3.0
+    try testing.expectEqual(a[out[2]], 3.0);
+    // kth=2 in second slice: value at out[7] should be 8.0
+    try testing.expectEqual(a[5 + out[7]], 8.0);
+}
+
+// --- lexLess ---
+
+test "lexLess: primary key decides" {
+    // key0 (secondary): [1, 2], key1 (primary): [10, 5]
+    const keys = [_]i32{ 1, 2, 10, 5 };
+    // Element 1 has primary=5 < element 0 primary=10
+    try testing.expect(lexLess(i32, &keys, 2, 2, 1, 0));
+    try testing.expect(!lexLess(i32, &keys, 2, 2, 0, 1));
+}
+
+test "lexLess: tie in primary, secondary decides" {
+    // key0 (secondary): [3, 1], key1 (primary): [5, 5]
+    const keys = [_]i32{ 3, 1, 5, 5 };
+    try testing.expect(lexLess(i32, &keys, 2, 2, 1, 0)); // secondary 1 < 3
+}
+
+test "lexLess: all equal, stable tiebreaker" {
+    const keys = [_]i32{ 1, 1, 1, 1 };
+    try testing.expect(lexLess(i32, &keys, 2, 2, 0, 1)); // idx 0 < 1
+    try testing.expect(!lexLess(i32, &keys, 2, 2, 1, 0));
+}
+
+test "lexLess: f64 NaN in primary" {
+    const nan = @as(f64, @bitCast(@as(u64, 0x7FF8000000000000)));
+    // key0: [1.0, 2.0], key1 (primary): [nan, 3.0]
+    const keys = [_]f64{ 1.0, 2.0, nan, 3.0 };
+    try testing.expect(!lexLess(f64, &keys, 2, 2, 0, 1)); // NaN primary → not less
+    try testing.expect(lexLess(f64, &keys, 2, 2, 1, 0)); // 3.0 < NaN
+}
+
+// --- complexLess ---
+
+test "complexLess: real part decides" {
+    const a = [_]f64{ 1.0, 5.0, 3.0, 2.0 }; // (1+5j), (3+2j)
+    try testing.expect(complexLess(f64, &a, 0, 1)); // re 1 < 3
+    try testing.expect(!complexLess(f64, &a, 1, 0));
+}
+
+test "complexLess: equal real, imag decides" {
+    const a = [_]f64{ 3.0, 1.0, 3.0, 5.0 }; // (3+1j), (3+5j)
+    try testing.expect(complexLess(f64, &a, 0, 1)); // im 1 < 5
+}
+
+test "complexLess: NaN sorts to end" {
+    const nan = @as(f64, @bitCast(@as(u64, 0x7FF8000000000000)));
+    const a = [_]f64{ nan, 0.0, 1.0, 2.0 }; // (NaN+0j), (1+2j)
+    try testing.expect(!complexLess(f64, &a, 0, 1)); // NaN not less
+    try testing.expect(complexLess(f64, &a, 1, 0)); // normal < NaN
+}
+
+// --- complexHeapSort ---
+
+test "complexHeapSort: basic" {
+    // (3+1j), (1+2j), (2+0j) → sorted: (1+2j), (2+0j), (3+1j)
+    var a = [_]f64{ 3.0, 1.0, 1.0, 2.0, 2.0, 0.0 };
+    complexHeapSort(f64, &a, 3);
+    try testing.expectApproxEqAbs(a[0], 1.0, 1e-10); // re of first
+    try testing.expectApproxEqAbs(a[1], 2.0, 1e-10); // im of first
+    try testing.expectApproxEqAbs(a[2], 2.0, 1e-10); // re of second
+    try testing.expectApproxEqAbs(a[4], 3.0, 1e-10); // re of third
+}
+
+test "complexHeapSort: equal real, sort by imag" {
+    // (1+3j), (1+1j), (1+2j) → sorted: (1+1j), (1+2j), (1+3j)
+    var a = [_]f64{ 1.0, 3.0, 1.0, 1.0, 1.0, 2.0 };
+    complexHeapSort(f64, &a, 3);
+    try testing.expectApproxEqAbs(a[1], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(a[3], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(a[5], 3.0, 1e-10);
+}
+
+// --- complexHeapSortStable ---
+
+test "complexHeapSortStable: preserves order for equal" {
+    // (1+1j), (2+2j), (1+1j) → stable: indices [0, 2, 1]
+    const a = [_]f64{ 1.0, 1.0, 2.0, 2.0, 1.0, 1.0 };
+    var out: [3]u32 = undefined;
+    initIndices(&out, 3);
+    complexHeapSortStable(f64, &a, &out, 3);
+    try testing.expectEqual(out[0], 0); // first (1+1j)
+    try testing.expectEqual(out[1], 2); // second (1+1j), idx 2 > 0
+    try testing.expectEqual(out[2], 1); // (2+2j)
+}
