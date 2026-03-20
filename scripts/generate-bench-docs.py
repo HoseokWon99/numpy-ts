@@ -5,10 +5,61 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from statistics import median as calc_median
 from typing import Any
+
+CATEGORY_ORDER = [
+    "creation", "arithmetic", "math", "trig", "gradient", "linalg",
+    "reductions", "manipulation", "io", "indexing", "bitwise",
+    "sorting", "logic", "statistics", "sets", "random", "polynomials",
+    "utilities", "fft",
+]
+
+DTYPE_ORDER = [
+    "float64", "float32", "int64", "uint64", "int32", "uint32",
+    "int16", "uint16", "int8", "uint8", "complex128", "complex64", "bool",
+]
+
+_DTYPE_RE = re.compile(
+    r"\s+(float64|float32|complex128|complex64|int64|int32|int16|int8"
+    r"|uint64|uint32|uint16|uint8|bool)$"
+)
+
+
+def _parse_name(name: str) -> tuple[str, str | None]:
+    m = _DTYPE_RE.search(name)
+    return (name[: m.start()], m.group(1)) if m else (name, None)
+
+
+def _benchmark_sort_key(b: dict[str, Any]) -> tuple[str, int]:
+    base, dtype = _parse_name(b["name"])
+    # Treat implicit (no suffix) as float64 so it sorts first in its group
+    effective = dtype if dtype is not None else "float64"
+    idx = DTYPE_ORDER.index(effective) if effective in DTYPE_ORDER else len(DTYPE_ORDER)
+    return (base, idx)
+
+
+def _compute_dtype_stats(all_benchmarks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    dtype_map: dict[str, list[float]] = {}
+    for b in all_benchmarks:
+        _, dtype = _parse_name(b["name"])
+        dtype_map.setdefault(dtype or "float64", []).append(b["ratio"])
+    result = []
+    for dtype in DTYPE_ORDER:
+        ratios = dtype_map.get(dtype)
+        if not ratios:
+            continue
+        result.append({
+            "dtype": dtype,
+            "count": len(ratios),
+            "avgSlowdown": round(sum(ratios) / len(ratios), 4),
+            "medianSlowdown": round(calc_median(ratios), 4),
+        })
+    return result
 
 
 def format_timestamp(ts: str) -> str:
@@ -52,37 +103,40 @@ def build_doc(report: dict[str, Any], source_path: str) -> str:
     for r in sorted_results:
         row = {
             "name": r["name"],
-            "ratio": r["ratio"],
-            "numpyMs": r["numpy"]["mean_ms"],
-            "numpyTsMs": r["numpyjs"]["mean_ms"],
-            "numpyOps": r["numpy"]["ops_per_sec"],
-            "numpyTsOps": r["numpyjs"]["ops_per_sec"],
+            "ratio": round(r["ratio"], 4),
+            "numpyOps": round(r["numpy"]["ops_per_sec"], 1),
+            "numpyTsOps": round(r["numpyjs"]["ops_per_sec"], 1),
         }
         category_map.setdefault(r["category"], []).append(row)
 
+    all_benchmarks: list[dict[str, Any]] = []
     categories: list[dict[str, Any]] = []
     for name, benchmarks in category_map.items():
-        avg_slowdown = sum(b["ratio"] for b in benchmarks) / len(benchmarks)
-        slower_count = sum(1 for b in benchmarks if b["ratio"] >= 1)
+        benchmarks_sorted = sorted(benchmarks, key=_benchmark_sort_key)
+        avg_slowdown = round(sum(b["ratio"] for b in benchmarks_sorted) / len(benchmarks_sorted), 4)
+        slower_count = sum(1 for b in benchmarks_sorted if b["ratio"] >= 1)
         categories.append(
             {
                 "name": name,
                 "avgSlowdown": avg_slowdown,
-                "count": len(benchmarks),
+                "count": len(benchmarks_sorted),
                 "slowerCount": slower_count,
-                "fasterCount": len(benchmarks) - slower_count,
-                "benchmarks": benchmarks,
+                "fasterCount": len(benchmarks_sorted) - slower_count,
+                "benchmarks": benchmarks_sorted,
             }
         )
+        all_benchmarks.extend(benchmarks_sorted)
 
-    categories.sort(key=lambda c: c["avgSlowdown"], reverse=True)
+    categories.sort(key=lambda c: (
+        CATEGORY_ORDER.index(c["name"]) if c["name"] in CATEGORY_ORDER else len(CATEGORY_ORDER)
+    ))
 
     data = {
         "summary": {
-            "avgSlowdown": report["summary"]["avg_slowdown"],
-            "medianSlowdown": report["summary"]["median_slowdown"],
-            "bestCase": report["summary"]["best_case"],
-            "worstCase": report["summary"]["worst_case"],
+            "avgSlowdown": round(report["summary"]["avg_slowdown"], 4),
+            "medianSlowdown": round(report["summary"]["median_slowdown"], 4),
+            "bestCase": round(report["summary"]["best_case"], 4),
+            "worstCase": round(report["summary"]["worst_case"], 4),
             "totalBenchmarks": report["summary"]["total_benchmarks"],
         },
         "meta": {
@@ -98,6 +152,7 @@ def build_doc(report: dict[str, Any], source_path: str) -> str:
             "machine": report["environment"].get("machine"),
         },
         "categories": categories,
+        "dtypeStats": _compute_dtype_stats(all_benchmarks),
     }
 
     template = """---

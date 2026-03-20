@@ -2,6 +2,7 @@ export const BenchmarkReport = ({ data }) => {
   const summary = data?.summary || {};
   const meta = data?.meta || {};
   const categories = Array.isArray(data?.categories) ? data.categories : [];
+  const dtypeStats = Array.isArray(data?.dtypeStats) ? data.dtypeStats : [];
 
   const THEME_COLORS = {
     light: {
@@ -48,43 +49,57 @@ export const BenchmarkReport = ({ data }) => {
     },
   };
 
+  const DTYPE_COLORS = {
+    // floats: blue family
+    float64:    { bg: '#eff6ff', text: '#3b82f6' },
+    float32:    { bg: '#e0f2fe', text: '#0369a1' },
+    // complex: purple family
+    complex128: { bg: '#ede9fe', text: '#6d28d9' },
+    complex64:  { bg: '#f3e8ff', text: '#7e22ce' },
+    // signed ints: emerald/teal family (darker = more bits)
+    int64:      { bg: '#a7f3d0', text: '#065f46' },
+    int32:      { bg: '#d1fae5', text: '#065f46' },
+    int16:      { bg: '#dcfce7', text: '#166534' },
+    int8:       { bg: '#f0fdf4', text: '#15803d' },
+    // unsigned ints: lime family (darker = more bits) — related to signed ints
+    uint64:     { bg: '#d9f99d', text: '#365314' },
+    uint32:     { bg: '#ecfccb', text: '#3f6212' },
+    uint16:     { bg: '#f7fee7', text: '#4d7c0f' },
+    uint8:      { bg: '#fefce8', text: '#713f12' },
+    // bool: pink
+    bool:       { bg: '#fce7f3', text: '#9d174d' },
+  };
+
+  const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+
   const [isDarkMode, setIsDarkMode] = useState(() =>
     document.documentElement.classList.contains('dark')
   );
   const [openCategories, setOpenCategories] = useState({});
+  const [isDtypeOpen, setIsDtypeOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 900);
+
   const toggleCategory = (name) => setOpenCategories((prev) => ({ ...prev, [name]: !prev[name] }));
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setIsDarkMode(document.documentElement.classList.contains('dark'));
     });
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
 
-  const colors = THEME_COLORS[isDarkMode ? 'dark' : 'light'];
+  useEffect(() => {
+    const handler = () => {
+      setIsMobile(window.innerWidth < 640);
+      setIsNarrow(window.innerWidth < 900);
+    };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
-  const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
-  const DTYPE_COLORS = {
-    float64:    { bg: '#dbeafe', text: '#1e40af' },
-    float32:    { bg: '#e0f2fe', text: '#0369a1' },
-    complex128: { bg: '#ede9fe', text: '#6d28d9' },
-    complex64:  { bg: '#f3e8ff', text: '#7e22ce' },
-    int64:      { bg: '#d1fae5', text: '#065f46' },
-    int32:      { bg: '#dcfce7', text: '#166534' },
-    int16:      { bg: '#ecfdf5', text: '#15803d' },
-    int8:       { bg: '#f0fdf4', text: '#16a34a' },
-    uint64:     { bg: '#fff7ed', text: '#9a3412' },
-    uint32:     { bg: '#ffedd5', text: '#c2410c' },
-    uint16:     { bg: '#fef3c7', text: '#b45309' },
-    uint8:      { bg: '#fef9c3', text: '#ca8a04' },
-    bool:       { bg: '#fce7f3', text: '#9d174d' },
-  };
+  const colors = THEME_COLORS[isDarkMode ? 'dark' : 'light'];
 
   const BenchmarkName = ({ name }) => {
     const s = String(name);
@@ -92,7 +107,7 @@ export const BenchmarkReport = ({ data }) => {
     const dtype = m ? m[1] : 'float64';
     const base = m ? s.slice(0, -m[0].length) : s;
     const dc = DTYPE_COLORS[dtype] || DTYPE_COLORS.float64;
-    const opacity = m ? 1 : 0.55;
+    const opacity = 0.8;
     return (
       <>
         {base}{' '}
@@ -142,6 +157,8 @@ export const BenchmarkReport = ({ data }) => {
   );
 
   const maxCategorySlowdown = Math.max(...categories.map((c) => c.avgSlowdown || 0), 1);
+  const maxDtypeSlowdown = Math.max(...dtypeStats.map((d) => d.avgSlowdown || 0), 1);
+  const barGridCols = isMobile ? '90px 1fr 52px' : '180px 1fr 80px';
 
   return (
     <div style={{ color: colors.text }}>
@@ -157,21 +174,21 @@ export const BenchmarkReport = ({ data }) => {
         {meta.machine ? <div><strong>Machine:</strong> <code>{meta.machine}</code></div> : null}
       </div>
 
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 20 }}>
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: isNarrow ? '1fr 1fr' : 'repeat(4, 1fr)', marginBottom: 20 }}>
         <SummaryCard label="Average slowdown" value={formatRatio(summary.avgSlowdown)} />
         <SummaryCard label="Median slowdown" value={formatRatio(summary.medianSlowdown)} />
         <SummaryCard label="Best case" value={formatRatio(summary.bestCase)} />
         <SummaryCard label="Worst case" value={formatRatio(summary.worstCase)} />
       </div>
 
-      <div style={{ border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16, background: colors.cardBg }}>
+      <div style={{ border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16, background: colors.cardBg, marginBottom: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: colors.text }}>Average Slowdown by Category</div>
         <div style={{ display: 'grid', gap: 10 }}>
           {categories.map((category) => {
             const ratio = Number(category.avgSlowdown) || 0;
             const widthPct = Math.max(2, (ratio / maxCategorySlowdown) * 100);
             return (
-              <div key={String(category.name)} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 80px', gap: 10, alignItems: 'center' }}>
+              <div key={String(category.name)} style={{ display: 'grid', gridTemplateColumns: barGridCols, gap: 10, alignItems: 'center' }}>
                 <div style={{ fontFamily: 'monospace', fontSize: 12, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   <a
                     href={`#cat-${String(category.name).replace(/\s+/g, '-').toLowerCase()}`}
@@ -190,13 +207,7 @@ export const BenchmarkReport = ({ data }) => {
                   >{String(category.name)}</a>
                 </div>
                 <div style={{ background: colors.chartTrack, height: 14, borderRadius: 7, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${widthPct}%`,
-                      background: chartColor(ratio),
-                    }}
-                  />
+                  <div style={{ height: '100%', width: `${widthPct}%`, background: chartColor(ratio) }} />
                 </div>
                 <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 12, color: colors.text }}>{formatRatio(ratio)}</div>
               </div>
@@ -204,6 +215,40 @@ export const BenchmarkReport = ({ data }) => {
           })}
         </div>
       </div>
+
+      {dtypeStats.length > 0 && (
+        <div style={{ border: `1px solid ${colors.border}`, borderRadius: 10, background: colors.cardBg, marginBottom: 20, overflow: 'hidden' }}>
+          <button
+            onClick={() => setIsDtypeOpen((v) => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: 16, background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 16, color: colors.text, textAlign: 'left' }}
+          >
+            <span style={{ fontSize: 10, display: 'inline-block', transform: isDtypeOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
+            Average Slowdown by DType
+          </button>
+          {isDtypeOpen && (
+            <div style={{ padding: '0 16px 16px', display: 'grid', gap: 10 }}>
+              {dtypeStats.map(({ dtype, count, avgSlowdown }) => {
+                const widthPct = Math.max(2, (avgSlowdown / maxDtypeSlowdown) * 100);
+                const dc = DTYPE_COLORS[dtype] || DTYPE_COLORS.float64;
+                return (
+                  <div key={dtype} style={{ display: 'grid', gridTemplateColumns: barGridCols, gap: 10, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <span style={{ display: 'inline-block', fontSize: '0.72em', fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: dc.bg, color: dc.text, opacity: 0.8, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {dtype}
+                      </span>
+                      {!isMobile && <span style={{ fontSize: 11, color: colors.mutedText, whiteSpace: 'nowrap' }}>({count})</span>}
+                    </div>
+                    <div style={{ background: colors.chartTrack, height: 14, borderRadius: 7, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${widthPct}%`, background: chartColor(avgSlowdown) }} />
+                    </div>
+                    <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 12, color: colors.text }}>{formatRatio(avgSlowdown)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <h2>Detailed Results</h2>
       <p style={{ color: colors.mutedText }}>
