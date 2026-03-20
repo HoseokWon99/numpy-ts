@@ -10,7 +10,7 @@ export const Playground = ({
   showCopyButton = false,
   showTiming = true
 }) => {
-  const NUMPY_TS_CDN_VERSION = "1.0.0";
+  const NUMPY_TS_CDN_VERSION = "1.1.0";
   const DEFAULT_EXAMPLES = {
     quickstart: {
       label: "Quickstart",
