@@ -560,10 +560,24 @@ export function asarray_chkfinite(a: NDArrayCore | unknown, dtype?: DType): NDAr
   const arr = asarray(a as NDArrayCore, dtype);
   const data = arr.data;
 
-  // Integer and BigInt types are always finite — skip the check
-  if (data instanceof Float64Array || data instanceof Float32Array) {
-    for (let i = 0; i < data.length; i++) {
-      if (!isFinite(data[i]!)) {
+  // Integer and BigInt types are always finite — skip the check.
+  // For floats, check via exponent bits: NaN/Inf have all exponent bits set.
+  if (data instanceof Float64Array) {
+    // View as Uint32Array to check upper 32 bits of each f64
+    // Float64 exponent bits are bits 52-62 → in upper 32 bits, that's bits 20-30
+    const u32 = new Uint32Array(data.buffer, data.byteOffset, data.length * 2);
+    const expMask = 0x7ff00000; // exponent bits in upper 32 bits of f64
+    for (let i = 1; i < u32.length; i += 2) {
+      if ((u32[i]! & expMask) === expMask) {
+        throw new Error('array must not contain infs or NaNs');
+      }
+    }
+  } else if (data instanceof Float32Array) {
+    // View as Uint32Array to check exponent bits of each f32
+    const u32 = new Uint32Array(data.buffer, data.byteOffset, data.length);
+    const expMask = 0x7f800000; // exponent bits in f32
+    for (let i = 0; i < u32.length; i++) {
+      if ((u32[i]! & expMask) === expMask) {
         throw new Error('array must not contain infs or NaNs');
       }
     }
