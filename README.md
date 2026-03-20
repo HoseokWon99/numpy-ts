@@ -23,7 +23,7 @@ Complete NumPy implementation for TypeScript and JavaScript.
 - **🔒 Type-safe** — Full TypeScript type definitions
 - **🌳 Tree-shakeable** — Import only what you use (`np.add()` -> ~10kB bundle)
 - **🌐 Universal** — Works in Node.js, Deno, Bun and browsers
-- **🏃🏽‍♂️ Fast** - Zig WASM kernels competitive with Python NumPy (see [benchmarks](https://numpyts.dev/performance))
+- **🏃🏽‍♂️ Fast** - Competitive with Python NumPy ([and sometimes faster](https://numpyts.dev/performance)) thanks to Zig-WASM kernels
 
 [Docs](https://numpyts.dev) • [Examples](https://numpyts.dev/examples) • [Benchmarks](https://numpyts.dev/performance)
 
