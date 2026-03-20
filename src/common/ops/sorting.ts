@@ -16,6 +16,7 @@ import { wasmPartition, wasmPartitionSlices } from '../wasm/partition';
 import { wasmArgpartition, wasmArgpartitionSlices } from '../wasm/argpartition';
 import { wasmSearchsorted } from '../wasm/searchsorted';
 import { wasmLexsort } from '../wasm/lexsort';
+import { wasmExtract, wasmWhere } from '../wasm/gather';
 
 /**
  * Check if a value at index i is non-zero (truthy)
@@ -1034,7 +1035,33 @@ export function nonzero(storage: ArrayStorage): ArrayStorage[] {
     stride *= shape[i]!;
   }
 
-  // Find non-zero elements
+  // Fast path: contiguous non-complex — single pass with max-size buffers, then trim
+  if (contiguous && !isComplex && ndim >= 1) {
+    const bufs: Int32Array[] = [];
+    for (let dim = 0; dim < ndim; dim++) bufs.push(new Int32Array(size));
+
+    let idx = 0;
+    for (let i = 0; i < size; i++) {
+      if (data[off + i]) {
+        let remaining = i;
+        for (let dim = 0; dim < ndim; dim++) {
+          bufs[dim]![idx] = (remaining / logicalStrides[dim]!) | 0;
+          remaining -= bufs[dim]![idx]! * logicalStrides[dim]!;
+        }
+        idx++;
+      }
+    }
+
+    const resultArrays: ArrayStorage[] = [];
+    for (let dim = 0; dim < ndim; dim++) {
+      const arr = ArrayStorage.zeros([idx], 'int32');
+      (arr.data as Int32Array).set(bufs[dim]!.subarray(0, idx));
+      resultArrays.push(arr);
+    }
+    return resultArrays;
+  }
+
+  // General path
   if (contiguous) {
     for (let i = 0; i < size; i++) {
       if (isNonZero(data, off + i, isComplex)) {
@@ -1170,7 +1197,19 @@ export function flatnonzero(storage: ArrayStorage): ArrayStorage {
   const data = storage.data;
   const off = storage.offset;
 
-  // Find all non-zero indices
+  // Fast path: contiguous non-complex — single pass, avoid isNonZero and Array.push
+  if (contiguous && !isComplex) {
+    const buf = new Int32Array(size);
+    let idx = 0;
+    for (let i = 0; i < size; i++) {
+      if (data[off + i]) buf[idx++] = i;
+    }
+    const result = ArrayStorage.zeros([idx], 'int32');
+    (result.data as Int32Array).set(buf.subarray(0, idx));
+    return result;
+  }
+
+  // General path
   const indices: number[] = [];
   if (contiguous) {
     for (let i = 0; i < size; i++) {
@@ -1221,6 +1260,19 @@ export function where(
   // Both x and y must be provided
   if (x === undefined || y === undefined) {
     throw new Error('either both or neither of x and y should be given');
+  }
+
+  // WASM fast path: same shape, contiguous, non-complex, non-broadcast
+  if (
+    condition.size === x.size &&
+    x.size === y.size &&
+    x.dtype === y.dtype &&
+    condition.shape.length === x.shape.length &&
+    condition.shape.every((d, i) => d === x.shape[i]) &&
+    x.shape.every((d, i) => d === y!.shape[i])
+  ) {
+    const wasmResult = wasmWhere(condition, x, y);
+    if (wasmResult) return wasmResult;
   }
 
   const condShape = condition.shape;
@@ -1327,14 +1379,26 @@ export function where(
       const resultTyped = resultData as Float64Array | Float32Array;
       const xTyped = xData as Float64Array | Float32Array;
       const yTyped = yData as Float64Array | Float32Array;
-      for (let i = 0; i < totalSize; i++) {
-        const condNz = isNonZero(condData, condOff + i, isCondComplex);
-        if (condNz) {
-          resultTyped[i * 2] = xTyped[(xOff + i) * 2]!;
-          resultTyped[i * 2 + 1] = xTyped[(xOff + i) * 2 + 1]!;
-        } else {
-          resultTyped[i * 2] = yTyped[(yOff + i) * 2]!;
-          resultTyped[i * 2 + 1] = yTyped[(yOff + i) * 2 + 1]!;
+      if (isCondComplex) {
+        for (let i = 0; i < totalSize; i++) {
+          const condNz = isNonZero(condData, condOff + i, true);
+          if (condNz) {
+            resultTyped[i * 2] = xTyped[(xOff + i) * 2]!;
+            resultTyped[i * 2 + 1] = xTyped[(xOff + i) * 2 + 1]!;
+          } else {
+            resultTyped[i * 2] = yTyped[(yOff + i) * 2]!;
+            resultTyped[i * 2 + 1] = yTyped[(yOff + i) * 2 + 1]!;
+          }
+        }
+      } else {
+        for (let i = 0; i < totalSize; i++) {
+          if (condData[condOff + i]) {
+            resultTyped[i * 2] = xTyped[(xOff + i) * 2]!;
+            resultTyped[i * 2 + 1] = xTyped[(xOff + i) * 2 + 1]!;
+          } else {
+            resultTyped[i * 2] = yTyped[(yOff + i) * 2]!;
+            resultTyped[i * 2 + 1] = yTyped[(yOff + i) * 2 + 1]!;
+          }
         }
       }
     } else if (isBigIntDType(resultDtype)) {
@@ -1342,8 +1406,7 @@ export function where(
       const xTyped = xData as BigInt64Array | BigUint64Array;
       const yTyped = yData as BigInt64Array | BigUint64Array;
       for (let i = 0; i < totalSize; i++) {
-        const condNz = isNonZero(condData, condOff + i, isCondComplex);
-        if (condNz) {
+        if (condData[condOff + i]) {
           resultTyped[i] = xTyped[xOff + i]!;
         } else {
           resultTyped[i] = yTyped[yOff + i]!;
@@ -1351,8 +1414,7 @@ export function where(
       }
     } else {
       for (let i = 0; i < totalSize; i++) {
-        const condNz = isNonZero(condData, condOff + i, isCondComplex);
-        if (condNz) {
+        if (condData[condOff + i]) {
           resultData[i] = xData[xOff + i] as number;
         } else {
           resultData[i] = yData[yOff + i] as number;
@@ -1615,6 +1677,10 @@ export function searchsorted(
  * @returns 1D array of elements where condition is true
  */
 export function extract(condition: ArrayStorage, storage: ArrayStorage): ArrayStorage {
+  // WASM fast path
+  const wasmResult = wasmExtract(condition, storage);
+  if (wasmResult) return wasmResult;
+
   const dtype = storage.dtype;
   const isCondComplex = isComplexDType(condition.dtype);
   const isDataComplex = isComplexDType(dtype);

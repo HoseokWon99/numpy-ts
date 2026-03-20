@@ -560,10 +560,26 @@ export function asarray_chkfinite(a: NDArrayCore | unknown, dtype?: DType): NDAr
   const arr = asarray(a as NDArrayCore, dtype);
   const data = arr.data;
 
-  for (let i = 0; i < data.length; i++) {
-    const val = data[i] as number;
-    if (!Number.isFinite(val)) {
-      throw new Error('array must not contain infs or NaNs');
+  // Integer and BigInt types are always finite — skip the check.
+  // For floats, check via exponent bits: NaN/Inf have all exponent bits set.
+  if (data instanceof Float64Array) {
+    // View as Uint32Array to check upper 32 bits of each f64
+    // Float64 exponent bits are bits 52-62 → in upper 32 bits, that's bits 20-30
+    const u32 = new Uint32Array(data.buffer, data.byteOffset, data.length * 2);
+    const expMask = 0x7ff00000; // exponent bits in upper 32 bits of f64
+    for (let i = 1; i < u32.length; i += 2) {
+      if ((u32[i]! & expMask) === expMask) {
+        throw new Error('array must not contain infs or NaNs');
+      }
+    }
+  } else if (data instanceof Float32Array) {
+    // View as Uint32Array to check exponent bits of each f32
+    const u32 = new Uint32Array(data.buffer, data.byteOffset, data.length);
+    const expMask = 0x7f800000; // exponent bits in f32
+    for (let i = 0; i < u32.length; i++) {
+      if ((u32[i]! & expMask) === expMask) {
+        throw new Error('array must not contain infs or NaNs');
+      }
     }
   }
 
@@ -686,14 +702,13 @@ export function tril(m: NDArrayCore, k: number = 0): NDArrayCore {
   const matrixSize = rows * cols;
   const isBigInt = data instanceof BigInt64Array || data instanceof BigUint64Array;
 
+  // Zero the upper triangle using bulk fill per row segment
   for (let b = 0; b < batchSize; b++) {
     const offset = b * matrixSize;
     for (let i = 0; i < rows; i++) {
-      for (let j = i + k + 1; j < cols; j++) {
-        if (isBigInt) (data as BigInt64Array | BigUint64Array)[offset + i * cols + j] = 0n;
-        else
-          (data as Exclude<typeof data, BigInt64Array | BigUint64Array>)[offset + i * cols + j] = 0;
-      }
+      const start = offset + i * cols + Math.max(0, Math.min(i + k + 1, cols));
+      const end = offset + i * cols + cols;
+      if (start < end) data.fill(isBigInt ? (0n as never) : (0 as never), start, end);
     }
   }
 
@@ -714,14 +729,13 @@ export function triu(m: NDArrayCore, k: number = 0): NDArrayCore {
   const matrixSize = rows * cols;
   const isBigInt = data instanceof BigInt64Array || data instanceof BigUint64Array;
 
+  // Zero the lower triangle using bulk fill per row segment
   for (let b = 0; b < batchSize; b++) {
     const offset = b * matrixSize;
     for (let i = 0; i < rows; i++) {
-      for (let j = 0; j < Math.min(i + k, cols); j++) {
-        if (isBigInt) (data as BigInt64Array | BigUint64Array)[offset + i * cols + j] = 0n;
-        else
-          (data as Exclude<typeof data, BigInt64Array | BigUint64Array>)[offset + i * cols + j] = 0;
-      }
+      const end = offset + i * cols + Math.max(0, Math.min(i + k, cols));
+      const start = offset + i * cols;
+      if (start < end) data.fill(isBigInt ? (0n as never) : (0 as never), start, end);
     }
   }
 

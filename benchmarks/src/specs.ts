@@ -1856,22 +1856,11 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     const [m, n] = sizes.medium;
     // NPY serialization
     specs.push({
-      name: `serializeNpy [${m}x${n}] float64`,
+      name: `serializeNpy [${m}x${n}]`,
       category: 'io',
       operation: 'serializeNpy',
       setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'float64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `serializeNpy [${m}x${n}] int32`,
-      category: 'io',
-      operation: 'serializeNpy',
-      setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'int32' },
+        a: { shape: [m!, n!], fill: 'arange' },
       },
       iterations,
       warmup,
@@ -1879,22 +1868,11 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
     // NPY parsing (uses pre-serialized bytes)
     specs.push({
-      name: `parseNpy [${m}x${n}] float64`,
+      name: `parseNpy [${m}x${n}]`,
       category: 'io',
       operation: 'parseNpy',
       setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'float64' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `parseNpy [${m}x${n}] int32`,
-      category: 'io',
-      operation: 'parseNpy',
-      setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'int32' },
+        a: { shape: [m!, n!], fill: 'arange' },
       },
       iterations,
       warmup,
@@ -1934,22 +1912,22 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     const [m, n] = sizes.large;
 
     specs.push({
-      name: `serializeNpy [${m}x${n}] float64`,
+      name: `serializeNpy [${m}x${n}]`,
       category: 'io',
       operation: 'serializeNpy',
       setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'float64' },
+        a: { shape: [m!, n!], fill: 'arange' },
       },
       iterations: Math.floor(iterations / 2),
       warmup: Math.floor(warmup / 2),
     });
 
     specs.push({
-      name: `parseNpy [${m}x${n}] float64`,
+      name: `parseNpy [${m}x${n}]`,
       category: 'io',
       operation: 'parseNpy',
       setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'float64' },
+        a: { shape: [m!, n!], fill: 'arange' },
       },
       iterations: Math.floor(iterations / 2),
       warmup: Math.floor(warmup / 2),
@@ -3790,7 +3768,8 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     polynomials: ['float'],
     bitwise: ['int', 'uint'],
     fft: ['float', 'complex'],
-    // Skipped entirely (no variants): random, utilities, io
+    io: ['float', 'int', 'uint'],
+    // Skipped entirely (no variants): random, utilities
   };
 
   // Variant dtypes for each family, keyed by minimum mode required
@@ -4050,13 +4029,12 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       const families = CATEGORY_DTYPE_SUPPORT[spec.category];
       if (!families) continue; // Category not listed = skip (random, utilities, etc.)
 
-      const hasFloatFamily = families.includes('float');
-      if (hasFloatFamily) {
-        const hasNonDefaultDtype = dataEntries.some(
-          ([, entry]) => entry.dtype && entry.dtype !== 'float64'
-        );
-        if (hasNonDefaultDtype) continue;
-      }
+      // Only vary entries with no explicit dtype or dtype === 'float64'.
+      // Entries with a pinned non-default dtype (e.g. index arrays at int32) are left alone.
+      const variableEntries = dataEntries.filter(
+        ([, entry]) => !entry.dtype || entry.dtype === 'float64'
+      );
+      if (variableEntries.length === 0) continue;
 
       // Collect all applicable variant dtypes
       for (const family of families) {
@@ -4091,11 +4069,12 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
           )
             continue;
 
-          // Clone setup with the new dtype on data array entries
+          // Clone setup: vary dtype only on entries without a pinned non-default dtype
           const variantSetup: BenchmarkSetup = {};
           let skipVariant = false;
+          const variableKeys = new Set(variableEntries.map(([k]) => k));
           for (const [key, entry] of Object.entries(spec.setup)) {
-            if (DATA_ARRAY_KEYS.has(key)) {
+            if (DATA_ARRAY_KEYS.has(key) && variableKeys.has(key)) {
               const cloned = { ...entry, dtype: variant.dtype as DType };
               if (family === 'complex') {
                 // Complex needs fill: 'complex' for all data arrays (arange/ones/zeros with

@@ -4109,15 +4109,28 @@ export function matrix_power(a: ArrayStorage, n: number): ArrayStorage {
   }
 
   // Use binary exponentiation
-  let result = ArrayStorage.zeros([size, size], 'float64');
+  // Preserve input dtype for the computation (float32 stays float32)
+  const dtype = base.dtype === 'float32' ? 'float32' : 'float64';
+  let result = ArrayStorage.zeros([size, size], dtype);
+  const resultData = result.data;
   for (let i = 0; i < size; i++) {
-    result.set([i, i], 1);
+    resultData[i * size + i] = 1; // identity diagonal
   }
 
-  let current = ArrayStorage.zeros([size, size], 'float64');
-  for (let i = 0; i < size; i++) {
-    for (let j = 0; j < size; j++) {
-      current.set([i, j], Number(base.get(i, j)));
+  // Copy base data directly (avoid per-element get/set)
+  let current: ArrayStorage;
+  if (base.isCContiguous && (base.dtype === 'float64' || base.dtype === 'float32')) {
+    current = base.copy();
+  } else {
+    current = ArrayStorage.zeros([size, size], dtype);
+    const curData = current.data;
+    const baseData = base.data;
+    const baseOff = base.offset;
+    const [strR = 0, strC = 0] = base.strides;
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j < size; j++) {
+        curData[i * size + j] = Number(baseData[baseOff + i * strR + j * strC]) as never;
+      }
     }
   }
 
