@@ -85,9 +85,6 @@ jobs:
           pip install numpy
           npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
       - name: Run full CI test suite
         run: npm run test:ci
 
