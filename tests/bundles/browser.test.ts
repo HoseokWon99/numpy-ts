@@ -95,4 +95,50 @@ describe('Browser IIFE Bundle Smoke Test', () => {
       [1, 1],
     ]);
   });
+
+  // ── File IO should throw in the browser ─────────────────────────────
+
+  test('loadNpy should throw a helpful error in the browser', async () => {
+    // @ts-ignore
+    expect(typeof np.loadNpy).toBe('function');
+    try {
+      // @ts-ignore
+      await np.loadNpy('test.npy');
+      expect.unreachable('loadNpy should have thrown');
+    } catch (e: any) {
+      expect(e.message).toContain('requires Node.js, Bun, or Deno');
+      expect(e.message).toContain('parseNpy');
+    }
+  });
+
+  test('loadNpySync should throw a helpful error in the browser', () => {
+    // @ts-ignore
+    expect(typeof np.loadNpySync).toBe('function');
+    expect(() => {
+      // @ts-ignore
+      np.loadNpySync('test.npy');
+    }).toThrow('requires Node.js, Bun, or Deno');
+  });
+
+  test('saveNpy should throw a helpful error in the browser', async () => {
+    // @ts-ignore
+    const arr = np.array([1, 2, 3]);
+    try {
+      // @ts-ignore
+      await np.saveNpy('test.npy', arr);
+      expect.unreachable('saveNpy should have thrown');
+    } catch (e: any) {
+      expect(e.message).toContain('requires Node.js, Bun, or Deno');
+    }
+  });
+
+  test('loadtxt should throw a helpful error in the browser', async () => {
+    try {
+      // @ts-ignore
+      await np.loadtxt('data.csv');
+      expect.unreachable('loadtxt should have thrown');
+    } catch (e: any) {
+      expect(e.message).toContain('requires Node.js, Bun, or Deno');
+    }
+  });
 });

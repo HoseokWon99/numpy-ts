@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    reporters: ['default'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'json', 'json-summary', 'html'],
@@ -46,19 +47,20 @@ export default defineConfig({
           environment: 'node',
         },
       }),
-      // Node.js CJS bundle test
+      // Runtime file IO tests (runs under Node, Bun, and Deno)
       defineProject({
         test: {
-          name: 'bundle-node',
-          include: ['tests/bundles/node.test.ts'],
+          name: 'runtime-io',
+          include: ['tests/runtime/**/*.test.ts'],
+          exclude: ['**/node_modules/**'],
           environment: 'node',
         },
       }),
-      // ESM bundle test
+      // ESM bundle smoke test (tests dist/esm/ with file IO)
       defineProject({
         test: {
           name: 'bundle-esm',
-          include: ['tests/bundles/esm.test.mjs'],
+          include: ['tests/bundles/node.test.ts'],
           environment: 'node',
         },
       }),
@@ -67,6 +69,25 @@ export default defineConfig({
         test: {
           name: 'bundle-browser',
           include: ['tests/bundles/browser.test.ts'],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({
+              launchOptions: {
+                headless: true,
+              },
+            }),
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      }),
+      // Full unit test suite in the browser (Playwright + Chromium)
+      // Validates that all array operations work in a real browser environment
+      defineProject({
+        test: {
+          name: 'browser-unit',
+          include: ['tests/unit/**'],
+          exclude: ['**/node_modules/**'],
           browser: {
             enabled: true,
             headless: true,

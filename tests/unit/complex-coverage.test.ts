@@ -512,6 +512,30 @@ const COMPLEX_BEHAVIOR: Record<string, ComplexBehavior> = {
   fromregex: 'skip',
   serializeTxt: 'skip',
 
+  // File IO functions (Node/Bun/Deno only)
+  loadNpy: 'skip',
+  loadNpySync: 'skip',
+  saveNpy: 'skip',
+  saveNpySync: 'skip',
+  loadNpzFile: 'skip',
+  loadNpzFileSync: 'skip',
+  saveNpzFile: 'skip',
+  saveNpzFileSync: 'skip',
+  savez: 'skip',
+  savez_compressed: 'skip',
+  load: 'skip',
+  loadSync: 'skip',
+  save: 'skip',
+  saveSync: 'skip',
+  loadtxt: 'skip',
+  loadtxtSync: 'skip',
+  savetxt: 'skip',
+  savetxtSync: 'skip',
+  genfromtxtFile: 'skip',
+  genfromtxtFileSync: 'skip',
+  fromregexFile: 'skip',
+  fromregexFileSync: 'skip',
+
   // Version and other values
   __version__: 'skip',
   true_divide: 'skip', // alias for divide, tested via divide

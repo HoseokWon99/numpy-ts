@@ -315,6 +315,23 @@ describe('NumPy API Comparison', () => {
         'genfromtxt',
         'fromregex',
         'serializeTxt',
+        // File IO functions (Node/Bun/Deno only)
+        'loadNpy',
+        'loadNpySync',
+        'saveNpy',
+        'saveNpySync',
+        'loadNpzFile',
+        'loadNpzFileSync',
+        'saveNpzFile',
+        'saveNpzFileSync',
+        'loadSync',
+        'saveSync',
+        'loadtxtSync',
+        'savetxtSync',
+        'genfromtxtFile',
+        'genfromtxtFileSync',
+        'fromregexFile',
+        'fromregexFileSync',
         // WASM runtime configuration
         'wasmConfig',
         // Deprecated in NumPy 1.24+, removed in NumPy 2.0 (use isin instead)
