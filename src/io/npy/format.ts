@@ -64,6 +64,7 @@ export interface DTypeParseResult {
 export const SUPPORTED_DTYPES: DType[] = [
   'float64',
   'float32',
+  'float16',
   'complex128',
   'complex64',
   'int64',
@@ -98,6 +99,7 @@ const DESCR_TO_DTYPE: Record<string, DType> = {
   // Float types
   f8: 'float64',
   f4: 'float32',
+  f2: 'float16',
   // Complex types
   c16: 'complex128', // 16 bytes = two float64
   c8: 'complex64', // 8 bytes = two float32
@@ -122,6 +124,7 @@ const DESCR_TO_DTYPE: Record<string, DType> = {
 export const DTYPE_TO_DESCR: Record<DType, string> = {
   float64: '<f8',
   float32: '<f4',
+  float16: '<f2',
   complex128: '<c16',
   complex64: '<c8',
   int64: '<i8',

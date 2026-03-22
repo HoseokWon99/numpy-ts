@@ -19,6 +19,7 @@ import {
 const DTYPE_COLORS: Record<string, { bg: string; text: string }> = {
   float64:    { bg: '#dbeafe', text: '#1e40af' },
   float32:    { bg: '#e0f2fe', text: '#0369a1' },
+  float16:    { bg: '#e0f7fa', text: '#00695c' },
   complex128: { bg: '#ede9fe', text: '#6d28d9' },
   complex64:  { bg: '#f3e8ff', text: '#7e22ce' },
   int64:      { bg: '#fef3c7', text: '#92400e' },
@@ -32,7 +33,7 @@ const DTYPE_COLORS: Record<string, { bg: string; text: string }> = {
   bool:       { bg: '#f1f5f9', text: '#475569' },
 };
 
-const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+const DTYPE_RE = /\s+(float64|float32|float16|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
 
 function formatBenchmarkName(name: string, wasmUsed?: boolean): string {
   const m = name.match(DTYPE_RE);

@@ -493,7 +493,7 @@ function formatValue(
   }
 
   // Format based on dtype
-  if (dtype === 'float32' || dtype === 'float64') {
+  if (dtype === 'float16' || dtype === 'float32' || dtype === 'float64') {
     // Check if we should suppress small values
     if (opts.suppress && Math.abs(value) < 1e-10 && value !== 0) {
       return '0.';

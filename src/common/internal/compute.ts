@@ -265,7 +265,7 @@ export function elementwiseUnaryOp(
 
   // Determine output dtype
   // Math operations like sqrt may need float output even for integer input
-  const isIntegerType = dtype !== 'float32' && dtype !== 'float64';
+  const isIntegerType = dtype !== 'float16' && dtype !== 'float32' && dtype !== 'float64';
   const resultDtype = preserveDtype ? dtype : isIntegerType ? 'float64' : dtype;
 
   // Create result storage

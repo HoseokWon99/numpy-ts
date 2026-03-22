@@ -10,6 +10,7 @@ import type { BenchmarkCase } from './types';
 
 const FLOAT64_TOLERANCE = 1e-5;
 const FLOAT32_TOLERANCE = 1e-3; // float32 has ~7 decimal digits of precision
+const FLOAT16_TOLERANCE = 2e-3; // float16 has ~3.3 decimal digits; fallback path diverges from NumPy's true float16
 
 /**
  * Deserialize special float values from Python
@@ -1284,10 +1285,13 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
             } else {
               // Standard comparison for other operations
               // Use looser tolerance for lower-precision dtypes
+              const hasFloat16 = Object.values(spec.setup).some(
+                (s) => s.dtype === 'float16'
+              );
               const hasLowPrecision = Object.values(spec.setup).some(
                 (s) => s.dtype && s.dtype !== 'float64'
               );
-              const tol = hasLowPrecision ? FLOAT32_TOLERANCE : FLOAT64_TOLERANCE;
+              const tol = hasFloat16 ? FLOAT16_TOLERANCE : hasLowPrecision ? FLOAT32_TOLERANCE : FLOAT64_TOLERANCE;
               isValid = resultsMatch(tsValue, numpyResult, spec.operation, tol);
             }
 

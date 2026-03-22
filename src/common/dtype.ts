@@ -2,7 +2,7 @@
  * DType (Data Type) system for numpy-ts
  *
  * Supports NumPy numeric types:
- * - Floating point: float32, float64
+ * - Floating point: float16, float32, float64
  * - Complex: complex64, complex128
  * - Signed integers: int8, int16, int32, int64
  * - Unsigned integers: uint8, uint16, uint32, uint64
@@ -15,6 +15,7 @@
 export type DType =
   | 'float64'
   | 'float32'
+  | 'float16'
   | 'complex128'
   | 'complex64'
   | 'int64'
@@ -43,6 +44,12 @@ export type TypedArray =
   | Uint8Array;
 
 /**
+ * Whether the runtime supports native Float16Array (TC39 proposal, available in modern engines).
+ * When false, float16 dtype uses Float32Array as a fallback backing store.
+ */
+export const hasFloat16: boolean = typeof globalThis.Float16Array !== 'undefined';
+
+/**
  * Default dtype (matches NumPy)
  */
 export const DEFAULT_DTYPE: DType = 'float64';
@@ -59,6 +66,11 @@ export function getTypedArrayConstructor(dtype: DType): TypedArrayConstructor | 
       return Float64Array;
     case 'float32':
       return Float32Array;
+    case 'float16':
+      // Use native Float16Array when available, otherwise fall back to Float32Array
+      return hasFloat16
+        ? (globalThis.Float16Array as unknown as TypedArrayConstructor)
+        : Float32Array;
     case 'complex128':
       return Float64Array; // Interleaved: [re, im, re, im, ...]
     case 'complex64':
@@ -115,6 +127,7 @@ export function getDTypeSize(dtype: DType): number {
     case 'int32':
     case 'uint32':
       return 4;
+    case 'float16':
     case 'int16':
     case 'uint16':
       return 2;
@@ -147,7 +160,7 @@ export function isIntegerDType(dtype: DType): boolean {
  * Check if dtype is floating point
  */
 export function isFloatDType(dtype: DType): boolean {
-  return dtype === 'float64' || dtype === 'float32';
+  return dtype === 'float64' || dtype === 'float32' || dtype === 'float16';
 }
 
 /**
@@ -336,35 +349,39 @@ export function promoteDTypes(dtype1: DType, dtype2: DType): DType {
     // float64 always wins
     if (dtype1 === 'float64' || dtype2 === 'float64') return 'float64';
 
-    // float32 with small integers (8, 16 bit) → float32
-    // float32 with large integers (32, 64 bit) → float64 (precision safety)
-    // This is because float32 has 24-bit mantissa, can't hold all int32 values
-    if (dtype1 === 'float32') {
-      const intDtype = dtype2;
+    // float32 wins over float16
+    if (dtype1 === 'float32' || dtype2 === 'float32') {
+      // float32 with large integers (32, 64 bit) → float64 (precision safety)
+      // This is because float32 has 24-bit mantissa, can't hold all int32 values
+      const otherDtype = dtype1 === 'float32' ? dtype2 : dtype1;
       if (
-        intDtype === 'int32' ||
-        intDtype === 'int64' ||
-        intDtype === 'uint32' ||
-        intDtype === 'uint64'
-      ) {
-        return 'float64';
-      }
-      return 'float32';
-    }
-    if (dtype2 === 'float32') {
-      const intDtype = dtype1;
-      if (
-        intDtype === 'int32' ||
-        intDtype === 'int64' ||
-        intDtype === 'uint32' ||
-        intDtype === 'uint64'
+        otherDtype === 'int32' ||
+        otherDtype === 'int64' ||
+        otherDtype === 'uint32' ||
+        otherDtype === 'uint64'
       ) {
         return 'float64';
       }
       return 'float32';
     }
 
-    // Both are float32
+    // float16 + float16 = float16
+    // float16 with small integers (8 bit) → float16 (float16 has 11-bit mantissa)
+    // float16 with 16-bit+ integers → float32 (precision safety)
+    if (dtype1 === 'float16' || dtype2 === 'float16') {
+      const otherDtype = dtype1 === 'float16' ? dtype2 : dtype1;
+      if (otherDtype === 'float16' || otherDtype === 'int8' || otherDtype === 'uint8') {
+        return 'float16';
+      }
+      // int16, uint16, int32, uint32, int64, uint64 → need at least float32
+      if (otherDtype === 'int16' || otherDtype === 'uint16') {
+        return 'float32';
+      }
+      // int32+ → float64
+      return 'float64';
+    }
+
+    // Both are float32 (unreachable now but kept for safety)
     return 'float32';
   }
 
@@ -460,6 +477,7 @@ export function isValidDType(dtype: string): dtype is DType {
   const validDTypes: DType[] = [
     'float64',
     'float32',
+    'float16',
     'complex128',
     'complex64',
     'int64',
@@ -495,6 +513,10 @@ export function castValue(value: number | bigint | boolean, dtype: DType): numbe
 export function toStdlibDType(dtype: DType): string {
   // Map int64/uint64 to generic (we manage the BigInt arrays ourselves)
   if (dtype === 'int64' || dtype === 'uint64') {
+    return 'generic';
+  }
+  // Map float16 to generic (stdlib doesn't support float16)
+  if (dtype === 'float16') {
     return 'generic';
   }
   // Map complex to generic (we manage complex arrays ourselves)

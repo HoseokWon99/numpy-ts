@@ -3774,7 +3774,10 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
   // Variant dtypes for each family, keyed by minimum mode required
   const FAMILY_VARIANTS: Record<DtypeFamily, { dtype: string; minMode: BenchmarkMode }[]> = {
-    float: [{ dtype: 'float32', minMode: 'standard' }],
+    float: [
+      { dtype: 'float32', minMode: 'standard' },
+      { dtype: 'float16', minMode: 'full' },
+    ],
     int: [
       { dtype: 'int64', minMode: 'full' },
       { dtype: 'int32', minMode: 'full' },
@@ -3821,6 +3824,30 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'interp', // special setup, not dtype-variant-friendly
     'packbits', // always uint8
     'unpackbits', // always uint8
+  ]);
+
+  // Operations to skip for float16 dtype variants (precision too low for numerical algorithms)
+  const SKIP_FLOAT16_OPERATIONS = new Set([
+    'linalg_cholesky',
+    'linalg_eigh',
+    'linalg_eigvalsh',
+    'linalg_svd',
+    'linalg_svdvals',
+    'linalg_pinv',
+    'linalg_lstsq',
+    'linalg_qr',
+    'linalg_cond',
+    'linalg_matrix_rank',
+    'linalg_norm',
+    'linalg_det',
+    'linalg_slogdet',
+    'linalg_inv',
+    'linalg_solve',
+    'linalg_matrix_power',
+    'linalg_multi_dot',
+    'einsum',
+    'correlate',
+    'convolve',
   ]);
 
   // Operations to skip for ALL int dtype variants (blocks both int and uint families)
@@ -4057,6 +4084,9 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
           // Skip variant if it matches the base spec's dtype (would be a duplicate)
           const baseDtype = dataEntries[0]?.[1]?.dtype;
           if (baseDtype && variant.dtype === baseDtype) continue;
+
+          // Skip float16 for numerically sensitive operations
+          if (variant.dtype === 'float16' && SKIP_FLOAT16_OPERATIONS.has(spec.operation)) continue;
 
           // Skip narrow int/uint types for accumulation ops where overflow wrapping differs
           if (
