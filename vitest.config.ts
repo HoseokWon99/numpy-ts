@@ -87,10 +87,11 @@ export default defineConfig({
         test: {
           name: 'browser-unit',
           include: ['tests/unit/**'],
-          exclude: ['**/node_modules/**'],
+          exclude: ['**/node_modules/**', '**/__screenshots__/**'],
           browser: {
             enabled: true,
             headless: true,
+            screenshotFailures: false,
             provider: playwright({
               launchOptions: {
                 headless: true,

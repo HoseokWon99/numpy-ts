@@ -15,6 +15,9 @@ describe('DType Support', () => {
       const float32Arr = zeros([2, 3], 'float32');
       expect(float32Arr.dtype).toBe('float32');
 
+      const float16Arr = zeros([2, 3], 'float16');
+      expect(float16Arr.dtype).toBe('float16');
+
       const int32Arr = zeros([2, 3], 'int32');
       expect(int32Arr.dtype).toBe('int32');
 
@@ -42,6 +45,10 @@ describe('DType Support', () => {
       const arr = array([1, 2, 3], 'float32');
       expect(arr.dtype).toBe('float32');
       expect(arr.toArray()).toEqual([1, 2, 3]);
+
+      const arr16 = array([1, 2, 3], 'float16');
+      expect(arr16.dtype).toBe('float16');
+      expect(arr16.toArray()).toEqual([1, 2, 3]);
     });
 
     it('creates arange with dtype', () => {
@@ -54,6 +61,10 @@ describe('DType Support', () => {
       const arr = linspace(0, 1, 5, 'float32');
       expect(arr.dtype).toBe('float32');
       expect(arr.shape).toEqual([5]);
+
+      const arr16 = linspace(0, 1, 5, 'float16');
+      expect(arr16.dtype).toBe('float16');
+      expect(arr16.shape).toEqual([5]);
     });
 
     it('creates eye with dtype', () => {

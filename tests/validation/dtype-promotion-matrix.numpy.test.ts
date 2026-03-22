@@ -27,6 +27,7 @@ describe('NumPy Validation: Complete DType Promotion Matrix', () => {
     'uint16',
     'uint32',
     'uint64',
+    'float16',
     'float32',
     'float64',
   ];
@@ -42,6 +43,7 @@ describe('NumPy Validation: Complete DType Promotion Matrix', () => {
     uint16: 'uint16',
     uint32: 'uint32',
     uint64: 'uint64',
+    float16: 'float16',
     float32: 'float32',
     float64: 'float64',
   };
@@ -57,6 +59,7 @@ describe('NumPy Validation: Complete DType Promotion Matrix', () => {
     uint16: 'uint16',
     uint32: 'uint32',
     uint64: 'uint64',
+    float16: 'float16',
     float32: 'float32',
     float64: 'float64',
   };
@@ -78,6 +81,7 @@ dtypes = {
   'uint16': np.uint16,
   'uint32': np.uint32,
   'uint64': np.uint64,
+  'float16': np.float16,
   'float32': np.float32,
   'float64': np.float64,
 }

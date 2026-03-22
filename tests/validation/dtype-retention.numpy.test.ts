@@ -19,6 +19,7 @@ describe('NumPy Validation: DType Retention', () => {
   const dtypeMap: Record<DType, string> = {
     float64: 'float64',
     float32: 'float32',
+    float16: 'float16',
     int64: 'int64',
     int32: 'int32',
     int16: 'int16',
@@ -30,7 +31,7 @@ describe('NumPy Validation: DType Retention', () => {
     bool: 'bool',
   };
 
-  const testDTypes: DType[] = ['float64', 'float32', 'int32', 'int16', 'uint8'];
+  const testDTypes: DType[] = ['float64', 'float32', 'float16', 'int32', 'int16', 'uint8'];
 
   describe('Shape operations match NumPy dtype behavior', () => {
     it('reshape() preserves dtype like NumPy', () => {

@@ -26,6 +26,9 @@ describe('Export Coverage', () => {
     // WASM runtime configuration (not a core array operation)
     'wasmConfig',
 
+    // Runtime feature detection (not a core array operation)
+    'hasFloat16',
+
     // File IO functions (require Node/Bun/Deno runtime, not available in core)
     'loadNpy',
     'loadNpySync',

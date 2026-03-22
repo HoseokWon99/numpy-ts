@@ -198,11 +198,11 @@ describe('dtype utility functions', () => {
       expect(isValidDType('bool')).toBe(true);
       expect(isValidDType('complex64')).toBe(true);
       expect(isValidDType('complex128')).toBe(true);
+      expect(isValidDType('float16')).toBe(true);
     });
 
     it('returns false for invalid dtypes', () => {
       expect(isValidDType('string')).toBe(false);
-      expect(isValidDType('float16')).toBe(false);
       expect(isValidDType('int128')).toBe(false);
       expect(isValidDType('')).toBe(false);
       expect(isValidDType('Float64')).toBe(false); // Case sensitive
