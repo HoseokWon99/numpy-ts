@@ -1532,11 +1532,49 @@ test "fftPow2 forward/inverse roundtrip" {
     }
 }
 
+test "Stockham pow2 N=8 forward/inverse roundtrip" {
+    const testing = std.testing;
+    const inp = [_]f64{ 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0 };
+    var out: [16]f64 = undefined;
+    var inv: [16]f64 = undefined;
+    var scratch: [48]f64 = undefined; // 6*8 = 48
+
+    fftDispatch(&inp, &out, &scratch, 8, false);
+
+    // DFT([1,2,3,4,5,6,7,8])[0] = 36
+    try testing.expectApproxEqAbs(out[0], 36.0, 1e-8);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-8);
+
+    fftDispatch(&out, &inv, &scratch, 8, true);
+    for (0..16) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "Stockham pow2 N=16 roundtrip" {
+    const testing = std.testing;
+    var inp: [32]f64 = undefined;
+    for (0..16) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i + 1));
+        inp[2 * i + 1] = 0;
+    }
+    var out: [32]f64 = undefined;
+    var scratch: [96]f64 = undefined; // 6*16
+
+    fftDispatch(&inp, &out, &scratch, 16, false);
+
+    var inv: [32]f64 = undefined;
+    fftDispatch(&out, &inv, &scratch, 16, true);
+    for (0..32) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
 test "mixed-radix N=6 (2*3)" {
     const testing = std.testing;
     const inp = [_]f64{ 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0 };
     var out: [12]f64 = undefined;
-    var scratch: [24]f64 = undefined; // 4*6 = 24
+    var scratch: [36]f64 = undefined; // 6*6 = 36
 
     fftDispatch(&inp, &out, &scratch, 6, false);
 
@@ -1566,7 +1604,7 @@ test "mixed-radix N=100 (4*25=4*5*5) roundtrip" {
         inp[2 * i + 1] = 0;
     }
     var out: [200]f64 = undefined;
-    var scratch: [400]f64 = undefined;
+    var scratch: [600]f64 = undefined; // 6*100
 
     fftDispatch(&inp, &out, &scratch, 100, false);
 
@@ -1586,7 +1624,7 @@ test "mixed-radix N=1000 (8*125=2^3*5^3) roundtrip" {
         inp[2 * i + 1] = 0;
     }
     var out: [2000]f64 = undefined;
-    var scratch: [4000]f64 = undefined;
+    var scratch: [6000]f64 = undefined; // 6*1000
 
     fftDispatch(&inp, &out, &scratch, 1000, false);
 
@@ -1603,12 +1641,448 @@ test "fft_c128 roundtrip" {
     const inp = [_]f64{ 1, 0, 0, 1, -1, 0, 0, -1 };
     var fwd: [8]f64 = undefined;
     var inv: [8]f64 = undefined;
-    var scratch: [1]f64 = undefined; // pow2 size=4, no scratch needed
+    var scratch: [24]f64 = undefined; // 6*4 = 24 for Stockham
 
     fft_c128(&inp, &fwd, &scratch, 4);
     ifft_c128(&fwd, &inv, &scratch, 4);
 
     for (0..8) |i| {
         try testing.expectApproxEqAbs(inv[i], inp[i], 1e-10);
+    }
+}
+
+test "dedicated rfft/irfft roundtrip N=8" {
+    const testing = std.testing;
+    const inp = [_]f64{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    var rfft_out: [10]f64 = undefined; // (8/2+1)*2 = 10
+    var irfft_out: [8]f64 = undefined;
+    var scratch: [200]f64 = undefined;
+
+    rfft_f64(&inp, &rfft_out, &scratch, 8);
+
+    // DC should be sum = 36
+    try testing.expectApproxEqAbs(rfft_out[0], 36.0, 1e-10);
+    try testing.expectApproxEqAbs(rfft_out[1], 0.0, 1e-10);
+    // Nyquist
+    try testing.expectApproxEqAbs(rfft_out[8], -4.0, 1e-10);
+    try testing.expectApproxEqAbs(rfft_out[9], 0.0, 1e-10);
+
+    irfft_f64(&rfft_out, &irfft_out, &scratch, 5, 8);
+
+    for (0..8) |i| {
+        try testing.expectApproxEqAbs(irfft_out[i], inp[i], 1e-8);
+    }
+}
+
+test "dedicated rfft/irfft roundtrip N=1000" {
+    const testing = std.testing;
+    var inp: [1000]f64 = undefined;
+    for (0..1000) |i| {
+        inp[i] = @as(f64, @floatFromInt(i % 13)) - 6.0;
+    }
+    var rfft_out: [1002]f64 = undefined; // (1000/2+1)*2 = 1002
+    var irfft_out: [1000]f64 = undefined;
+    var scratch: [20000]f64 = undefined;
+
+    rfft_f64(&inp, &rfft_out, &scratch, 1000);
+    irfft_f64(&rfft_out, &irfft_out, &scratch, 501, 1000);
+
+    for (0..1000) |i| {
+        try testing.expectApproxEqAbs(irfft_out[i], inp[i], 1e-6);
+    }
+}
+
+// Edge cases and minimal sizes
+
+test "fftDispatch N=1" {
+    const testing = std.testing;
+    const inp = [_]f64{ 42.0, 7.0 };
+    var out: [2]f64 = undefined;
+    var scratch: [1]f64 = undefined;
+    fftDispatch(&inp, &out, &scratch, 1, false);
+    try testing.expectApproxEqAbs(out[0], 42.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 7.0, 1e-10);
+}
+
+test "fftDispatch N=2 roundtrip" {
+    const testing = std.testing;
+    const inp = [_]f64{ 3.0, 1.0, -2.0, 4.0 };
+    var out: [4]f64 = undefined;
+    var scratch: [12]f64 = undefined; // 6*2
+    fftDispatch(&inp, &out, &scratch, 2, false);
+    // DFT([3+i, -2+4i]): X[0]=1+5i, X[1]=5-3i
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[2], 5.0, 1e-10);
+    try testing.expectApproxEqAbs(out[3], -3.0, 1e-10);
+
+    var inv: [4]f64 = undefined;
+    fftDispatch(&out, &inv, &scratch, 2, true);
+    for (0..4) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-10);
+    }
+}
+
+// Radix-specific coverage
+
+test "radix-3 pure N=9 (3*3) roundtrip" {
+    const testing = std.testing;
+    var inp: [18]f64 = undefined;
+    for (0..9) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i * i));
+        inp[2 * i + 1] = @as(f64, @floatFromInt(i));
+    }
+    var out: [18]f64 = undefined;
+    var inv: [18]f64 = undefined;
+    var scratch: [54]f64 = undefined; // 6*9
+
+    fftDispatch(&inp, &out, &scratch, 9, false);
+    fftDispatch(&out, &inv, &scratch, 9, true);
+    for (0..18) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "radix-5 pure N=25 (5*5) roundtrip" {
+    const testing = std.testing;
+    var inp: [50]f64 = undefined;
+    for (0..25) |i| {
+        inp[2 * i] = @sin(@as(f64, @floatFromInt(i)));
+        inp[2 * i + 1] = @cos(@as(f64, @floatFromInt(i)));
+    }
+    var out: [50]f64 = undefined;
+    var inv: [50]f64 = undefined;
+    var scratch: [150]f64 = undefined;
+
+    fftDispatch(&inp, &out, &scratch, 25, false);
+    fftDispatch(&out, &inv, &scratch, 25, true);
+    for (0..50) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "radix-8 pure N=64 (8*8) roundtrip" {
+    const testing = std.testing;
+    var inp: [128]f64 = undefined;
+    for (0..64) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i % 7)) - 3.0;
+        inp[2 * i + 1] = @as(f64, @floatFromInt(i % 5)) - 2.0;
+    }
+    var out: [128]f64 = undefined;
+    var inv: [128]f64 = undefined;
+    var scratch: [384]f64 = undefined; // 6*64
+
+    fftDispatch(&inp, &out, &scratch, 64, false);
+
+    // DC = sum of all elements
+    var dc_r: f64 = 0;
+    var dc_i: f64 = 0;
+    for (0..64) |i| {
+        dc_r += inp[2 * i];
+        dc_i += inp[2 * i + 1];
+    }
+    try testing.expectApproxEqAbs(out[0], dc_r, 1e-8);
+    try testing.expectApproxEqAbs(out[1], dc_i, 1e-8);
+
+    fftDispatch(&out, &inv, &scratch, 64, true);
+    for (0..128) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "mixed radix N=120 (8*3*5) roundtrip" {
+    const testing = std.testing;
+    var inp: [240]f64 = undefined;
+    for (0..120) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i % 11)) - 5.0;
+        inp[2 * i + 1] = 0;
+    }
+    var out: [240]f64 = undefined;
+    var inv: [240]f64 = undefined;
+    var scratch: [720]f64 = undefined; // 6*120
+
+    fftDispatch(&inp, &out, &scratch, 120, false);
+    fftDispatch(&out, &inv, &scratch, 120, true);
+    for (0..240) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-6);
+    }
+}
+
+// Bluestein's algorithm (prime sizes)
+
+test "Bluestein N=7 (prime) roundtrip" {
+    const testing = std.testing;
+    const inp = [_]f64{ 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0 };
+    var out: [14]f64 = undefined;
+    var scratch: [1000]f64 = undefined;
+
+    fftDispatch(&inp, &out, &scratch, 7, false);
+    // DC = 28
+    try testing.expectApproxEqAbs(out[0], 28.0, 1e-8);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-8);
+
+    var inv: [14]f64 = undefined;
+    fftDispatch(&out, &inv, &scratch, 7, true);
+    for (0..14) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "Bluestein N=13 (prime) roundtrip" {
+    const testing = std.testing;
+    var inp: [26]f64 = undefined;
+    for (0..13) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i));
+        inp[2 * i + 1] = @as(f64, @floatFromInt(13 - i));
+    }
+    var out: [26]f64 = undefined;
+    var inv: [26]f64 = undefined;
+    var scratch: [2000]f64 = undefined;
+
+    fftDispatch(&inp, &out, &scratch, 13, false);
+    fftDispatch(&out, &inv, &scratch, 13, true);
+    for (0..26) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+// Complex input (non-zero imaginary)
+
+test "complex input N=8 roundtrip" {
+    const testing = std.testing;
+    const inp = [_]f64{ 1, 2, 3, -1, 0, 5, -2, 3, 4, -4, 1, 1, -3, 2, 0, -5 };
+    var out: [16]f64 = undefined;
+    var inv: [16]f64 = undefined;
+    var scratch: [48]f64 = undefined;
+
+    fftDispatch(&inp, &out, &scratch, 8, false);
+    fftDispatch(&out, &inv, &scratch, 8, true);
+    for (0..16) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+// Export function coverage: fft_c64/ifft_c64
+
+test "fft_c64/ifft_c64 roundtrip" {
+    const testing = std.testing;
+    const inp = [_]f32{ 1, 0, 2, 0, 3, 0, 4, 0 };
+    var fwd: [8]f32 = undefined;
+    var inv: [8]f32 = undefined;
+    var scratch: [200]f64 = undefined;
+
+    fft_c64(&inp, &fwd, &scratch, 4);
+    ifft_c64(&fwd, &inv, &scratch, 4);
+
+    for (0..8) |i| {
+        try testing.expectApproxEqAbs(@as(f64, inv[i]), @as(f64, inp[i]), 1e-5);
+    }
+}
+
+// Batch FFT coverage
+
+test "fft_batch_c128 roundtrip" {
+    const testing = std.testing;
+    // 3 batches of 4-point FFTs
+    var inp: [24]f64 = undefined;
+    for (0..12) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i));
+        inp[2 * i + 1] = 0;
+    }
+    var fwd: [24]f64 = undefined;
+    var inv: [24]f64 = undefined;
+    var scratch: [24]f64 = undefined; // 6*4
+
+    fft_batch_c128(&inp, &fwd, &scratch, 4, 3);
+    ifft_batch_c128(&fwd, &inv, &scratch, 4, 3);
+
+    for (0..24) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "rfft_batch_f64 roundtrip" {
+    const testing = std.testing;
+    // 4 batches of 8-point rfft
+    var inp: [32]f64 = undefined;
+    for (0..32) |i| {
+        inp[i] = @as(f64, @floatFromInt(i % 7)) - 3.0;
+    }
+    var rfft_out: [40]f64 = undefined; // 4 * (8/2+1) * 2 = 40
+    var irfft_out: [32]f64 = undefined;
+    var scratch: [200]f64 = undefined; // 6*N needs room for internal buffers
+
+    rfft_batch_f64(&inp, &rfft_out, &scratch, 8, 4, 8, 10);
+    irfft_batch_f64(&rfft_out, &irfft_out, &scratch, 8, 4, 10, 8);
+
+    for (0..32) |i| {
+        try testing.expectApproxEqAbs(irfft_out[i], inp[i], 1e-8);
+    }
+}
+
+// 2D FFT coverage
+
+test "fft2_c128/ifft2_c128 roundtrip 4x4" {
+    const testing = std.testing;
+    var inp: [32]f64 = undefined; // 4x4 complex
+    for (0..16) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i));
+        inp[2 * i + 1] = 0;
+    }
+    var out: [32]f64 = undefined;
+    var inv: [32]f64 = undefined;
+    const sz = fft2_scratch_size(4, 4);
+    var scratch: [500]f64 = undefined;
+    _ = sz;
+
+    fft2_c128(&inp, &out, &scratch, 4, 4);
+    // DC = sum of all = 0+1+...+15 = 120
+    try testing.expectApproxEqAbs(out[0], 120.0, 1e-8);
+    try testing.expectApproxEqAbs(out[1], 0.0, 1e-8);
+
+    ifft2_c128(&out, &inv, &scratch, 4, 4);
+    for (0..32) |i| {
+        try testing.expectApproxEqAbs(inv[i], inp[i], 1e-8);
+    }
+}
+
+test "rfft2_f64 forward values 4x4" {
+    const testing = std.testing;
+    // All ones: rfft2 should give 16 at DC, 0 everywhere else
+    var inp: [16]f64 = undefined;
+    for (0..16) |i| inp[i] = 1.0;
+    _ = &inp;
+
+    const half_cols = 4 / 2 + 1; // 3
+    var rfft_out: [24]f64 = undefined; // 4 * 3 * 2
+    var scratch: [10000]f64 = undefined;
+
+    rfft2_f64(&inp, &rfft_out, &scratch, 4, 4);
+
+    // DC = sum = 16
+    try testing.expectApproxEqAbs(rfft_out[0], 16.0, 1e-8);
+    try testing.expectApproxEqAbs(rfft_out[1], 0.0, 1e-8);
+    // All other bins should be 0
+    for (1..4 * half_cols) |i| {
+        try testing.expectApproxEqAbs(rfft_out[2 * i], 0.0, 1e-8);
+        try testing.expectApproxEqAbs(rfft_out[2 * i + 1], 0.0, 1e-8);
+    }
+}
+
+// Fused irfftn_3d coverage
+
+test "irfftn_3d constant input 2x2x4" {
+    const testing = std.testing;
+    // For constant input x[i,j,k] = 1.0, rfftn produces:
+    // X[0,0,0] = M*P*N, all others = 0
+    // So irfftn of that should give back all 1.0
+    const M = 2;
+    const P = 2;
+    const N = 4;
+    const H = N / 2 + 1; // 3
+
+    // Construct rfftn output: only DC bin is nonzero
+    var rfftn_out: [M * P * H * 2]f64 = [_]f64{0} ** (M * P * H * 2);
+    rfftn_out[0] = @as(f64, @floatFromInt(M * P * N)); // DC real = 16
+    rfftn_out[1] = 0; // DC imag = 0
+
+    var recovered: [M * P * N]f64 = undefined;
+    var scratch: [20000]f64 = undefined;
+
+    irfftn_3d(&rfftn_out, &recovered, &scratch, M, P, H, N);
+
+    for (0..M * P * N) |i| {
+        try testing.expectApproxEqAbs(recovered[i], 1.0, 1e-8);
+    }
+}
+
+test "irfftn_3d impulse 2x2x4" {
+    const testing = std.testing;
+    // For impulse x[0,0,0] = 1.0, rest = 0, rfftn produces all bins = 1.0+0i
+    // So irfftn of all-ones spectrum should give impulse
+    const M = 2;
+    const P = 2;
+    const N = 4;
+    const H = N / 2 + 1; // 3
+
+    var rfftn_out: [M * P * H * 2]f64 = undefined;
+    for (0..M * P * H) |i| {
+        rfftn_out[2 * i] = 1.0;
+        rfftn_out[2 * i + 1] = 0.0;
+    }
+
+    var recovered: [M * P * N]f64 = undefined;
+    var scratch: [20000]f64 = undefined;
+
+    irfftn_3d(&rfftn_out, &recovered, &scratch, M, P, H, N);
+
+    // Element [0,0,0] should be 1.0, all others 0
+    try testing.expectApproxEqAbs(recovered[0], 1.0, 1e-8);
+    for (1..M * P * N) |i| {
+        try testing.expectApproxEqAbs(recovered[i], 0.0, 1e-8);
+    }
+}
+
+// Parseval's theorem: energy preservation
+
+test "Parseval's theorem N=32" {
+    const testing = std.testing;
+    var inp: [64]f64 = undefined;
+    for (0..32) |i| {
+        inp[2 * i] = @as(f64, @floatFromInt(i % 7)) - 3.0;
+        inp[2 * i + 1] = @as(f64, @floatFromInt(i % 5)) - 2.0;
+    }
+    var out: [64]f64 = undefined;
+    var scratch: [192]f64 = undefined; // 6*32
+
+    fftDispatch(&inp, &out, &scratch, 32, false);
+
+    // Time-domain energy
+    var energy_time: f64 = 0;
+    for (0..32) |i| {
+        energy_time += inp[2 * i] * inp[2 * i] + inp[2 * i + 1] * inp[2 * i + 1];
+    }
+
+    // Frequency-domain energy (scaled by N for unnormalized DFT)
+    var energy_freq: f64 = 0;
+    for (0..32) |i| {
+        energy_freq += out[2 * i] * out[2 * i] + out[2 * i + 1] * out[2 * i + 1];
+    }
+    energy_freq /= 32.0;
+
+    try testing.expectApproxEqAbs(energy_time, energy_freq, 1e-8);
+}
+
+// Linearity: FFT(a*x + b*y) = a*FFT(x) + b*FFT(y)
+
+test "FFT linearity N=16" {
+    const testing = std.testing;
+    var x: [32]f64 = undefined;
+    var y: [32]f64 = undefined;
+    var combo: [32]f64 = undefined;
+    const a: f64 = 2.5;
+    const b: f64 = -1.3;
+
+    for (0..16) |i| {
+        x[2 * i] = @as(f64, @floatFromInt(i));
+        x[2 * i + 1] = 0;
+        y[2 * i] = @as(f64, @floatFromInt(16 - i));
+        y[2 * i + 1] = 0;
+        combo[2 * i] = a * x[2 * i] + b * y[2 * i];
+        combo[2 * i + 1] = 0;
+    }
+
+    var fx: [32]f64 = undefined;
+    var fy: [32]f64 = undefined;
+    var fc: [32]f64 = undefined;
+    var scratch: [96]f64 = undefined;
+
+    fftDispatch(&x, &fx, &scratch, 16, false);
+    fftDispatch(&y, &fy, &scratch, 16, false);
+    fftDispatch(&combo, &fc, &scratch, 16, false);
+
+    for (0..32) |i| {
+        const expected = a * fx[i] + b * fy[i];
+        try testing.expectApproxEqAbs(fc[i], expected, 1e-8);
     }
 }
