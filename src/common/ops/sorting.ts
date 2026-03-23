@@ -190,7 +190,7 @@ export function sort(storage: ArrayStorage, axis: number = -1): ArrayStorage {
       const base = baseOffsets[outerIdx]!;
       const f32Slice =
         axisStride === 1
-          ? new Float32Array((data as any).subarray(base, base + axisSize))
+          ? new Float32Array((data as Float16Array).subarray(base, base + axisSize))
           : Float32Array.from({ length: axisSize }, (_, i) => Number(data[base + i * axisStride]!));
 
       // Sort (NaN values go to end)
@@ -204,7 +204,7 @@ export function sort(storage: ArrayStorage, axis: number = -1): ArrayStorage {
       // Bulk-write sorted values back
       const outBase = outBaseOffsets[outerIdx]!;
       if (outAxisStride === 1) {
-        (resultData as any).subarray(outBase, outBase + axisSize).set(f32Slice);
+        (resultData as Float16Array).subarray(outBase, outBase + axisSize).set(f32Slice);
       } else {
         for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
           resultData[outBase + axisIdx * outAxisStride] = f32Slice[axisIdx]!;
@@ -377,7 +377,7 @@ export function argsort(storage: ArrayStorage, axis: number = -1): ArrayStorage 
       // Bulk-read slice via Float32Array conversion
       const f32Slice =
         axisStride === 1
-          ? new Float32Array((data as any).subarray(base, base + axisSize))
+          ? new Float32Array((data as Float16Array).subarray(base, base + axisSize))
           : Float32Array.from({ length: axisSize }, (_, i) => Number(data[base + i * axisStride]!));
 
       // Create index array and sort by value (NaN values go to end)

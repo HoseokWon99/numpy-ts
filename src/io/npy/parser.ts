@@ -204,6 +204,7 @@ function createTypedArray(
 ):
   | Float64Array
   | Float32Array
+  | Float16Array
   | BigInt64Array
   | Int32Array
   | Int16Array

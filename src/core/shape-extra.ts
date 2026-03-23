@@ -265,7 +265,7 @@ export function pad(
     resultStorage.isCContiguous
   ) {
     const f32Src = new Float32Array(
-      (srcStorage.data as any).subarray(srcStorage.offset, srcStorage.offset + totalSize)
+      (srcStorage.data as Float16Array).subarray(srcStorage.offset, srcStorage.offset + totalSize)
     );
     const resultSize = resultStorage.size;
     const f32Result = new Float32Array(resultSize);
@@ -290,7 +290,7 @@ export function pad(
       f32Result[newFlatIdx] = f32Src[flatIdx]!;
     }
 
-    (resultStorage.data as any).set(f32Result);
+    (resultStorage.data as Float16Array).set(f32Result);
     return result;
   }
 

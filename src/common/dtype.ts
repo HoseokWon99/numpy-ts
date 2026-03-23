@@ -34,6 +34,7 @@ export type DType =
 export type TypedArray =
   | Float64Array
   | Float32Array
+  | Float16Array
   | BigInt64Array
   | Int32Array
   | Int16Array
@@ -68,9 +69,7 @@ export function getTypedArrayConstructor(dtype: DType): TypedArrayConstructor | 
       return Float32Array;
     case 'float16':
       // Use native Float16Array when available, otherwise fall back to Float32Array
-      return hasFloat16
-        ? (globalThis.Float16Array as unknown as TypedArrayConstructor)
-        : Float32Array;
+      return hasFloat16 ? Float16Array : Float32Array;
     case 'complex128':
       return Float64Array; // Interleaved: [re, im, re, im, ...]
     case 'complex64':
@@ -101,6 +100,7 @@ export function getTypedArrayConstructor(dtype: DType): TypedArrayConstructor | 
 type TypedArrayConstructor =
   | Float64ArrayConstructor
   | Float32ArrayConstructor
+  | Float16ArrayConstructor
   | BigInt64ArrayConstructor
   | Int32ArrayConstructor
   | Int16ArrayConstructor
