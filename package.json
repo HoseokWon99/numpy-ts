@@ -48,7 +48,7 @@
     "test:deno": "npm run build:test && deno run -A node_modules/.bin/vitest run --project=unit --project=validation --project=runtime-io",
     "test:tree-shaking": "vitest run --project=tree-shaking",
     "test:ci": "npm run lint && npm run typecheck && npm run test",
-    "test:coverage": "vitest run --project=unit --project=validation --coverage",
+    "test:coverage": "vitest run --project=unit --project=validation --project=runtime-io --coverage",
     "test:coverage:view": "open coverage/index.html || xdg-open coverage/index.html",
     "lint": "npm run lint:ts && npm run lint:zig",
     "lint:ts": "eslint --cache src tests",
@@ -136,7 +136,7 @@
     "ts-loader": "^9.5.2",
     "ts-morph": "^27.0.2",
     "tsx": "^4.20.6",
-    "typescript": "^5.3.3",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.3",
     "webpack": "^5.99.9"
   },

@@ -1517,7 +1517,7 @@ export function trapezoid(
     const yData = y.data;
     const yDtype = y.dtype;
     if (yDtype === 'float16' && hasFloat16) {
-      const f16 = new (globalThis.Float16Array as any)(1);
+      const f16 = new Float16Array(1);
       f16[0] = 0;
       for (let i = 0; i < axisSize - 1; i++) {
         const y0 = Number(yData[i]);
@@ -1554,7 +1554,7 @@ export function trapezoid(
   const useF16ND = yDtypeND === 'float16' && hasFloat16;
   const useF32ND = yDtypeND === 'float32';
   const resultData = useF16ND
-    ? new (globalThis.Float16Array as any)(outSize)
+    ? new Float16Array(outSize)
     : useF32ND
       ? new Float32Array(outSize)
       : new Float64Array(outSize);
@@ -1602,7 +1602,7 @@ export function trapezoid(
 
     // Compute integral along axis
     if (useF16ND) {
-      const f16 = new (globalThis.Float16Array as any)(1);
+      const f16 = new Float16Array(1);
       f16[0] = 0;
       for (let i = 0; i < axisSize - 1; i++) {
         inCoordsBase[axis] = i;

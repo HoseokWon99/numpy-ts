@@ -340,7 +340,7 @@ export function dot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number | b
     }
     // Accumulate in the result dtype's precision (float16/float32/float64)
     if (resultDtype === 'float16' && hasFloat16) {
-      const f16 = new (globalThis.Float16Array as any)(1);
+      const f16 = new Float16Array(1);
       f16[0] = 0;
       for (let i = 0; i < n; i++) {
         f16[0] += Number(a.get(i)) * Number(b.get(i));
@@ -894,7 +894,7 @@ function matmul2D(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     const out = ArrayStorage.zeros([m, n], outputDtype);
     const src = result.data as Float64Array;
     const dst = out.data;
-    for (let i = 0; i < src.length; i++) (dst as any)[i] = src[i]!;
+    for (let i = 0; i < src.length; i++) (dst as Float16Array)[i] = src[i]!;
     return out;
   }
 
@@ -1207,7 +1207,7 @@ export function trace(
 
     // Float16/float32 accumulator for matching NumPy precision
     if (a.dtype === 'float16' && hasFloat16) {
-      const f16 = new (globalThis.Float16Array as any)(1);
+      const f16 = new Float16Array(1);
       f16[0] = 0;
       for (let i = 0; i < diagLen; i++) {
         const idx0 = offset >= 0 ? i : i - offset;
@@ -1553,8 +1553,12 @@ export function outer(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
 
   // Float16Array optimization: bulk-convert inputs to Float32Array for faster per-element access
   if (resultDtype === 'float16' && hasFloat16 && aFlat.isCContiguous && bFlat.isCContiguous) {
-    const f32A = new Float32Array((aFlat.data as any).subarray(aFlat.offset, aFlat.offset + m));
-    const f32B = new Float32Array((bFlat.data as any).subarray(bFlat.offset, bFlat.offset + n));
+    const f32A = new Float32Array(
+      (aFlat.data as Float16Array).subarray(aFlat.offset, aFlat.offset + m)
+    );
+    const f32B = new Float32Array(
+      (bFlat.data as Float16Array).subarray(bFlat.offset, bFlat.offset + n)
+    );
     const f32Out = new Float32Array(m * n);
     for (let i = 0; i < m; i++) {
       const aVal = f32A[i]!;
@@ -1563,7 +1567,7 @@ export function outer(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
         f32Out[base + j] = aVal * f32B[j]!;
       }
     }
-    (result.data as any).set(f32Out);
+    (result.data as Float16Array).set(f32Out);
     return result;
   }
 
@@ -4633,7 +4637,7 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
   }
   // Float16/float32 accumulator for matching NumPy precision
   if (vdotResultDtype === 'float16' && hasFloat16) {
-    const f16 = new (globalThis.Float16Array as any)(1);
+    const f16 = new Float16Array(1);
     f16[0] = 0;
     for (let i = 0; i < aSize; i++) {
       f16[0] += Number(aFlat.get(i)) * Number(bFlat.get(i));

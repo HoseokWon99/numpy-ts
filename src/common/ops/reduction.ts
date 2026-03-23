@@ -41,17 +41,15 @@ const f32acc = new Float32Array(2); // [0]=primary, [1]=secondary (for complex i
 // Float16Array accumulator for matching NumPy's float16 reduction precision.
 // When native Float16Array is available, accumulating via f16acc[0] rounds to
 // float16 at each step — matching NumPy's overflow/precision behavior exactly.
-const f16acc: Float32Array | null =
-  typeof globalThis.Float16Array !== 'undefined'
-    ? (new (globalThis.Float16Array as any)(2) as unknown as Float32Array)
-    : null;
+const f16acc: Float16Array | null =
+  typeof globalThis.Float16Array !== 'undefined' ? new Float16Array(2) : null;
 
 /**
  * Get the appropriate typed accumulator for a dtype.
  * Returns f16acc for float16 (native only), f32acc for float32, or null for float64/others.
  * Writing to acc[0] implicitly rounds to the dtype's precision at each step.
  */
-function getFloatAcc(dtype: DType): Float32Array | null {
+function getFloatAcc(dtype: DType): Float16Array | Float32Array | null {
   if (dtype === 'float16') return f16acc;
   if (dtype === 'float32') return f32acc;
   return null;
@@ -182,7 +180,9 @@ export function sum(
       if (contiguous) {
         // Bulk-convert Float16Array to Float32Array to avoid per-element f16 overhead
         const f32 =
-          dtype === 'float16' ? new Float32Array((data as any).subarray(off, off + size)) : data;
+          dtype === 'float16'
+            ? new Float32Array((data as Float16Array).subarray(off, off + size))
+            : data;
         const f32off = dtype === 'float16' ? 0 : off;
         for (let i = 0; i < size; i++) {
           acc[0] += Number(f32[f32off + i]!);
@@ -449,7 +449,7 @@ export function mean(
       // Bulk-convert Float16Array→Float32Array first to avoid per-element f16 overhead
       const src =
         dtype === 'float16' && hasFloat16
-          ? new Float32Array((srcData as any).subarray(off2, off2 + storage.size))
+          ? new Float32Array((srcData as Float16Array).subarray(off2, off2 + storage.size))
           : srcData;
       const srcOff = dtype === 'float16' && hasFloat16 ? 0 : off2;
       for (let i = 0; i < storage.size; i++) dstData[i] = Number(src[srcOff + i]);
@@ -466,7 +466,7 @@ export function mean(
     const Ctor = getTypedArrayConstructor(dtype)!;
     const outData = new Ctor(resultData.length);
     for (let i = 0; i < resultData.length; i++) {
-      (outData as any)[i] = resultData[i]! / divisor;
+      (outData as Float64Array)[i] = resultData[i]! / divisor;
     }
     return ArrayStorage.fromData(
       outData as unknown as TypedArray,
@@ -1771,7 +1771,7 @@ export function variance(
           bufIdx += axisStr;
         }
         acc[0] /= axisSize - ddof;
-        (outData as any)[outerIdx] = acc[0]!;
+        (outData as Float16Array)[outerIdx] = acc[0]!;
       }
       return ArrayStorage.fromData(
         outData as unknown as TypedArray,

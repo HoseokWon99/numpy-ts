@@ -123,8 +123,8 @@ export function f16ToF32Input(data: TypedArray, dtype: string): TypedArray {
  */
 export function f32ToF16Output(data: TypedArray, dtype: string): TypedArray {
   if (dtype === 'float16' && hasFloat16) {
-    const f16 = new (globalThis.Float16Array as any)(data.length);
-    f16.set(data);
+    const f16 = new Float16Array(data.length);
+    f16.set(data as Exclude<TypedArray, BigInt64Array | BigUint64Array>);
     return f16 as unknown as TypedArray;
   }
   return data;

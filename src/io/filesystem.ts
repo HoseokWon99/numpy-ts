@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Runtime filesystem abstraction for cross-platform file IO.
  *
