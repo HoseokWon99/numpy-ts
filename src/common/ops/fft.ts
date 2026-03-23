@@ -29,6 +29,11 @@ import {
   rfft2_scratch_size,
   irfft2_f64,
   irfft2_scratch_size,
+  rfft_batch_f64,
+  irfft_batch_f64,
+  rfft_batch_scratch_size,
+  irfftn_3d,
+  irfftn_3d_scratch_size,
 } from '../wasm/bins/fft.wasm';
 import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from '../wasm/runtime';
 import type { TypedArray } from '../dtype';
@@ -651,6 +656,135 @@ function truncateAxis(a: ArrayStorage, axis: number, newSize: number): ArrayStor
  */
 const FFT_WASM_THRESHOLD = 32;
 
+/**
+ * WASM batch rfft: processes all last-axis rfft's in a single WASM call.
+ * Input: real array, C-contiguous. Transforms along last axis.
+ * Returns null if WASM can't handle.
+ */
+function wasmBatchRfft(a: ArrayStorage, n: number): ArrayStorage | null {
+  const shape = Array.from(a.shape);
+  const ndim = shape.length;
+  const outLen = Math.floor(n / 2) + 1;
+
+  // Batch = product of all dims except last
+  const batch = shape.slice(0, ndim - 1).reduce((acc, s) => acc * s, 1);
+  const inStride = n; // real values per row
+  const outStride = outLen * 2; // complex values per row (interleaved)
+
+  // Convert input to float64 if needed
+  const srcData =
+    a.dtype === 'float64'
+      ? (a.data as Float64Array)
+      : Float64Array.from(
+          a.data.subarray(a.offset, a.offset + a.size) as unknown as ArrayLike<number>
+        );
+
+  const inBytes = batch * n * 8;
+  const outBytes = batch * outLen * 2 * 8;
+  const scratchN = rfft_batch_scratch_size(n);
+  const scratchBytes = scratchN * 8;
+
+  ensureMemory(inBytes + outBytes + scratchBytes);
+  resetAllocator();
+
+  const inPtr = copyIn(srcData.subarray(0, batch * n) as unknown as TypedArray);
+  const outPtr = alloc(outBytes);
+  const scratchPtr = alloc(scratchBytes);
+
+  rfft_batch_f64(inPtr, outPtr, scratchPtr, n, batch, inStride, outStride);
+
+  const outData = copyOut(
+    outPtr,
+    batch * outLen * 2,
+    Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  );
+
+  const outShape = [...shape];
+  outShape[ndim - 1] = outLen;
+  return ArrayStorage.fromData(outData as unknown as Float64Array, outShape, 'complex128');
+}
+
+/**
+ * WASM batch irfft: processes all last-axis irfft's in a single WASM call.
+ * Input: complex array, C-contiguous. Transforms along last axis.
+ * Returns null if WASM can't handle.
+ */
+function wasmBatchIrfft(a: ArrayStorage, nOut: number): ArrayStorage | null {
+  const shape = Array.from(a.shape);
+  const ndim = shape.length;
+  const nHalf = shape[ndim - 1]!; // input length along last axis
+
+  const batch = shape.slice(0, ndim - 1).reduce((acc, s) => acc * s, 1);
+  const inStride = nHalf * 2; // complex values per row (interleaved)
+  const outStride = nOut; // real values per row
+
+  // Ensure complex128 input
+  const cplx = isComplexDType(a.dtype) ? toComplex(a) : toComplex(a);
+  const srcData = cplx.data as Float64Array;
+
+  const inBytes = batch * nHalf * 2 * 8;
+  const outBytes = batch * nOut * 8;
+  const scratchN = rfft_batch_scratch_size(nOut);
+  const scratchBytes = scratchN * 8;
+
+  ensureMemory(inBytes + outBytes + scratchBytes);
+  resetAllocator();
+
+  const inPtr = copyIn(srcData.subarray(0, batch * nHalf * 2) as unknown as TypedArray);
+  const outPtr = alloc(outBytes);
+  const scratchPtr = alloc(scratchBytes);
+
+  irfft_batch_f64(inPtr, outPtr, scratchPtr, nOut, batch, inStride, outStride);
+
+  const outData = copyOut(
+    outPtr,
+    batch * nOut,
+    Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  );
+
+  const outShape = [...shape];
+  outShape[ndim - 1] = nOut;
+  return ArrayStorage.fromData(outData as unknown as Float64Array, outShape, 'float64');
+}
+
+/**
+ * WASM fused 3D irfftn: one WASM call for the entire inverse real 3D FFT.
+ */
+function wasmIrfftn3d(
+  a: ArrayStorage,
+  d0: number,
+  d1: number,
+  d2Half: number,
+  d2Out: number
+): ArrayStorage | null {
+  const cplx = toComplex(a);
+  const srcData = cplx.data as Float64Array;
+  const totalIn = d0 * d1 * d2Half * 2; // complex interleaved
+  const totalOut = d0 * d1 * d2Out; // real
+
+  const inBytes = totalIn * 8;
+  const outBytes = totalOut * 8;
+  const scratchN = irfftn_3d_scratch_size(d0, d1, d2Out);
+  const scratchBytes = scratchN * 8;
+
+  ensureMemory(inBytes + outBytes + scratchBytes);
+  resetAllocator();
+
+  const inPtr = copyIn(srcData.subarray(0, totalIn) as unknown as TypedArray);
+  const outPtr = alloc(outBytes);
+  const scratchPtr = alloc(scratchBytes);
+
+  irfftn_3d(inPtr, outPtr, scratchPtr, d0, d1, d2Half, d2Out);
+
+  const outData = copyOut(
+    outPtr,
+    totalOut,
+    Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  );
+
+  return ArrayStorage.fromData(outData as unknown as Float64Array, [d0, d1, d2Out], 'float64');
+}
+
 function fft1dAlongAxis(
   a: ArrayStorage,
   axis: number,
@@ -862,13 +996,24 @@ export function rfft(
 
   // Determine input length
   const inputLen = n ?? shape[ax]!;
-
-  // Full FFT
-  const fullResult = fft(a, inputLen, axis, norm);
-
-  // Take only first n//2 + 1 elements along axis
   const outLen = Math.floor(inputLen / 2) + 1;
 
+  // WASM fast path: batch rfft when last axis is contiguous and input is real/float
+  if (
+    ax === ndim - 1 &&
+    a.isCContiguous &&
+    n === undefined &&
+    norm === 'backward' &&
+    !isComplexDType(a.dtype) &&
+    inputLen >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier &&
+    inputLen % 2 === 0
+  ) {
+    const result = wasmBatchRfft(a, inputLen);
+    if (result) return result;
+  }
+
+  // Fallback: full FFT + truncation
+  const fullResult = fft(a, inputLen, axis, norm);
   return truncateAxis(fullResult, ax, outLen);
 }
 
@@ -896,6 +1041,19 @@ export function irfft(
   // Determine output length
   const inputLen = shape[ax]!;
   const outLen = n ?? (inputLen - 1) * 2;
+
+  // WASM fast path: batch irfft when last axis is contiguous
+  if (
+    ax === ndim - 1 &&
+    a.isCContiguous &&
+    norm === 'backward' &&
+    outLen % 2 === 0 &&
+    outLen >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier &&
+    inputLen === Math.floor(outLen / 2) + 1
+  ) {
+    const result = wasmBatchIrfft(a, outLen);
+    if (result) return result;
+  }
 
   // Reconstruct full spectrum using Hermitian symmetry
   // For real signal: X[k] = conj(X[n-k])
@@ -1101,18 +1259,20 @@ export function rfftn(
     return toComplex(a);
   }
 
-  // Apply FFT along all axes except the last
-  let result: ArrayStorage = a;
+  // Apply rfft along the LAST axis FIRST — while data is still real, this uses
+  // the WASM batch rfft kernel (half the FFT work) and produces smaller output.
+  const lastAx = axesList[axesList.length - 1]!;
+  const lastN = s ? s[axesList.length - 1] : undefined;
+  let result = rfft(a, lastN, lastAx, norm);
+
+  // Apply FFT along remaining axes (on the reduced complex data)
   for (let i = 0; i < axesList.length - 1; i++) {
     const ax = axesList[i]!;
     const n = s ? s[i] : undefined;
     result = fft(result, n, ax, norm);
   }
 
-  // Apply rfft along the last axis
-  const lastAx = axesList[axesList.length - 1]!;
-  const lastN = s ? s[axesList.length - 1] : undefined;
-  return rfft(result, lastN, lastAx, norm);
+  return result;
 }
 
 /**
@@ -1151,7 +1311,28 @@ export function irfftn(
         return shape[ax]!;
       });
 
-  // Apply irfft along the last axis first
+  // WASM fast path: fused 3D irfftn in one WASM call
+  if (
+    ndim === 3 &&
+    axesList.length === 3 &&
+    axesList[0] === 0 &&
+    axesList[1] === 1 &&
+    axesList[2] === 2 &&
+    norm === 'backward' &&
+    s === undefined &&
+    a.isCContiguous &&
+    isComplexDType(a.dtype) &&
+    outLens[2]! % 2 === 0
+  ) {
+    const d0 = outLens[0]!;
+    const d1 = outLens[1]!;
+    const d2Half = inputLastLen;
+    const d2Out = outLens[2]!;
+    const result = wasmIrfftn3d(a, d0, d1, d2Half, d2Out);
+    if (result) return result;
+  }
+
+  // Apply irfft along the last axis first (recovers full spectrum from Hermitian half)
   let result = irfft(a, outLens[axesList.length - 1], lastAx, norm);
 
   // Apply ifft along remaining axes (in reverse order for consistency with NumPy)
