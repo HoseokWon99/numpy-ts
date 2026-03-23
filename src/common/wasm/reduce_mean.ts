@@ -28,7 +28,7 @@ import {
   reduce_mean_strided_u16,
   reduce_mean_strided_u8,
 } from './bins/reduce_mean.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -40,6 +40,7 @@ type ReduceFn = (aPtr: number, N: number) => number | bigint;
 const kernels: Partial<Record<DType, ReduceFn>> = {
   float64: reduce_mean_f64,
   float32: reduce_mean_f32,
+  float16: reduce_mean_f32,
   int64: reduce_mean_i64,
   uint64: reduce_mean_u64,
   int32: reduce_mean_i32,
@@ -54,6 +55,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -85,7 +87,8 @@ export function wasmReduceMean(a: ArrayStorage): number | null {
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
+  const aData = f16ToF32Input(aRaw, dtype);
   const aPtr = copyIn(aData);
 
   return Number(kernel(aPtr, size));
@@ -98,6 +101,7 @@ type StridedFn = (aPtr: number, outPtr: number, outer: number, axis: number, inn
 const stridedKernels: Partial<Record<DType, StridedFn>> = {
   float64: reduce_mean_strided_f64,
   float32: reduce_mean_strided_f32,
+  float16: reduce_mean_strided_f32,
   int64: reduce_mean_strided_i64,
   uint64: reduce_mean_strided_u64,
   int32: reduce_mean_strided_i32,
@@ -136,7 +140,8 @@ export function wasmReduceMeanStrided(
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + totalSize) as TypedArray;
+  const aRaw = a.data.subarray(aOff, aOff + totalSize) as TypedArray;
+  const aData = f16ToF32Input(aRaw, dtype);
   const inPtr = copyIn(aData);
   const outPtr = alloc(outSize * outBpe);
 

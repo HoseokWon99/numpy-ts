@@ -574,10 +574,19 @@ export function asarray_chkfinite(a: NDArrayCore | unknown, dtype?: DType): NDAr
     }
   } else if (data instanceof Float32Array) {
     // View as Uint32Array to check exponent bits of each f32
+    // Float16Array backing is also Float32Array on fallback, so this handles both
     const u32 = new Uint32Array(data.buffer, data.byteOffset, data.length);
     const expMask = 0x7f800000; // exponent bits in f32
     for (let i = 0; i < u32.length; i++) {
       if ((u32[i]! & expMask) === expMask) {
+        throw new Error('array must not contain infs or NaNs');
+      }
+    }
+  } else if (arr.dtype === 'float16') {
+    // Native Float16Array — check each element via Number conversion
+    for (let i = 0; i < data.length; i++) {
+      const v = Number(data[i]);
+      if (!isFinite(v)) {
         throw new Error('array must not contain infs or NaNs');
       }
     }

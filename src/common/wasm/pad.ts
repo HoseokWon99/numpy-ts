@@ -13,7 +13,7 @@ import {
   pad_2d_i16,
   pad_2d_i8,
 } from './bins/pad.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -33,6 +33,7 @@ const kernels: Partial<Record<DType, Pad2DFn>> = {
   uint16: pad_2d_i16,
   int8: pad_2d_i8,
   uint8: pad_2d_i8,
+  float16: pad_2d_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -47,6 +48,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -79,8 +81,10 @@ export function wasmPad2D(a: ArrayStorage, padWidth: number): ArrayStorage | nul
   ensureMemory(aBytes + outBytes);
   resetAllocator();
 
+  const isF16 = dtype === 'float16';
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  if (isF16) aData = f16ToF32Input(aData, dtype);
 
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);
@@ -93,5 +97,5 @@ export function wasmPad2D(a: ArrayStorage, padWidth: number): ArrayStorage | nul
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, [outRows, outCols], dtype);
+  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, [outRows, outCols], dtype);
 }

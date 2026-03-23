@@ -17,7 +17,7 @@ import {
   clip_u16,
   clip_u8,
 } from './bins/clip.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -37,12 +37,14 @@ const kernels: Partial<Record<DType, ClipFn>> = {
   uint16: clip_u16,
   int8: clip_i8,
   uint8: clip_u8,
+  float16: clip_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -71,7 +73,7 @@ export function wasmClip(a: ArrayStorage, lo: number, hi: number): ArrayStorage 
   ensureMemory(size * bpe * 2);
   resetAllocator();
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
+  const aPtr = copyIn(f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype));
   const outPtr = alloc(size * bpe);
   kernel(aPtr, outPtr, size, lo, hi);
 
@@ -80,5 +82,6 @@ export function wasmClip(a: ArrayStorage, lo: number, hi: number): ArrayStorage 
     size,
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+  const finalOut = f32ToF16Output(outData, dtype);
+  return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
 }

@@ -30,7 +30,7 @@ import {
   logaddexp_u8,
   logaddexp_scalar_u8,
 } from './bins/logaddexp.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -43,11 +43,13 @@ type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => voi
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: logaddexp_f64,
   float32: logaddexp_f32,
+  float16: logaddexp_f32,
 };
 
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: logaddexp_scalar_f64,
   float32: logaddexp_scalar_f32,
+  float16: logaddexp_scalar_f32,
 };
 
 const intBinaryKernels: Partial<Record<DType, BinaryFn>> = {
@@ -76,6 +78,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -107,8 +110,8 @@ export function wasmLogaddexp(a: ArrayStorage, b: ArrayStorage): ArrayStorage | 
     ensureMemory(size * bpe * 3);
     resetAllocator();
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    const bData = b.data.subarray(b.offset, b.offset + size) as TypedArray;
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype);
+    const bData = f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype);
 
     const aPtr = copyIn(aData);
     const bPtr = copyIn(bData);
@@ -121,7 +124,8 @@ export function wasmLogaddexp(a: ArrayStorage, b: ArrayStorage): ArrayStorage | 
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+    const finalOut = f32ToF16Output(outData, dtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
   }
 
   // Int64 path
@@ -179,7 +183,7 @@ export function wasmLogaddexpScalar(a: ArrayStorage, scalar: number): ArrayStora
     ensureMemory(size * bpe * 2);
     resetAllocator();
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
     const aPtr = copyIn(aData);
     const outPtr = alloc(size * bpe);
 
@@ -190,7 +194,8 @@ export function wasmLogaddexpScalar(a: ArrayStorage, scalar: number): ArrayStora
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+    const finalOut = f32ToF16Output(outData, dtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
   }
 
   // Int64 path

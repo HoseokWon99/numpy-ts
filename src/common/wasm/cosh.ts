@@ -8,7 +8,7 @@
  */
 
 import { cosh_f64, cosh_f32, cosh_i64, cosh_u64 } from './bins/cosh.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, isBigIntDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -34,6 +34,27 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
 
   const dtype = a.dtype;
   if (isComplexDType(dtype)) return null;
+
+  // float16 path: convert to f32, run f32 kernel, convert back
+  if (dtype === 'float16') {
+    const bpe = 4;
+    ensureMemory(size * bpe * 2);
+    resetAllocator();
+
+    const aOff = a.offset;
+    const aData = f16ToF32Input(a.data.subarray(aOff, aOff + size) as TypedArray, dtype);
+    const aPtr = copyIn(aData);
+    const outPtr = alloc(size * bpe);
+
+    cosh_f32(aPtr, outPtr, size);
+
+    const outData = copyOut(
+      outPtr,
+      size,
+      Float32Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+    );
+    return ArrayStorage.fromData(f32ToF16Output(outData, dtype), Array.from(a.shape), dtype);
+  }
 
   // Native float path
   const nativeKernel = kernels[dtype];

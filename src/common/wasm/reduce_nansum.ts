@@ -48,8 +48,8 @@ export function wasmReduceNansum(a: ArrayStorage): number | null {
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aPtr = copyIn(aData);
+  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
+  const aPtr = copyIn(aRaw);
 
   return Number(kernel(aPtr, size));
 }

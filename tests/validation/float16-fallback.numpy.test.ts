@@ -352,6 +352,117 @@ result = a * np.float16(2)
     });
   });
 
+  describe('overflow behavior matches NumPy (WASM f16→f32→f16 path)', () => {
+    // These test that the f16→f32→kernel→f32→f16 WASM path preserves
+    // NumPy's overflow/underflow behavior exactly. The key: even though the
+    // kernel computes in f32, the final f32→f16 conversion produces the same
+    // overflow (>65504 → inf) and underflow (< ~6e-8 → 0) as native f16.
+
+    it('multiply overflow', () => {
+      const a = array([256, 65000, 200], 'float16');
+      const b = array([256, 2, 400], 'float16');
+      const ts = a.multiply(b);
+
+      const py = runNumPy(`
+a = np.array([256, 65000, 200], dtype=np.float16)
+b = np.array([256, 2, 400], dtype=np.float16)
+result = a * b
+      `);
+
+      for (let i = 0; i < 3; i++) {
+        expect(ts.get([i])).toBe(py.value[i]);
+      }
+    });
+
+    it('add overflow', () => {
+      const ts = array([65000, 65000], 'float16').add(array([1000, 1000], 'float16'));
+      const py = runNumPy(`result = np.array([65000, 65000], dtype=np.float16) + np.array([1000, 1000], dtype=np.float16)`);
+      expect(ts.toArray()).toEqual(py.value);
+    });
+
+    it('exp overflow', () => {
+      const ts = np.exp(array([10, 11, 12, -20], 'float16'));
+      const py = runNumPy(`result = np.exp(np.array([10, 11, 12, -20], dtype=np.float16))`);
+      for (let i = 0; i < 4; i++) {
+        expect(approxEqual(ts.get([i]) as number, py.value[i])).toBe(true);
+      }
+    });
+
+    it('exp2 overflow', () => {
+      const ts = np.exp2(array([15, 16, 17], 'float16'));
+      const py = runNumPy(`result = np.exp2(np.array([15, 16, 17], dtype=np.float16))`);
+      for (let i = 0; i < 3; i++) {
+        expect(ts.get([i])).toBe(py.value[i]);
+      }
+    });
+
+    it('power overflow', () => {
+      const ts = np.power(array([256, 100], 'float16'), array([2, 3], 'float16'));
+      const py = runNumPy(`result = np.power(np.array([256, 100], dtype=np.float16), np.array([2, 3], dtype=np.float16))`);
+      for (let i = 0; i < 2; i++) {
+        expect(ts.get([i])).toBe(py.value[i]);
+      }
+    });
+
+    it('square overflow', () => {
+      const ts = np.square(array([256, 200, 10], 'float16'));
+      const py = runNumPy(`result = np.square(np.array([256, 200, 10], dtype=np.float16))`);
+      for (let i = 0; i < 3; i++) {
+        expect(ts.get([i])).toBe(py.value[i]);
+      }
+    });
+
+    it('trig functions preserve precision', () => {
+      const a = array([0, 0.5, 1, 1.5, 3.14], 'float16');
+      const tsSin = np.sin(a);
+      const tsCos = np.cos(a);
+
+      const pySin = runNumPy(`result = np.sin(np.array([0, 0.5, 1, 1.5, 3.14], dtype=np.float16))`);
+      const pyCos = runNumPy(`result = np.cos(np.array([0, 0.5, 1, 1.5, 3.14], dtype=np.float16))`);
+
+      for (let i = 0; i < 5; i++) {
+        expect(tsSin.get([i])).toBe(pySin.value[i]);
+        expect(tsCos.get([i])).toBe(pyCos.value[i]);
+      }
+    });
+
+    it('hyperbolic functions at extremes', () => {
+      const ts = np.tanh(array([0, 1, 10, 100, -100], 'float16'));
+      const py = runNumPy(`result = np.tanh(np.array([0, 1, 10, 100, -100], dtype=np.float16))`);
+      for (let i = 0; i < 5; i++) {
+        expect(ts.get([i])).toBe(py.value[i]);
+      }
+    });
+
+    it('underflow to zero', () => {
+      const ts = array([0.0001], 'float16').multiply(array([0.0001], 'float16'));
+      const py = runNumPy(`result = np.array([0.0001], dtype=np.float16) * np.array([0.0001], dtype=np.float16)`);
+      expect(ts.get([0])).toBe(py.value[0]);
+    });
+
+    it('reciprocal overflow/underflow', () => {
+      const ts = np.reciprocal(array([0.0001, 1, 65504], 'float16'));
+      const py = runNumPy(`result = np.reciprocal(np.array([0.0001, 1, 65504], dtype=np.float16))`);
+      for (let i = 0; i < 3; i++) {
+        expect(approxEqual(ts.get([i]) as number, py.value[i])).toBe(true);
+      }
+    });
+
+    it('sqrt preserves values', () => {
+      const ts = np.sqrt(array([0, 1, 4, 65504], 'float16'));
+      const py = runNumPy(`result = np.sqrt(np.array([0, 1, 4, 65504], dtype=np.float16))`);
+      for (let i = 0; i < 4; i++) {
+        expect(approxEqual(ts.get([i]) as number, py.value[i])).toBe(true);
+      }
+    });
+
+    it('asarray_chkfinite detects inf/nan in float16', () => {
+      expect(() => np.asarray_chkfinite(array([1, Infinity], 'float16'))).toThrow();
+      expect(() => np.asarray_chkfinite(array([NaN, 1], 'float16'))).toThrow();
+      expect(() => np.asarray_chkfinite(array([1, 2, 3], 'float16'))).not.toThrow();
+    });
+  });
+
   describe('type promotion matches NumPy', () => {
     it('float16 + float32 promotes to float32', () => {
       const a = array([1, 2, 3], 'float16');
@@ -510,6 +621,129 @@ result = np.sum(np.array([[1,2,3],[4,5,6]], dtype=np.float16), axis=1)
       for (let i = 0; i < 2; i++) {
         expect(approxEqual(ts1.get([i]) as number, py1.value[i])).toBe(true);
       }
+    });
+  });
+
+  describe('reduction overflow matches NumPy (JS float16 accumulator path)', () => {
+    // These reductions are excluded from WASM because they need float16
+    // accumulation precision — the JS path uses a Float16Array accumulator
+    // that overflows at the same points as NumPy.
+
+    it('sum overflows to inf on large arrays', () => {
+      const a = arange(0, 1000, 1, 'float16');
+      const ts = a.sum();
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+result = np.array([float(np.sum(np.arange(1000, dtype=np.float16)))])
+      `);
+
+      if (hasFloat16) {
+        expect(ts).toBe(py.value[0]); // Both should be inf
+      }
+    });
+
+    it('prod overflows to inf', () => {
+      const a = array([100, 100, 100], 'float16');
+      const ts = a.prod();
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+result = np.array([float(np.prod(np.array([100, 100, 100], dtype=np.float16)))])
+      `);
+
+      if (hasFloat16) {
+        expect(ts).toBe(py.value[0]);
+      }
+    });
+
+    it('cumsum overflow propagates', () => {
+      const a = array([65000, 65000, 1], 'float16');
+      const ts = np.cumsum(a);
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+result = np.cumsum(np.array([65000, 65000, 1], dtype=np.float16))
+      `);
+
+      if (hasFloat16) {
+        expect(ts.toArray()).toEqual(py.value);
+      }
+    });
+
+    it('var overflows for large values', () => {
+      // Variance of large float16 values overflows due to squared differences
+      const a = array([0, 65504, 0, 65504], 'float16');
+      const ts = a.var();
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+result = np.array([float(np.var(np.array([0, 65504, 0, 65504], dtype=np.float16)))])
+      `);
+
+      if (hasFloat16) {
+        expect(ts).toBe(py.value[0]);
+      }
+    });
+
+    it('std overflows for large values', () => {
+      const a = array([0, 65504, 0, 65504], 'float16');
+      const ts = a.std();
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+result = np.array([float(np.std(np.array([0, 65504, 0, 65504], dtype=np.float16)))])
+      `);
+
+      if (hasFloat16) {
+        expect(ts).toBe(py.value[0]);
+      }
+    });
+
+    it('dot 1D overflow', () => {
+      const a = array([256, 256, 256], 'float16');
+      const ts = np.dot(a, a);
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+a = np.array([256, 256, 256], dtype=np.float16)
+result = np.array([float(np.dot(a, a))])
+      `);
+
+      if (hasFloat16) {
+        expect(ts).toBe(py.value[0]);
+      }
+    });
+
+    it('nansum overflow matches sum overflow', () => {
+      const a = arange(0, 500, 1, 'float16');
+      const tsSum = a.sum();
+      const tsNansum = np.nansum(a);
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+a = np.arange(500, dtype=np.float16)
+result = np.array([float(np.sum(a)), float(np.nansum(a))])
+      `);
+
+      if (hasFloat16) {
+        expect(tsSum).toBe(py.value[0]);
+        expect(tsNansum).toBe(py.value[1]);
+      }
+    });
+
+    it('mean uses higher precision (does NOT overflow like sum)', () => {
+      // NumPy's mean upcasts internally — sum overflows but mean doesn't
+      const a = arange(0, 1000, 1, 'float16');
+
+      const py = runNumPy(`
+import warnings; warnings.filterwarnings('ignore')
+a = np.arange(1000, dtype=np.float16)
+result = np.array([float(np.mean(a))])
+      `);
+
+      const tsMean = a.mean();
+      expect(approxEqual(tsMean as number, py.value[0])).toBe(true);
     });
   });
 

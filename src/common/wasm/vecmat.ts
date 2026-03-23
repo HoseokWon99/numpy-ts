@@ -15,7 +15,7 @@ import {
   vecmat_i16,
   vecmat_i8,
 } from './bins/vecmat.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 
@@ -38,6 +38,7 @@ const wasmKernels: Partial<Record<DType, WasmVecmatFn>> = {
   uint16: vecmat_i16,
   int8: vecmat_i8,
   uint8: vecmat_i8,
+  float16: vecmat_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -54,6 +55,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 const complexFactor: Partial<Record<DType, number>> = {
@@ -88,11 +90,13 @@ export function wasmVecmat(x: ArrayStorage, A: ArrayStorage): ArrayStorage | nul
   ensureMemory(xBytes + aBytes + outBytes);
   resetAllocator();
 
-  const xData = x.data.subarray(x.offset * factor, x.offset * factor + K * factor) as TypedArray;
-  const aData = A.data.subarray(
+  const isF16 = resultDtype === 'float16';
+  let xData = x.data.subarray(x.offset * factor, x.offset * factor + K * factor) as TypedArray;
+  let aData = A.data.subarray(
     A.offset * factor,
     A.offset * factor + K * N * factor
   ) as TypedArray;
+  if (isF16) { xData = f16ToF32Input(xData, resultDtype); aData = f16ToF32Input(aData, resultDtype); }
 
   const xPtr = copyIn(xData);
   const aPtr = copyIn(aData);
@@ -106,5 +110,5 @@ export function wasmVecmat(x: ArrayStorage, A: ArrayStorage): ArrayStorage | nul
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, [N], resultDtype);
+  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, resultDtype) : outData, [N], resultDtype);
 }

@@ -6,7 +6,7 @@
  */
 
 import { ArrayStorage, computeStrides } from '../storage';
-import { getTypedArrayConstructor, isBigIntDType, isComplexDType, type TypedArray } from '../dtype';
+import { getTypedArrayConstructor, isBigIntDType, isComplexDType, hasFloat16, type TypedArray } from '../dtype';
 import { Complex } from '../complex';
 import { wasmFlip } from '../wasm/flip';
 import { wasmTile2D } from '../wasm/tile';
@@ -586,6 +586,28 @@ function copyToOutput(
     return;
   }
 
+  // Float16Array optimization: bulk-convert for faster per-element access
+  if (dtype === 'float16' && hasFloat16 && source.isCContiguous) {
+    const f32Src = new Float32Array((source.data as any).subarray(source.offset, source.offset + sourceSize));
+    const indices = new Array(ndim).fill(0);
+    const baseOutputOffset = axisOffset * outputStrides[axis]!;
+
+    for (let i = 0; i < sourceSize; i++) {
+      let outputIdx = baseOutputOffset;
+      for (let d = 0; d < ndim; d++) {
+        outputIdx += indices[d]! * outputStrides[d]!;
+      }
+      (outputData as any)[outputIdx] = f32Src[i]!;
+
+      for (let d = ndim - 1; d >= 0; d--) {
+        indices[d]++;
+        if (indices[d]! < sourceShape[d]!) break;
+        indices[d] = 0;
+      }
+    }
+    return;
+  }
+
   // Slow path: element-by-element copy using flat indices (iget)
   // Optimized to avoid array spread and pre-compute base offset
   const indices = new Array(ndim).fill(0);
@@ -932,6 +954,32 @@ export function tile(storage: ArrayStorage, reps: number | number[]): ArrayStora
   const isBigInt = dtype === 'int64' || dtype === 'uint64';
   const expandedStrides = expandedStorage.strides;
 
+  // Float16Array optimization: bulk-convert to Float32Array for faster per-element access
+  if (dtype === 'float16' && hasFloat16 && expandedStorage.isCContiguous) {
+    const srcSize = expandedStorage.size;
+    const f32Src = new Float32Array((expandedStorage.data as any).subarray(expandedStorage.offset, expandedStorage.offset + srcSize));
+    const f32Out = new Float32Array(outputSize);
+    const outputIndices = new Array(maxDim).fill(0);
+
+    for (let i = 0; i < outputSize; i++) {
+      let sourceFlatIdx = 0;
+      for (let d = 0; d < maxDim; d++) {
+        const sourceIdx = outputIndices[d]! % paddedShape[d]!;
+        sourceFlatIdx += sourceIdx * expandedStrides[d]!;
+      }
+      f32Out[i] = f32Src[sourceFlatIdx]!;
+
+      for (let d = maxDim - 1; d >= 0; d--) {
+        outputIndices[d]++;
+        if (outputIndices[d]! < outputShape[d]!) break;
+        outputIndices[d] = 0;
+      }
+    }
+
+    (outputData as any).set(f32Out);
+    return ArrayStorage.fromData(outputData, outputShape, dtype);
+  }
+
   // Fill output by iterating through all output positions
   const outputIndices = new Array(maxDim).fill(0);
 
@@ -1009,6 +1057,22 @@ export function repeat(
     }
     const outputData = new Constructor(outputSize);
 
+    // Float16Array optimization: bulk-convert for faster per-element access
+    if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
+      const f32Src = new Float32Array((storage.data as any).subarray(storage.offset, storage.offset + flatSize));
+      const f32Out = new Float32Array(outputSize);
+      let outIdx = 0;
+      for (let i = 0; i < flatSize; i++) {
+        const value = f32Src[i]!;
+        const rep = repeatsArr[i]!;
+        for (let r = 0; r < rep; r++) {
+          f32Out[outIdx++] = value;
+        }
+      }
+      (outputData as any).set(f32Out);
+      return ArrayStorage.fromData(outputData, [outputSize], dtype);
+    }
+
     let outIdx = 0;
     for (let i = 0; i < flatSize; i++) {
       const value = storage.iget(i);
@@ -1061,6 +1125,40 @@ export function repeat(
   const axisPositions: number[] = [0];
   for (let i = 0; i < axisSize; i++) {
     axisPositions.push(axisPositions[i]! + repeatsArr[i]!);
+  }
+
+  // Float16Array optimization: bulk-convert for faster per-element access
+  if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
+    const f32Src = new Float32Array((storage.data as any).subarray(storage.offset, storage.offset + size));
+    const f32Out = new Float32Array(outputSize);
+
+    for (let i = 0; i < size; i++) {
+      const value = f32Src[i]!;
+      const axisIdx = sourceIndices[normalizedAxis]!;
+      const rep = repeatsArr[axisIdx]!;
+
+      let baseOutIdx = 0;
+      for (let d = 0; d < ndim; d++) {
+        if (d !== normalizedAxis) {
+          baseOutIdx += sourceIndices[d]! * outputStrides[d]!;
+        }
+      }
+
+      const axisStride = outputStrides[normalizedAxis]!;
+      const axisStart = axisPositions[axisIdx]!;
+      for (let r = 0; r < rep; r++) {
+        f32Out[baseOutIdx + (axisStart + r) * axisStride] = value;
+      }
+
+      for (let d = ndim - 1; d >= 0; d--) {
+        sourceIndices[d]++;
+        if (sourceIndices[d]! < shape[d]!) break;
+        sourceIndices[d] = 0;
+      }
+    }
+
+    (outputData as any).set(f32Out);
+    return ArrayStorage.fromData(outputData, outputShape, dtype);
   }
 
   for (let i = 0; i < size; i++) {
@@ -1155,6 +1253,18 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
 
   // Fast path for 1D arrays
   if (ndim === 1 && storage.isCContiguous) {
+    // Float16Array optimization: bulk-convert for faster per-element access
+    if (dtype === 'float16' && hasFloat16) {
+      const start = storage.offset;
+      const f32Src = new Float32Array((storage.data as any).subarray(start, start + size));
+      const f32Out = new Float32Array(size);
+      for (let i = 0; i < size; i++) {
+        f32Out[i] = f32Src[size - 1 - i]!;
+      }
+      (outputData as any).set(f32Out);
+      return ArrayStorage.fromData(outputData, [...shape], dtype);
+    }
+
     const sourceData = storage.data;
     const start = storage.offset;
     for (let i = 0; i < size; i++) {
@@ -1175,8 +1285,9 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
   if (ndim === 2 && storage.isCContiguous) {
     const rows = shape[0]!;
     const cols = shape[1]!;
-    const sourceData = storage.data;
     const start = storage.offset;
+
+    const sourceData = storage.data;
 
     // Flipping both axes - reverse entire array
     if (axesToFlip.size === 2) {
@@ -1518,6 +1629,18 @@ export function roll(
     const outputData = new Constructor(size);
     const isBigInt = isBigIntDType(dtype);
 
+    // Float16Array optimization: bulk-convert for faster per-element access
+    if (dtype === 'float16' && hasFloat16 && flatStorage.isCContiguous) {
+      const f32Src = new Float32Array((flatStorage.data as any).subarray(flatStorage.offset, flatStorage.offset + size));
+      const f32Out = new Float32Array(size);
+      for (let i = 0; i < size; i++) {
+        const sourceIdx = (((i - flatShift) % size) + size) % size;
+        f32Out[i] = f32Src[sourceIdx]!;
+      }
+      (outputData as any).set(f32Out);
+      return ArrayStorage.fromData(outputData, [...shape], dtype);
+    }
+
     for (let i = 0; i < size; i++) {
       const sourceIdx = (((i - flatShift) % size) + size) % size;
       const value = flatStorage.iget(sourceIdx);
@@ -1559,6 +1682,38 @@ export function roll(
 
   // Iterate through all output positions
   const outputIndices = new Array(ndim).fill(0);
+
+  // Float16Array optimization: bulk-convert for faster per-element access
+  if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
+    const f32Src = new Float32Array((storage.data as any).subarray(storage.offset, storage.offset + size));
+    const f32Out = new Float32Array(size);
+    const srcStrides = storage.strides;
+
+    for (let i = 0; i < size; i++) {
+      const sourceIndices = [...outputIndices];
+      for (let j = 0; j < normalizedAxes.length; j++) {
+        const ax = normalizedAxes[j]!;
+        const axisSize = shape[ax]!;
+        const sh = shifts[j]!;
+        sourceIndices[ax] = (((sourceIndices[ax]! - sh) % axisSize) + axisSize) % axisSize;
+      }
+
+      let srcIdx = 0;
+      for (let d = 0; d < ndim; d++) {
+        srcIdx += sourceIndices[d]! * srcStrides[d]!;
+      }
+      f32Out[i] = f32Src[srcIdx]!;
+
+      for (let d = ndim - 1; d >= 0; d--) {
+        outputIndices[d]++;
+        if (outputIndices[d]! < shape[d]!) break;
+        outputIndices[d] = 0;
+      }
+    }
+
+    (outputData as any).set(f32Out);
+    return ArrayStorage.fromData(outputData, [...shape], dtype);
+  }
 
   for (let i = 0; i < size; i++) {
     // Compute source indices by rolling back

@@ -6,7 +6,7 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { getTypedArrayConstructor, isBigIntDType, isComplexDType, isFloatDType, throwIfComplex, type DType, type TypedArray } from '../dtype';
+import { getTypedArrayConstructor, hasFloat16, isBigIntDType, isComplexDType, isFloatDType, throwIfComplex, type DType, type TypedArray } from '../dtype';
 import { computeStrides, precomputeAxisOffsets } from '../internal/indexing';
 import { Complex } from '../complex';
 import { wasmReduceSum, wasmReduceSumStrided } from '../wasm/reduce_sum';
@@ -171,8 +171,13 @@ export function sum(
       const acc = getFloatAcc(dtype)!;
       acc[0] = 0;
       if (contiguous) {
+        // Bulk-convert Float16Array to Float32Array to avoid per-element f16 overhead
+        const f32 = dtype === 'float16'
+          ? new Float32Array((data as any).subarray(off, off + size))
+          : data;
+        const f32off = dtype === 'float16' ? 0 : off;
         for (let i = 0; i < size; i++) {
-          acc[0] += Number(data[off + i]!);
+          acc[0] += Number(f32[f32off + i]!);
         }
       } else {
         for (let i = 0; i < size; i++) {
@@ -433,7 +438,12 @@ export function mean(
     const dstData = f64Storage.data as Float64Array;
     const off2 = storage.offset;
     if (storage.isCContiguous) {
-      for (let i = 0; i < storage.size; i++) dstData[i] = Number(srcData[off2 + i]);
+      // Bulk-convert Float16Array→Float32Array first to avoid per-element f16 overhead
+      const src = (dtype === 'float16' && hasFloat16)
+        ? new Float32Array((srcData as any).subarray(off2, off2 + storage.size))
+        : srcData;
+      const srcOff = (dtype === 'float16' && hasFloat16) ? 0 : off2;
+      for (let i = 0; i < storage.size; i++) dstData[i] = Number(src[srcOff + i]);
     } else {
       for (let i = 0; i < storage.size; i++) dstData[i] = Number(storage.iget(i));
     }

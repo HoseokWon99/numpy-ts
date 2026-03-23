@@ -7,7 +7,7 @@
  */
 
 import { correlate_f64, correlate_f32 } from './bins/correlate.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -47,8 +47,9 @@ export function wasmCorrelate(a: ArrayStorage, v: ArrayStorage): ArrayStorage | 
 
   if (outLen < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
-  // Use float64 unless both are float32
-  const dtype: DType = a.dtype === 'float32' && v.dtype === 'float32' ? 'float32' : 'float64';
+  // Use float64 unless both are float32 (or float16, which uses f32 kernel)
+  const bothF32Like = (a.dtype === 'float32' || a.dtype === 'float16') && (v.dtype === 'float32' || v.dtype === 'float16');
+  const dtype: DType = bothF32Like ? 'float32' : 'float64';
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
@@ -67,7 +68,9 @@ export function wasmCorrelate(a: ArrayStorage, v: ArrayStorage): ArrayStorage | 
   // Convert to target float type if input dtype differs (e.g. int32 -> float64)
   let aData: TypedArray;
   let vData: TypedArray;
-  if (a.dtype === dtype) {
+  if (a.dtype === 'float16') {
+    aData = f16ToF32Input(a.data.subarray(aOff, aOff + aLen) as TypedArray, a.dtype);
+  } else if (a.dtype === dtype) {
     aData = a.data.subarray(aOff, aOff + aLen) as TypedArray;
   } else {
     const tmp = new (Ctor as unknown as new (len: number) => TypedArray)(aLen);
@@ -75,7 +78,9 @@ export function wasmCorrelate(a: ArrayStorage, v: ArrayStorage): ArrayStorage | 
     for (let i = 0; i < aLen; i++) tmp[i] = Number(src[aOff + i]!);
     aData = tmp;
   }
-  if (v.dtype === dtype) {
+  if (v.dtype === 'float16') {
+    vData = f16ToF32Input(v.data.subarray(vOff, vOff + vLen) as TypedArray, v.dtype);
+  } else if (v.dtype === dtype) {
     vData = v.data.subarray(vOff, vOff + vLen) as TypedArray;
   } else {
     const tmp = new (Ctor as unknown as new (len: number) => TypedArray)(vLen);

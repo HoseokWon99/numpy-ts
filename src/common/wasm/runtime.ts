@@ -7,6 +7,7 @@
  */
 
 import type { TypedArray } from '../dtype';
+import { hasFloat16 } from '../dtype';
 import { wasmConfig } from './config';
 
 // Shared memory instance — grows as needed, never shrinks
@@ -102,4 +103,29 @@ export function copyOut<T extends TypedArray>(
     new Uint8Array(mem.buffer, ptr, result.byteLength)
   );
   return result;
+}
+
+/**
+ * Convert Float16Array data to Float32Array for WASM kernel input.
+ * WASM kernels operate on f32 for float16 data (no native f16 SIMD).
+ * Returns the original data unchanged if not float16.
+ */
+export function f16ToF32Input(data: TypedArray, dtype: string): TypedArray {
+  if (dtype === 'float16' && hasFloat16) {
+    return new Float32Array(data as unknown as ArrayLike<number>) as unknown as TypedArray;
+  }
+  return data;
+}
+
+/**
+ * Convert Float32Array WASM output back to Float16Array.
+ * Call after copyOut when the operation's dtype is float16.
+ */
+export function f32ToF16Output(data: TypedArray, dtype: string): TypedArray {
+  if (dtype === 'float16' && hasFloat16) {
+    const f16 = new (globalThis.Float16Array as any)(data.length);
+    f16.set(data);
+    return f16 as unknown as TypedArray;
+  }
+  return data;
 }

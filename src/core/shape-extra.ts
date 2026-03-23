@@ -8,6 +8,7 @@ import { NDArrayCore, type DType } from '../common/ndarray-core';
 import { array, zeros } from './creation';
 import { concatenate, flatten } from './shape';
 import { wasmPad2D } from '../common/wasm/pad';
+import { hasFloat16 } from '../common/dtype';
 
 /**
  * Append values to the end of an array
@@ -255,6 +256,37 @@ export function pad(
 
   // Copy data
   const totalSize = shape.reduce((a, b) => a * b, 1);
+
+  // Float16Array optimization: bulk-convert for faster per-element access
+  if (arr.dtype === 'float16' && hasFloat16 && srcStorage.isCContiguous && resultStorage.isCContiguous) {
+    const f32Src = new Float32Array((srcStorage.data as any).subarray(srcStorage.offset, srcStorage.offset + totalSize));
+    const resultSize = resultStorage.size;
+    const f32Result = new Float32Array(resultSize);
+    // Pre-fill with constant value if non-zero
+    if (constant_values !== 0) {
+      f32Result.fill(constant_values);
+    }
+
+    for (let flatIdx = 0; flatIdx < totalSize; flatIdx++) {
+      const multiIdx: number[] = [];
+      let remaining = flatIdx;
+      for (let i = 0; i < shape.length; i++) {
+        multiIdx.push(Math.floor(remaining / strides[i]!));
+        remaining = remaining % strides[i]!;
+      }
+
+      let newFlatIdx = 0;
+      for (let i = 0; i < newShape.length; i++) {
+        newFlatIdx += (multiIdx[i]! + padWidths[i]![0]) * newStrides[i]!;
+      }
+
+      f32Result[newFlatIdx] = f32Src[flatIdx]!;
+    }
+
+    (resultStorage.data as any).set(f32Result);
+    return result;
+  }
+
   for (let flatIdx = 0; flatIdx < totalSize; flatIdx++) {
     // Get multi-index in original array
     const multiIdx: number[] = [];

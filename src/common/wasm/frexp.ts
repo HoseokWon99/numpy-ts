@@ -6,7 +6,7 @@
  */
 
 import { frexp_f64 } from './bins/frexp.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -20,7 +20,7 @@ export function wasmFrexp(a: ArrayStorage): [ArrayStorage, ArrayStorage] | null 
 
   // frexp only defined for float types; integers are promoted to float64 by caller
   const dtype = a.dtype;
-  if (dtype !== 'float64' && dtype !== 'float32') return null;
+  if (dtype !== 'float64' && dtype !== 'float32' && dtype !== 'float16') return null;
 
   // Input gets promoted to f64 for the kernel, output is always f64 mantissa + i32 exponent
   const bpe_f64 = 8;
@@ -28,9 +28,14 @@ export function wasmFrexp(a: ArrayStorage): [ArrayStorage, ArrayStorage] | null 
   ensureMemory(size * bpe_f64 + size * bpe_f64 + size * bpe_i32);
   resetAllocator();
 
-  // If float32, we need to promote to f64 for the kernel
+  // If float16/float32, we need to promote to f64 for the kernel
   let aData: TypedArray;
-  if (dtype === 'float32') {
+  if (dtype === 'float16') {
+    const f32Data = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype) as Float32Array;
+    const f64Data = new Float64Array(size);
+    for (let i = 0; i < size; i++) f64Data[i] = f32Data[i]!;
+    aData = f64Data;
+  } else if (dtype === 'float32') {
     const f32Data = a.data.subarray(a.offset, a.offset + size) as Float32Array;
     const f64Data = new Float64Array(size);
     for (let i = 0; i < size; i++) f64Data[i] = f32Data[i]!;

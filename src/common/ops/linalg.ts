@@ -1551,6 +1551,22 @@ export function outer(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const resultDtype = promoteDTypes(a.dtype, b.dtype);
   const result = ArrayStorage.zeros([m, n], resultDtype);
 
+  // Float16Array optimization: bulk-convert inputs to Float32Array for faster per-element access
+  if (resultDtype === 'float16' && hasFloat16 && aFlat.isCContiguous && bFlat.isCContiguous) {
+    const f32A = new Float32Array((aFlat.data as any).subarray(aFlat.offset, aFlat.offset + m));
+    const f32B = new Float32Array((bFlat.data as any).subarray(bFlat.offset, bFlat.offset + n));
+    const f32Out = new Float32Array(m * n);
+    for (let i = 0; i < m; i++) {
+      const aVal = f32A[i]!;
+      const base = i * n;
+      for (let j = 0; j < n; j++) {
+        f32Out[base + j] = aVal * f32B[j]!;
+      }
+    }
+    (result.data as any).set(f32Out);
+    return result;
+  }
+
   // Compute outer product: result[i,j] = a[i] * b[j]
   for (let i = 0; i < m; i++) {
     for (let j = 0; j < n; j++) {

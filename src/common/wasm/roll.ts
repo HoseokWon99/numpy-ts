@@ -6,7 +6,7 @@
  */
 
 import { roll_f64, roll_f32, roll_i64, roll_i32, roll_i16, roll_i8 } from './bins/roll.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -26,6 +26,7 @@ const kernels: Partial<Record<DType, RollFn>> = {
   uint16: roll_i16,
   int8: roll_i8,
   uint8: roll_i8,
+  float16: roll_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -40,6 +41,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -64,8 +66,10 @@ export function wasmRoll(a: ArrayStorage, shift: number): ArrayStorage | null {
   ensureMemory(aBytes + outBytes);
   resetAllocator();
 
+  const isF16 = dtype === 'float16';
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  if (isF16) aData = f16ToF32Input(aData, dtype);
 
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);
@@ -78,5 +82,5 @@ export function wasmRoll(a: ArrayStorage, shift: number): ArrayStorage | null {
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, Array.from(a.shape), dtype);
 }
