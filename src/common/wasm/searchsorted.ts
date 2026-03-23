@@ -26,7 +26,7 @@ import {
   searchsorted_left_u8,
   searchsorted_right_u8,
 } from './bins/searchsorted.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -52,6 +52,7 @@ const leftKernels: Partial<Record<DType, SearchFn>> = {
   uint16: searchsorted_left_u16,
   int8: searchsorted_left_i8,
   uint8: searchsorted_left_u8,
+  float16: searchsorted_left_f32,
 };
 
 const rightKernels: Partial<Record<DType, SearchFn>> = {
@@ -65,6 +66,7 @@ const rightKernels: Partial<Record<DType, SearchFn>> = {
   uint16: searchsorted_right_u16,
   int8: searchsorted_right_i8,
   uint8: searchsorted_right_u8,
+  float16: searchsorted_right_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -79,6 +81,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -114,12 +117,15 @@ export function wasmSearchsorted(
   ensureMemory(sortedBytes + valuesBytes + outBytes);
   resetAllocator();
 
+  const isF16 = dtype === 'float16';
   const sOff = sorted.offset;
-  const sData = sorted.data.subarray(sOff, sOff + n) as TypedArray;
+  let sData = sorted.data.subarray(sOff, sOff + n) as TypedArray;
+  if (isF16) sData = f16ToF32Input(sData, dtype);
   const sortedPtr = copyIn(sData);
 
   const vOff = values.offset;
-  const vData = values.data.subarray(vOff, vOff + m) as TypedArray;
+  let vData = values.data.subarray(vOff, vOff + m) as TypedArray;
+  if (isF16) vData = f16ToF32Input(vData, dtype);
   const valuesPtr = copyIn(vData);
 
   const outPtr = alloc(outBytes);

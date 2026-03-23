@@ -30,7 +30,15 @@ import {
   argsort_slices_c128,
   argsort_slices_c64,
 } from './bins/argsort.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, getSharedMemory } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -53,6 +61,7 @@ const kernels: Partial<Record<DType, ArgsortFn>> = {
   uint8: argsort_u8,
   complex128: argsort_c128,
   complex64: argsort_c64,
+  float16: argsort_f32,
 };
 
 const sliceKernels: Partial<Record<DType, SliceArgsortFn>> = {
@@ -68,6 +77,7 @@ const sliceKernels: Partial<Record<DType, SliceArgsortFn>> = {
   uint8: argsort_slices_u8,
   complex128: argsort_slices_c128,
   complex64: argsort_slices_c64,
+  float16: argsort_slices_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -84,6 +94,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint8: Uint8Array,
   complex128: Float64Array,
   complex64: Float32Array,
+  float16: Float32Array,
 };
 
 /**
@@ -122,7 +133,11 @@ export function wasmArgsortSlices(
     ensureMemory(inputBytes + outputBytes);
     resetAllocator();
 
-    const inputPtr = copyIn(inputData as TypedArray);
+    const inputPtr = copyIn(
+      dtype === 'float16'
+        ? f16ToF32Input(inputData as TypedArray, dtype)
+        : (inputData as TypedArray)
+    );
     const outputPtr = alloc(outputBytes);
 
     sliceKernel(inputPtr, outputPtr, axisSize, outerSize);
@@ -147,7 +162,9 @@ export function wasmArgsortSlices(
   ensureMemory(inputBytes + outputBytes);
   resetAllocator();
 
-  const inputPtr = copyIn(inputData as TypedArray);
+  const inputPtr = copyIn(
+    dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : (inputData as TypedArray)
+  );
   const outputPtr = alloc(outputBytes);
 
   for (let i = 0; i < outerSize; i++) {
@@ -190,7 +207,8 @@ export function wasmArgsort(a: ArrayStorage): ArrayStorage | null {
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + bufLen) as TypedArray;
+  let aData = a.data.subarray(aOff, aOff + bufLen) as TypedArray;
+  if (dtype === 'float16') aData = f16ToF32Input(aData, dtype);
 
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);

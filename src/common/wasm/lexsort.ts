@@ -17,7 +17,14 @@ import {
   lexsort_i8,
   lexsort_u8,
 } from './bins/lexsort.wasm';
-import { ensureMemory, resetAllocator, alloc, copyOut, getSharedMemory } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  alloc,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -37,6 +44,7 @@ const kernels: Partial<Record<DType, LexsortFn>> = {
   uint16: lexsort_u16,
   int8: lexsort_i8,
   uint8: lexsort_u8,
+  float16: lexsort_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -51,6 +59,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -93,7 +102,8 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
   for (let k = 0; k < numKeys; k++) {
     const key = keys[k]!;
     const kOff = key.offset;
-    const kData = key.data.subarray(kOff, kOff + n) as TypedArray;
+    let kData = key.data.subarray(kOff, kOff + n) as TypedArray;
+    if (dtype === 'float16') kData = f16ToF32Input(kData, dtype);
     const destOffset = flatBuf + k * n * bpe;
     new Uint8Array(mem.buffer, destOffset, n * bpe).set(
       new Uint8Array(kData.buffer, kData.byteOffset, kData.byteLength)

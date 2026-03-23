@@ -6,7 +6,7 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { isBigIntDType, isComplexDType, type DType } from '../dtype';
+import { isBigIntDType, isComplexDType, hasFloat16, type DType } from '../dtype';
 import { Complex } from '../complex';
 import { computeStrides, precomputeAxisOffsets } from '../internal/indexing';
 import { wasmReduceCountNz } from '../wasm/reduce_count_nz';
@@ -183,6 +183,34 @@ export function sort(storage: ArrayStorage, axis: number = -1): ArrayStorage {
         outIdx += outAxisStride;
       }
     }
+  } else if (dtype === 'float16' && hasFloat16 && storage.isCContiguous && result.isCContiguous) {
+    // Float16Array optimization: bulk-convert to Float32Array for faster per-element access
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      // Bulk-read slice via Float32Array conversion
+      const base = baseOffsets[outerIdx]!;
+      const f32Slice =
+        axisStride === 1
+          ? new Float32Array((data as Float16Array).subarray(base, base + axisSize))
+          : Float32Array.from({ length: axisSize }, (_, i) => Number(data[base + i * axisStride]!));
+
+      // Sort (NaN values go to end)
+      f32Slice.sort((a, b) => {
+        if (isNaN(a) && isNaN(b)) return 0;
+        if (isNaN(a)) return 1;
+        if (isNaN(b)) return -1;
+        return a - b;
+      });
+
+      // Bulk-write sorted values back
+      const outBase = outBaseOffsets[outerIdx]!;
+      if (outAxisStride === 1) {
+        (resultData as Float16Array).subarray(outBase, outBase + axisSize).set(f32Slice);
+      } else {
+        for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+          resultData[outBase + axisIdx * outAxisStride] = f32Slice[axisIdx]!;
+        }
+      }
+    }
   } else {
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
       // Collect values along axis
@@ -339,6 +367,34 @@ export function argsort(storage: ArrayStorage, axis: number = -1): ArrayStorage 
       let outIdx = outBaseOffsets[outerIdx]!;
       for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
         resultData[outIdx] = values[axisIdx]!.idx;
+        outIdx += outAxisStride;
+      }
+    }
+  } else if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
+    // Float16Array optimization: bulk-convert to Float32Array for faster per-element access
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      const base = baseOffsets[outerIdx]!;
+      // Bulk-read slice via Float32Array conversion
+      const f32Slice =
+        axisStride === 1
+          ? new Float32Array((data as Float16Array).subarray(base, base + axisSize))
+          : Float32Array.from({ length: axisSize }, (_, i) => Number(data[base + i * axisStride]!));
+
+      // Create index array and sort by value (NaN values go to end)
+      const indices = Array.from({ length: axisSize }, (_, i) => i);
+      indices.sort((a, b) => {
+        const va = f32Slice[a]!;
+        const vb = f32Slice[b]!;
+        if (isNaN(va) && isNaN(vb)) return 0;
+        if (isNaN(va)) return 1;
+        if (isNaN(vb)) return -1;
+        return va - vb;
+      });
+
+      // Write sorted indices back (result is contiguous)
+      let outIdx = outBaseOffsets[outerIdx]!;
+      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+        resultData[outIdx] = indices[axisIdx]!;
         outIdx += outAxisStride;
       }
     }

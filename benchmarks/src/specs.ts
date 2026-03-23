@@ -3774,7 +3774,10 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
   // Variant dtypes for each family, keyed by minimum mode required
   const FAMILY_VARIANTS: Record<DtypeFamily, { dtype: string; minMode: BenchmarkMode }[]> = {
-    float: [{ dtype: 'float32', minMode: 'standard' }],
+    float: [
+      { dtype: 'float32', minMode: 'standard' },
+      { dtype: 'float16', minMode: 'full' },
+    ],
     int: [
       { dtype: 'int64', minMode: 'full' },
       { dtype: 'int32', minMode: 'full' },
@@ -3821,6 +3824,34 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'interp', // special setup, not dtype-variant-friendly
     'packbits', // always uint8
     'unpackbits', // always uint8
+  ]);
+
+  // Operations to skip for float16 dtype variants (precision too low for numerical algorithms)
+  const SKIP_FLOAT16_OPERATIONS = new Set([
+    'linalg_cholesky',
+    'linalg_eigh',
+    'linalg_eigvalsh',
+    'linalg_svd',
+    'linalg_svdvals',
+    'linalg_pinv',
+    'linalg_lstsq',
+    'linalg_qr',
+    'linalg_cond',
+    'linalg_matrix_rank',
+    'linalg_norm',
+    'linalg_det',
+    'linalg_slogdet',
+    'linalg_inv',
+    'linalg_solve',
+    'linalg_matrix_power',
+    'linalg_multi_dot',
+    'einsum',
+    'correlate',
+    'convolve',
+    // NumPy's linalg explicitly rejects float16 for polynomial ops (uses eigvals/lstsq internally)
+    'polyfit',
+    'polyval',
+    'roots',
   ]);
 
   // Operations to skip for ALL int dtype variants (blocks both int and uint families)
@@ -4058,6 +4089,9 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
           const baseDtype = dataEntries[0]?.[1]?.dtype;
           if (baseDtype && variant.dtype === baseDtype) continue;
 
+          // Skip float16 for numerically sensitive operations
+          if (variant.dtype === 'float16' && SKIP_FLOAT16_OPERATIONS.has(spec.operation)) continue;
+
           // Skip narrow int/uint types for accumulation ops where overflow wrapping differs
           if (
             (family === 'int' || family === 'uint') &&
@@ -4117,7 +4151,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
   // visualization layer shows the correct badge instead of defaulting to float64.
   for (const spec of specs) {
     // Already has a dtype suffix from auto-generation? Skip.
-    if (/\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/.test(spec.name)) continue;
+    if (/\s+(float64|float32|float16|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/.test(spec.name)) continue;
     const dataEntries = Object.entries(spec.setup).filter(([key]) => DATA_ARRAY_KEYS.has(key));
     if (dataEntries.length === 0) continue;
     const dtypes = new Set(dataEntries.map(([, e]) => e.dtype).filter(Boolean));

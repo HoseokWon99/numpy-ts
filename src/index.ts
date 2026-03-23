@@ -27,6 +27,7 @@
 export { Complex, type ComplexInput } from './common/complex';
 export { NDArray } from './full';
 export { NDArrayCore } from './common/ndarray-core';
+export { hasFloat16 } from './common/dtype';
 
 // ============================================================
 // Array Creation Functions

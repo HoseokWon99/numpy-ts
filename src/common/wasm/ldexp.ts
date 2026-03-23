@@ -6,7 +6,15 @@
  */
 
 import { ldexp_scalar_f64, ldexp_scalar_f32 } from './bins/ldexp.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -18,12 +26,14 @@ type ScalarFn = (x1Ptr: number, outPtr: number, N: number, exp: number) => void;
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: ldexp_scalar_f64,
   float32: ldexp_scalar_f32,
+  float16: ldexp_scalar_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
 };
 
 export function wasmLdexpScalar(a: ArrayStorage, exp: number): ArrayStorage | null {
@@ -36,18 +46,23 @@ export function wasmLdexpScalar(a: ArrayStorage, exp: number): ArrayStorage | nu
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
 
+  const isF16 = dtype === 'float16';
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   ensureMemory(size * bpe * 2);
   resetAllocator();
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
+  const aData = isF16
+    ? f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype)
+    : (a.data.subarray(a.offset, a.offset + size) as TypedArray);
+  const aPtr = copyIn(aData);
   const outPtr = alloc(size * bpe);
   kernel(aPtr, outPtr, size, exp);
 
-  const outData = copyOut(
+  let outData = copyOut(
     outPtr,
     size,
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
+  if (isF16) outData = f32ToF16Output(outData, dtype);
   return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

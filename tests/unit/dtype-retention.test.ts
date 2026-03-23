@@ -11,6 +11,7 @@ import type { DType } from '../../src/common/dtype';
 const numericDTypes: DType[] = [
   'float64',
   'float32',
+  'float16',
   'int32',
   'int16',
   'int8',
@@ -101,7 +102,7 @@ describe('DType Retention', () => {
 
     it('divide scalar preserves float types, promotes integers to float64', () => {
       // Float types are preserved
-      for (const dtype of ['float32', 'float64'] as const) {
+      for (const dtype of ['float16', 'float32', 'float64'] as const) {
         const arr = ones([2, 3], dtype);
         const result = arr.divide(2);
         expect(result.dtype).toBe(dtype);
@@ -177,6 +178,9 @@ describe('DType Retention', () => {
       }
 
       // Float types should preserve dtype
+      const arr16 = ones([2, 3], 'float16');
+      expect(arr16.mean(0).dtype).toBe('float16');
+
       const arr32 = ones([2, 3], 'float32');
       expect(arr32.mean(0).dtype).toBe('float32');
 
@@ -251,6 +255,9 @@ describe('DType Retention', () => {
 
       const f32 = array([1.5, 2.5], 'float32');
       expect(typeof f32.get([0])).toBe('number');
+
+      const f16 = array([1.5, 2.5], 'float16');
+      expect(typeof f16.get([0])).toBe('number');
 
       // BigInt types
       const i64 = ones([2], 'int64');

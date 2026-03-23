@@ -26,6 +26,7 @@ describe('NumPy Validation: DType Promotion', () => {
     uint16: 'uint16',
     uint32: 'uint32',
     uint64: 'uint64',
+    float16: 'float16',
     float32: 'float32',
     float64: 'float64',
     complex64: 'complex64',
@@ -43,11 +44,79 @@ describe('NumPy Validation: DType Promotion', () => {
     uint16: 'uint16',
     uint32: 'uint32',
     uint64: 'uint64',
+    float16: 'float16',
     float32: 'float32',
     float64: 'float64',
     complex64: 'complex64',
     complex128: 'complex128',
   };
+
+  describe('Float16 promotion rules', () => {
+    it('should promote float16 + float16 to float16', () => {
+      const jsResult = promoteDTypes('float16', 'float16');
+      const pyResult = runNumPy(`
+import numpy as np
+a = np.array([1], dtype=np.float16)
+b = np.array([1], dtype=np.float16)
+result = a + b
+      `);
+
+      const expectedDtype = reverseMap[pyResult.dtype] || 'float16';
+      expect(jsResult).toBe(expectedDtype);
+    });
+
+    it('should promote float16 + float32 to float32', () => {
+      const jsResult = promoteDTypes('float16', 'float32');
+      const pyResult = runNumPy(`
+import numpy as np
+a = np.array([1], dtype=np.float16)
+b = np.array([1], dtype=np.float32)
+result = a + b
+      `);
+
+      const expectedDtype = reverseMap[pyResult.dtype] || 'float32';
+      expect(jsResult).toBe(expectedDtype);
+    });
+
+    it('should promote float16 + float64 to float64', () => {
+      const jsResult = promoteDTypes('float16', 'float64');
+      const pyResult = runNumPy(`
+import numpy as np
+a = np.array([1], dtype=np.float16)
+b = np.array([1], dtype=np.float64)
+result = a + b
+      `);
+
+      const expectedDtype = reverseMap[pyResult.dtype] || 'float64';
+      expect(jsResult).toBe(expectedDtype);
+    });
+
+    it('should promote float16 + int8 to float16', () => {
+      const jsResult = promoteDTypes('float16', 'int8');
+      const pyResult = runNumPy(`
+import numpy as np
+a = np.array([1], dtype=np.float16)
+b = np.array([1], dtype=np.int8)
+result = a + b
+      `);
+
+      const expectedDtype = reverseMap[pyResult.dtype] || 'float16';
+      expect(jsResult).toBe(expectedDtype);
+    });
+
+    it('should promote float16 + int16 to float32', () => {
+      const jsResult = promoteDTypes('float16', 'int16');
+      const pyResult = runNumPy(`
+import numpy as np
+a = np.array([1], dtype=np.float16)
+b = np.array([1], dtype=np.int16)
+result = a + b
+      `);
+
+      const expectedDtype = reverseMap[pyResult.dtype] || 'float32';
+      expect(jsResult).toBe(expectedDtype);
+    });
+  });
 
   describe('Basic promotion rules', () => {
     it('should promote bool + int8 correctly', () => {

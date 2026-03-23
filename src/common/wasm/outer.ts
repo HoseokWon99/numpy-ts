@@ -15,7 +15,15 @@ import {
   outer_i16,
   outer_i8,
 } from './bins/outer.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 
@@ -38,6 +46,7 @@ const wasmKernels: Partial<Record<DType, WasmOuterFn>> = {
   uint16: outer_i16,
   int8: outer_i8,
   uint8: outer_i8,
+  float16: outer_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -54,6 +63,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 const complexFactor: Partial<Record<DType, number>> = {
@@ -86,8 +96,13 @@ export function wasmOuter(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
   ensureMemory(aBytes + bBytes + outBytes);
   resetAllocator();
 
-  const aData = a.data.subarray(a.offset * factor, a.offset * factor + M * factor) as TypedArray;
-  const bData = b.data.subarray(b.offset * factor, b.offset * factor + N * factor) as TypedArray;
+  const isF16 = resultDtype === 'float16';
+  let aData = a.data.subarray(a.offset * factor, a.offset * factor + M * factor) as TypedArray;
+  let bData = b.data.subarray(b.offset * factor, b.offset * factor + N * factor) as TypedArray;
+  if (isF16) {
+    aData = f16ToF32Input(aData, resultDtype);
+    bData = f16ToF32Input(bData, resultDtype);
+  }
 
   const aPtr = copyIn(aData);
   const bPtr = copyIn(bData);
@@ -101,5 +116,9 @@ export function wasmOuter(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, [M, N], resultDtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, resultDtype) : outData,
+    [M, N],
+    resultDtype
+  );
 }

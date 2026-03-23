@@ -22,7 +22,15 @@ import {
   hypot_i8,
   hypot_scalar_i8,
 } from './bins/hypot.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -35,11 +43,13 @@ type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => voi
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: hypot_f64,
   float32: hypot_f32,
+  float16: hypot_f32,
 };
 
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: hypot_scalar_f64,
   float32: hypot_scalar_f32,
+  float16: hypot_scalar_f32,
 };
 
 // Int64 kernels: native int input, f64 output
@@ -69,6 +79,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -100,8 +111,8 @@ export function wasmHypot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
     ensureMemory(size * bpe * 3);
     resetAllocator();
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    const bData = b.data.subarray(b.offset, b.offset + size) as TypedArray;
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype);
+    const bData = f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype);
 
     const aPtr = copyIn(aData);
     const bPtr = copyIn(bData);
@@ -114,7 +125,8 @@ export function wasmHypot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+    const finalOut = f32ToF16Output(outData, dtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
   }
 
   // Int64 path: native int input, f64 output
@@ -172,7 +184,7 @@ export function wasmHypotScalar(a: ArrayStorage, scalar: number): ArrayStorage |
     ensureMemory(size * bpe * 2);
     resetAllocator();
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
     const aPtr = copyIn(aData);
     const outPtr = alloc(size * bpe);
 
@@ -183,7 +195,8 @@ export function wasmHypotScalar(a: ArrayStorage, scalar: number): ArrayStorage |
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+    const finalOut = f32ToF16Output(outData, dtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
   }
 
   // Int64 path

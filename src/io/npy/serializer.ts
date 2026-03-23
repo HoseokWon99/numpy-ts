@@ -8,8 +8,15 @@
  */
 
 import { NDArrayCore } from '../../common/ndarray-core';
-import { getDTypeSize, isBigIntDType, isComplexDType, type DType } from '../../common/dtype';
+import {
+  getDTypeSize,
+  hasFloat16,
+  isBigIntDType,
+  isComplexDType,
+  type DType,
+} from '../../common/dtype';
 import { Complex } from '../../common/complex';
+import { numberToFloat16Bits } from '../../common/float16-conv';
 import { NPY_MAGIC, DTYPE_TO_DESCR, isSystemLittleEndian } from './format';
 
 /**
@@ -88,8 +95,9 @@ function writeArrayData(arr: NDArrayCore, output: Uint8Array, itemsize: number):
   const storage = arr.storage;
   const isCContiguous = storage.isCContiguous && storage.offset === 0;
 
-  if (isCContiguous && isLittleEndian) {
+  if (isCContiguous && isLittleEndian && !(dtype === 'float16' && !hasFloat16)) {
     // Fast path: just copy the underlying buffer
+    // (Not usable for float16 with Float32Array fallback — byte layouts differ)
     const srcData = storage.data;
     const srcBytes = new Uint8Array(srcData.buffer, srcData.byteOffset, size * itemsize);
     output.set(srcBytes);
@@ -170,6 +178,9 @@ function writeNumberLE(view: DataView, offset: number, value: number, dtype: DTy
     case 'uint8':
     case 'bool':
       view.setUint8(offset, value);
+      break;
+    case 'float16':
+      view.setUint16(offset, numberToFloat16Bits(value), true);
       break;
     default:
       throw new Error(`Unsupported dtype for serialization: ${dtype}`);

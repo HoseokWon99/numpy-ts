@@ -28,7 +28,15 @@ import {
   min_scalar_u16,
   min_scalar_u8,
 } from './bins/min.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -49,6 +57,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   uint16: min_u16,
   int8: min_i8,
   uint8: min_u8,
+  float16: min_f32,
 };
 
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
@@ -62,12 +71,14 @@ const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   uint16: min_scalar_u16,
   int8: min_scalar_i8,
   uint8: min_scalar_u8,
+  float16: min_scalar_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -92,8 +103,13 @@ export function wasmMin(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   ensureMemory(size * bpe * 3);
   resetAllocator();
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const bPtr = copyIn(b.data.subarray(b.offset, b.offset + size) as TypedArray);
+  const originalDtype = dtype;
+  const aPtr = copyIn(
+    f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype)
+  );
+  const bPtr = copyIn(
+    f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype)
+  );
   const outPtr = alloc(size * bpe);
   kernel(aPtr, bPtr, outPtr, size);
 
@@ -102,7 +118,8 @@ export function wasmMin(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
     size,
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+  const finalOut = f32ToF16Output(outData, originalDtype);
+  return ArrayStorage.fromData(finalOut, Array.from(a.shape), originalDtype);
 }
 
 export function wasmMinScalar(a: ArrayStorage, scalar: number): ArrayStorage | null {
@@ -119,7 +136,9 @@ export function wasmMinScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   ensureMemory(size * bpe * 2);
   resetAllocator();
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
+  const aPtr = copyIn(
+    f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype)
+  );
   const outPtr = alloc(size * bpe);
   kernel(aPtr, outPtr, size, scalar);
 
@@ -128,5 +147,6 @@ export function wasmMinScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
     size,
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+  const finalOut = f32ToF16Output(outData, dtype);
+  return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
 }

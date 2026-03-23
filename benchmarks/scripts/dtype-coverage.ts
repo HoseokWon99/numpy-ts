@@ -4,7 +4,7 @@ const specs = getBenchmarkSpecs('full');
 
 // Known dtypes to strip from spec names
 const DTYPES = new Set([
-  'float64', 'float32',
+  'float64', 'float32', 'float16',
   'complex128', 'complex64',
   'int64', 'int32', 'int16', 'int8',
   'uint64', 'uint32', 'uint16', 'uint8',
@@ -29,7 +29,7 @@ for (const s of specs) {
 
 // All dtypes in a nice order
 const dtypeOrder = [
-  'float64', 'float32',
+  'float64', 'float32', 'float16',
   'complex128', 'complex64',
   'int64', 'int32', 'int16', 'int8',
 ];

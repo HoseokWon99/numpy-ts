@@ -17,7 +17,7 @@ import {
   gradient_u16,
   gradient_u8,
 } from './bins/gradient.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -37,6 +37,7 @@ const kernels: Partial<Record<DType, GradFn>> = {
   uint16: gradient_u16,
   int8: gradient_i8,
   uint8: gradient_u8,
+  float16: gradient_f32,
 };
 
 // Input typed array constructors (for copyIn)
@@ -52,6 +53,7 @@ const inCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 // Output typed array constructors — f32→f32, everything else→f64
@@ -66,6 +68,7 @@ const outCtorMap: Partial<Record<DType, new (length: number) => TypedArray>> = {
   uint16: Float64Array,
   int8: Float64Array,
   uint8: Float64Array,
+  float16: Float32Array,
 };
 
 const outDtypeMap: Partial<Record<DType, DType>> = {
@@ -79,6 +82,7 @@ const outDtypeMap: Partial<Record<DType, DType>> = {
   uint16: 'float64',
   int8: 'float64',
   uint8: 'float64',
+  float16: 'float32',
 };
 
 /**
@@ -109,7 +113,8 @@ export function wasmGradient1D(a: ArrayStorage, spacing: number): ArrayStorage |
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  if (dtype === 'float16') aData = f16ToF32Input(aData, dtype);
 
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);

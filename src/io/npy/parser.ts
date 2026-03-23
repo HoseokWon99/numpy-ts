@@ -8,10 +8,12 @@ import { NDArrayCore } from '../../common/ndarray-core';
 import { ArrayStorage } from '../../common/storage';
 import {
   getTypedArrayConstructor,
+  hasFloat16,
   isBigIntDType,
   isComplexDType,
   type DType,
 } from '../../common/dtype';
+import { float16BytesToTypedArray } from '../../common/float16-conv';
 import {
   NPY_MAGIC,
   parseDescriptor,
@@ -202,6 +204,7 @@ function createTypedArray(
 ):
   | Float64Array
   | Float32Array
+  | Float16Array
   | BigInt64Array
   | Int32Array
   | Int16Array
@@ -210,12 +213,30 @@ function createTypedArray(
   | Uint32Array
   | Uint16Array
   | Uint8Array {
+  const isComplex = isComplexDType(dtype);
+
+  // float16 without native Float16Array: convert from half-precision bytes to Float32Array
+  if (dtype === 'float16' && !hasFloat16) {
+    // Byte-swap first if needed
+    let srcBuffer = buffer;
+    if (needsByteSwap) {
+      const bytes = new Uint8Array(buffer);
+      const swapped = new Uint8Array(buffer.byteLength);
+      for (let i = 0; i < numElements; i++) {
+        const start = i * 2;
+        swapped[start] = bytes[start + 1]!;
+        swapped[start + 1] = bytes[start]!;
+      }
+      srcBuffer = swapped.buffer;
+    }
+    return float16BytesToTypedArray(srcBuffer, 0, numElements, false);
+  }
+
   const Constructor = getTypedArrayConstructor(dtype);
   if (!Constructor) {
     throw new InvalidNpyError(`Cannot create array for dtype: ${dtype}`);
   }
 
-  const isComplex = isComplexDType(dtype);
   // For complex types, the typed array needs 2x elements (interleaved re, im)
   const arrayLength = isComplex ? numElements * 2 : numElements;
 

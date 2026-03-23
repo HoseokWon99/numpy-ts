@@ -7,7 +7,7 @@
  */
 
 import { reduce_quantile_f64 } from './bins/reduce_quantile.wasm';
-import { ensureMemory, resetAllocator, copyIn } from './runtime';
+import { ensureMemory, resetAllocator, copyIn, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isBigIntDType, isComplexDType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -33,6 +33,12 @@ export function wasmReduceQuantile(a: ArrayStorage, q: number): number | null {
 
   if (a.dtype === 'float64') {
     f64Buf.set((data as Float64Array).subarray(off, off + size));
+  } else if (a.dtype === 'float16') {
+    const f32Data = f16ToF32Input(
+      data.subarray(off, off + size) as TypedArray,
+      a.dtype
+    ) as Float32Array;
+    for (let i = 0; i < size; i++) f64Buf[i] = f32Data[i]!;
   } else if (isBigIntDType(a.dtype)) {
     const typed = data as BigInt64Array | BigUint64Array;
     for (let i = 0; i < size; i++) f64Buf[i] = Number(typed[off + i]!);

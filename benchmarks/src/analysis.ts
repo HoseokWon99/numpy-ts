@@ -2,8 +2,8 @@
  * Benchmark results analysis
  */
 
-const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
-const DTYPE_ORDER = ['float64', 'float32', 'int64', 'uint64', 'int32', 'uint32', 'int16', 'uint16', 'int8', 'uint8', 'complex128', 'complex64', 'bool'];
+const DTYPE_RE = /\s+(float64|float32|float16|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+const DTYPE_ORDER = ['float64', 'float32', 'float16', 'int64', 'uint64', 'int32', 'uint32', 'int16', 'uint16', 'int8', 'uint8', 'complex128', 'complex64', 'bool'];
 
 function compareBenchmarkNames(a: string, b: string): number {
   const aMatch = a.match(DTYPE_RE);
@@ -114,7 +114,7 @@ export function getDtypeSummaries(
   comparisons: BenchmarkComparison[]
 ): Map<string, { avg_slowdown: number; median_slowdown: number; count: number }> {
   const dtypeRe =
-    /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+    /\s+(float64|float32|float16|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
   const groups = new Map<string, number[]>();
 
   for (const c of comparisons) {
@@ -128,7 +128,7 @@ export function getDtypeSummaries(
   const summaries = new Map<string, { avg_slowdown: number; median_slowdown: number; count: number }>();
   // Order dtypes consistently
   const dtypeOrder = [
-    'float64', 'float32', 'complex128', 'complex64',
+    'float64', 'float32', 'float16', 'complex128', 'complex64',
     'int64', 'int32', 'int16', 'int8',
     'uint64', 'uint32', 'uint16', 'uint8', 'bool',
   ];

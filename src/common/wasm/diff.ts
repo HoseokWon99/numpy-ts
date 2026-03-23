@@ -20,7 +20,15 @@ import {
   diff_2d_i16,
   diff_2d_i8,
 } from './bins/diff.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -43,6 +51,7 @@ const kernels1D: Partial<Record<DType, DiffFn>> = {
   uint16: diff_i16,
   int8: diff_i8,
   uint8: diff_i8,
+  float16: diff_f32,
 };
 
 const kernels2D: Partial<Record<DType, Diff2DFn>> = {
@@ -56,6 +65,7 @@ const kernels2D: Partial<Record<DType, Diff2DFn>> = {
   uint16: diff_2d_i16,
   int8: diff_2d_i8,
   uint8: diff_2d_i8,
+  float16: diff_2d_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -70,6 +80,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -107,8 +118,10 @@ export function wasmDiff(a: ArrayStorage, axis: number): ArrayStorage | null {
   ensureMemory(aBytes + outBytes);
   resetAllocator();
 
+  const isF16 = dtype === 'float16';
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  if (isF16) aData = f16ToF32Input(aData, dtype);
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);
 
@@ -131,5 +144,9 @@ export function wasmDiff(a: ArrayStorage, axis: number): ArrayStorage | null {
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, resultShape, dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    resultShape,
+    dtype
+  );
 }

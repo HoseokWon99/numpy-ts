@@ -275,6 +275,20 @@ result = arr * 1e-40
       expect(npResult.value[0]).toBe(0);
     });
 
+    it('float16 underflows to zero like NumPy', () => {
+      // float16 min positive: ~6e-8 (denormal), normal min: ~6.1e-5
+      const arr = array([1e-5], 'float16');
+      const result = arr.multiply(1e-5);
+
+      const npResult = runNumPy(`
+arr = np.array([1e-5], dtype=np.float16)
+result = arr * 1e-5
+      `);
+
+      expect(result.get([0])).toBe(0);
+      expect(npResult.value[0]).toBe(0);
+    });
+
     it('float64 preserves very small values', () => {
       // float64 min positive: ~2.2e-308
       const arr = array([1e-200], 'float64');
@@ -316,6 +330,28 @@ result = np.array([${value}], dtype=np.float64)
       expect(f64.get([0])).toBeCloseTo(npF64.value[0], 14);
     });
 
+    it('float16 has less precision than float32', () => {
+      // float16: ~3.3 decimal digits, float32: ~7 decimal digits
+      const value = 1.0 + 0.001;
+
+      const f16 = array([value], 'float16');
+      const f32 = array([value], 'float32');
+
+      const npF16 = runNumPy(`
+result = np.array([${value}], dtype=np.float16)
+      `);
+
+      const npF32 = runNumPy(`
+result = np.array([${value}], dtype=np.float32)
+      `);
+
+      // float16 loses precision
+      expect(f16.get([0])).toBeCloseTo(npF16.value[0], 2);
+
+      // float32 preserves more
+      expect(f32.get([0])).toBeCloseTo(npF32.value[0], 6);
+    });
+
     it('float32 rounding errors accumulate faster', () => {
       const arr32 = ones([1000], 'float32');
       const sum32 = arr32.sum();
@@ -337,6 +373,19 @@ result = np.array([arr.sum()])
       expect(sum32).toBeCloseTo(npSum32.value[0], 5);
       expect(sum64).toBeCloseTo(npSum64.value[0], 14);
       expect(sum64).toBeCloseTo(1000, 14);
+    });
+
+    it('float16 rounding errors accumulate even faster', () => {
+      const arr16 = ones([100], 'float16');
+      const sum16 = arr16.sum();
+
+      const npSum16 = runNumPy(`
+arr = np.ones(100, dtype=np.float16)
+result = np.array([float(arr.sum())])
+      `);
+
+      // float16 sum of 100 ones should be close to 100
+      expect(sum16).toBeCloseTo(npSum16.value[0], 0);
     });
   });
 

@@ -26,7 +26,15 @@ import {
   argpartition_slices_i8,
   argpartition_slices_u8,
 } from './bins/argpartition.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, getSharedMemory } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -53,6 +61,7 @@ const kernels: Partial<Record<DType, ArgpartitionFn>> = {
   uint16: argpartition_u16,
   int8: argpartition_i8,
   uint8: argpartition_u8,
+  float16: argpartition_f32,
 };
 
 const sliceKernels: Partial<Record<DType, SliceArgpartitionFn>> = {
@@ -66,6 +75,7 @@ const sliceKernels: Partial<Record<DType, SliceArgpartitionFn>> = {
   uint16: argpartition_slices_u16,
   int8: argpartition_slices_i8,
   uint8: argpartition_slices_u8,
+  float16: argpartition_slices_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -80,6 +90,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -117,7 +128,11 @@ export function wasmArgpartitionSlices(
     ensureMemory(inputBytes + outputBytes);
     resetAllocator();
 
-    const inputPtr = copyIn(inputData as TypedArray);
+    const inputPtr = copyIn(
+      dtype === 'float16'
+        ? f16ToF32Input(inputData as TypedArray, dtype)
+        : (inputData as TypedArray)
+    );
     const outputPtr = alloc(outputBytes);
 
     sliceKernel(inputPtr, outputPtr, axisSize, outerSize, kth);
@@ -141,7 +156,9 @@ export function wasmArgpartitionSlices(
   ensureMemory(inputBytes + outputBytes);
   resetAllocator();
 
-  const inputPtr = copyIn(inputData as TypedArray);
+  const inputPtr = copyIn(
+    dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : (inputData as TypedArray)
+  );
   const outputPtr = alloc(outputBytes);
 
   for (let i = 0; i < outerSize; i++) {
@@ -184,7 +201,8 @@ export function wasmArgpartition(a: ArrayStorage, kth: number): ArrayStorage | n
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  if (dtype === 'float16') aData = f16ToF32Input(aData, dtype);
 
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);

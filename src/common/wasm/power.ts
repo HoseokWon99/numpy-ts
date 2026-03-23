@@ -20,7 +20,15 @@ import {
   power_scalar_i16,
   power_scalar_i8,
 } from './bins/power.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, isBigIntDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -41,6 +49,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   uint16: power_i16,
   int8: power_i8,
   uint8: power_i8,
+  float16: power_f32,
 };
 
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
@@ -54,12 +63,14 @@ const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   uint16: power_scalar_i16,
   int8: power_scalar_i8,
   uint8: power_scalar_i8,
+  float16: power_scalar_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -93,10 +104,11 @@ export function wasmPower(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
   ensureMemory(aBytes + bBytes + outBytes);
   resetAllocator();
 
+  const originalDtype = dtype;
   const aOff = a.offset;
   const bOff = b.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const bData = b.data.subarray(bOff, bOff + size) as TypedArray;
+  const aData = f16ToF32Input(a.data.subarray(aOff, aOff + size) as TypedArray, a.dtype);
+  const bData = f16ToF32Input(b.data.subarray(bOff, bOff + size) as TypedArray, b.dtype);
 
   const aPtr = copyIn(aData);
   const bPtr = copyIn(bData);
@@ -110,7 +122,8 @@ export function wasmPower(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+  const finalOut = f32ToF16Output(outData, originalDtype);
+  return ArrayStorage.fromData(finalOut, Array.from(a.shape), originalDtype);
 }
 
 /**
@@ -172,7 +185,7 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
   resetAllocator();
 
   const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  const aData = f16ToF32Input(a.data.subarray(aOff, aOff + size) as TypedArray, dtype);
 
   const aPtr = copyIn(aData);
   const outPtr = alloc(outBytes);
@@ -185,5 +198,6 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+  const finalOut = f32ToF16Output(outData, dtype);
+  return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
 }

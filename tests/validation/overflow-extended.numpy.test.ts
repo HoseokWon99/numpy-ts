@@ -97,6 +97,26 @@ result = float(np.sum(np.full(1000, 1e35, dtype=np.float32)))
       expect(relErr).toBeLessThan(1e-3);
     });
 
+    it('float16 sum with large values', () => {
+      const r = np.sum(np.full([100], 60000, 'float16'));
+
+      const npResult = runNumPy(`
+import numpy as np
+result = float(np.sum(np.full(100, 60000, dtype=np.float16)))
+      `);
+
+      // NumPy float16 sum overflows to inf since float16 max is ~65504.
+      // With Float32Array fallback, our sum may not overflow (Float32Array
+      // can hold 6,000,000). This is expected Option A behavior.
+      if (npResult.value === Infinity) {
+        // Either we also overflow (native Float16Array) or we get a large finite value (fallback)
+        expect(toNum(r) === Infinity || toNum(r) > 65504).toBe(true);
+      } else {
+        const relErr = Math.abs(toNum(r) - npResult.value) / Math.abs(npResult.value);
+        expect(relErr).toBeLessThan(0.1);
+      }
+    });
+
     it('float32 prod overflow to infinity', () => {
       const r = np.prod(np.full([100], 100.0, 'float32'));
 
@@ -149,6 +169,17 @@ result = float(np.exp(np.float32(100)))
       const npResult = runNumPy(`
 import numpy as np
 result = float(np.exp(np.float32(89)))
+      `);
+
+      expect(r.tolist()[0]).toBe(npResult.value);
+    });
+
+    it('exp(12) overflows to inf in float16', () => {
+      const r = np.exp(np.array([12], 'float16'));
+
+      const npResult = runNumPy(`
+import numpy as np
+result = float(np.exp(np.float16(12)))
       `);
 
       expect(r.tolist()[0]).toBe(npResult.value);

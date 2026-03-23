@@ -129,11 +129,11 @@ export function elementwiseBinaryOp(
     const size = a.size;
     const result = ArrayStorage.zeros(Array.from(aShape), resultDtype);
     const resultData = result.data;
-    const aData = a.data;
-    const bData = b.data;
     const aOff = a.offset;
     const bOff = b.offset;
 
+    const aData = a.data;
+    const bData = b.data;
     if (aOff === 0 && bOff === 0) {
       for (let i = 0; i < size; i++) {
         resultData[i] = op(aData[i] as number, bData[i] as number);
@@ -265,7 +265,7 @@ export function elementwiseUnaryOp(
 
   // Determine output dtype
   // Math operations like sqrt may need float output even for integer input
-  const isIntegerType = dtype !== 'float32' && dtype !== 'float64';
+  const isIntegerType = dtype !== 'float16' && dtype !== 'float32' && dtype !== 'float64';
   const resultDtype = preserveDtype ? dtype : isIntegerType ? 'float64' : dtype;
 
   // Create result storage

@@ -11,7 +11,7 @@ import { isComplexDType, isFloatDType, isIntegerDType } from '../common/dtype';
 const SIGNED_INTEGER_DTYPES: DType[] = ['int8', 'int16', 'int32', 'int64'];
 const UNSIGNED_INTEGER_DTYPES: DType[] = ['uint8', 'uint16', 'uint32', 'uint64'];
 const INTEGER_DTYPES: DType[] = [...SIGNED_INTEGER_DTYPES, ...UNSIGNED_INTEGER_DTYPES];
-const FLOAT_DTYPES: DType[] = ['float32', 'float64'];
+const FLOAT_DTYPES: DType[] = ['float16', 'float32', 'float64'];
 const COMPLEX_DTYPES: DType[] = ['complex64', 'complex128'];
 const NUMERIC_DTYPES: DType[] = [...INTEGER_DTYPES, ...FLOAT_DTYPES, ...COMPLEX_DTYPES];
 
@@ -26,10 +26,11 @@ const TYPE_HIERARCHY: Record<DType, number> = {
   uint32: 6,
   int64: 7,
   uint64: 8,
-  float32: 9,
-  float64: 10,
-  complex64: 11,
-  complex128: 12,
+  float16: 9,
+  float32: 10,
+  float64: 11,
+  complex64: 12,
+  complex128: 13,
 };
 
 /**
@@ -76,12 +77,14 @@ export function can_cast(
         uint32: 32,
         uint64: 64,
         bool: 1,
+        float16: 0,
         float32: 0,
         float64: 0,
         complex64: 0,
         complex128: 0,
       };
       const floatMantissaBits: Record<DType, number> = {
+        float16: 11,
         float32: 24,
         float64: 53,
         int8: 0,
@@ -147,6 +150,7 @@ export function common_type(...arrays: NDArrayCore[]): DType {
 
   let hasComplex = false;
   let needsFloat64 = false;
+  let needsFloat32 = false;
 
   for (const arr of arrays) {
     const dtype = arr.dtype as DType;
@@ -158,6 +162,8 @@ export function common_type(...arrays: NDArrayCore[]): DType {
     } else if (isFloatDType(dtype)) {
       if (dtype === 'float64') {
         needsFloat64 = true;
+      } else if (dtype === 'float32') {
+        needsFloat32 = true;
       }
     } else if (isIntegerDType(dtype)) {
       // 64-bit integers require float64 (float32 can't represent all values)
@@ -171,7 +177,13 @@ export function common_type(...arrays: NDArrayCore[]): DType {
     return needsFloat64 ? 'complex128' : 'complex64';
   }
 
-  return needsFloat64 ? 'float64' : 'float32';
+  if (needsFloat64) return 'float64';
+  // common_type returns a float that can represent all inputs.
+  // For integer-only inputs, float32 is the minimum (matching NumPy).
+  // float16 is only returned when all inputs are already float16.
+  if (needsFloat32) return 'float32';
+  const allFloat16 = arrays.every((a) => a.dtype === 'float16');
+  return allFloat16 ? 'float16' : 'float32';
 }
 
 /**
@@ -214,6 +226,7 @@ export function result_type(...arrays_and_dtypes: (NDArrayCore | DType)[]): DTyp
   // Float promotion
   if (hasFloat) {
     const hasFloat64 = dtypes.some((d) => d === 'float64');
+    const hasFloat32 = dtypes.some((d) => d === 'float32');
     // Integer + float: promote based on integer size
     if (hasInteger) {
       const has32BitOrLarger = dtypes.some(
@@ -222,8 +235,14 @@ export function result_type(...arrays_and_dtypes: (NDArrayCore | DType)[]): DTyp
       if (has32BitOrLarger || hasFloat64) {
         return 'float64';
       }
+      // float16 + int16/uint16 → float32 (float16 has only 11-bit mantissa)
+      const has16BitInt = dtypes.some((d) => d === 'int16' || d === 'uint16');
+      if (!hasFloat32 && has16BitInt) {
+        return 'float32';
+      }
     }
-    return hasFloat64 ? 'float64' : 'float32';
+    if (hasFloat64) return 'float64';
+    return hasFloat32 ? 'float32' : 'float16';
   }
 
   // Pure integer promotion
@@ -242,6 +261,7 @@ export function result_type(...arrays_and_dtypes: (NDArrayCore | DType)[]): DTyp
       uint32: 32,
       int64: 64,
       uint64: 64,
+      float16: 0,
       float32: 0,
       float64: 0,
       complex64: 0,

@@ -34,7 +34,15 @@ import {
   where_i8,
   where_u8,
 } from './bins/gather.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -61,6 +69,7 @@ const extractKernels: Partial<Record<DType, ExtractFn>> = {
   uint16: extract_u16,
   int8: extract_i8,
   uint8: extract_u8,
+  float16: extract_f32,
 };
 
 const takeKernels: Partial<Record<DType, TakeFn>> = {
@@ -74,6 +83,7 @@ const takeKernels: Partial<Record<DType, TakeFn>> = {
   uint16: take_axis0_2d_u16,
   int8: take_axis0_2d_i8,
   uint8: take_axis0_2d_u8,
+  float16: take_axis0_2d_f32,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -88,6 +98,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+  float16: Float32Array,
 };
 
 /**
@@ -140,8 +151,10 @@ export function wasmExtract(condition: ArrayStorage, storage: ArrayStorage): Arr
 
   const condPtr = copyIn(condI32);
 
+  const isF16 = dtype === 'float16';
   const dataOff = storage.offset;
-  const dataSlice = storage.data.subarray(dataOff, dataOff + size) as TypedArray;
+  let dataSlice = storage.data.subarray(dataOff, dataOff + size) as TypedArray;
+  if (isF16) dataSlice = f16ToF32Input(dataSlice, dtype);
   const dataPtr = copyIn(dataSlice);
 
   const outPtr = alloc(outMaxBytes);
@@ -154,7 +167,7 @@ export function wasmExtract(condition: ArrayStorage, storage: ArrayStorage): Arr
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, [count], dtype);
+  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, [count], dtype);
 }
 
 /**
@@ -187,8 +200,10 @@ export function wasmTakeAlongAxis2D(
   ensureMemory(dataBytes + idxBytes + outBytes);
   resetAllocator();
 
+  const isF16 = dtype === 'float16';
   const dataOff = storage.offset;
-  const dataSlice = storage.data.subarray(dataOff, dataOff + totalSize) as TypedArray;
+  let dataSlice = storage.data.subarray(dataOff, dataOff + totalSize) as TypedArray;
+  if (isF16) dataSlice = f16ToF32Input(dataSlice, dtype);
   const dataPtr = copyIn(dataSlice);
 
   // Convert indices to i32
@@ -210,7 +225,11 @@ export function wasmTakeAlongAxis2D(
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, Array.from(indices.shape), dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    Array.from(indices.shape),
+    dtype
+  );
 }
 
 // --- WASM where: out[i] = cond[i] ? x[i] : y[i] ---
@@ -228,6 +247,7 @@ const whereKernels: Partial<Record<DType, WhereFn>> = {
   uint16: where_u16,
   int8: where_i8,
   uint8: where_u8,
+  float16: where_f32,
 };
 
 /**
@@ -270,12 +290,15 @@ export function wasmWhere(
   }
   const condPtr = copyIn(condI32);
 
+  const isF16 = dtype === 'float16';
   const xOff = x.offset;
-  const xSlice = x.data.subarray(xOff, xOff + size) as TypedArray;
+  let xSlice = x.data.subarray(xOff, xOff + size) as TypedArray;
+  if (isF16) xSlice = f16ToF32Input(xSlice, dtype);
   const xPtr = copyIn(xSlice);
 
   const yOff = y.offset;
-  const ySlice = y.data.subarray(yOff, yOff + size) as TypedArray;
+  let ySlice = y.data.subarray(yOff, yOff + size) as TypedArray;
+  if (isF16) ySlice = f16ToF32Input(ySlice, dtype);
   const yPtr = copyIn(ySlice);
 
   const outPtr = alloc(dataBytes);
@@ -288,5 +311,9 @@ export function wasmWhere(
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(outData, Array.from(x.shape), dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    Array.from(x.shape),
+    dtype
+  );
 }

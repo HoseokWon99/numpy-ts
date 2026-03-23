@@ -791,7 +791,7 @@ function divideScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   if (wasmResult) return wasmResult;
 
   // Promote integer types to float64 for JS fallback
-  const isFloat = dtype === 'float32' || dtype === 'float64';
+  const isFloat = dtype === 'float16' || dtype === 'float32' || dtype === 'float64';
   const promoted = isFloat ? storage : convertToFloatDType(storage, 'float64');
 
   // JS fallback
