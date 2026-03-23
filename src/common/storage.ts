@@ -328,7 +328,11 @@ export class ArrayStorage {
 
     if (this.isCContiguous && this._offset === 0) {
       // Fast path: direct copy via TypedArray.set() (works for all types including BigInt)
-      (newData as any).set((this._data as any).subarray(0, physicalSize));
+      (newData as unknown as { set(src: ArrayLike<number>): void }).set(
+        (
+          this._data as unknown as { subarray(begin: number, end: number): ArrayLike<number> }
+        ).subarray(0, physicalSize)
+      );
     } else {
       // Slow path: respect strides
       if (isBigIntDType(dtype)) {

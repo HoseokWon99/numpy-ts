@@ -1,6 +1,64 @@
 import { build } from 'esbuild';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+
+/**
+ * Post-process ESM output to add .js extensions to relative import/export
+ * specifiers, so Node's ESM loader can resolve them.
+ *
+ * Handles: './foo' → './foo.js', './dir' → './dir/index.js'
+ */
+async function fixEsmExtensions(outdir: string, srcDir: string) {
+  const fsp = await import('node:fs/promises');
+  const path = await import('node:path');
+
+  async function walk(dir: string): Promise<string[]> {
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    const files: string[] = [];
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) files.push(...(await walk(full)));
+      else if (entry.name.endsWith('.js')) files.push(full);
+    }
+    return files;
+  }
+
+  const files = await walk(outdir);
+
+  // Match: from"./relative/path" or from "./relative/path"
+  const importRe = /(from\s*["'])(\.\.?\/[^"']+)(["'])/g;
+
+  for (const file of files) {
+    let content = await fsp.readFile(file, 'utf-8');
+    let changed = false;
+
+    content = content.replace(importRe, (match, prefix, specifier, suffix) => {
+      if (specifier.endsWith('.js') || specifier.endsWith('.mjs')) return match;
+
+      // Resolve against the source dir to check what the specifier points to
+      const relFromOut = path.relative(outdir, path.dirname(file));
+      const srcFile = path.resolve(srcDir, relFromOut, specifier);
+
+      // Directory with index.ts → append /index.js
+      if (existsSync(srcFile) && statSync(srcFile).isDirectory()) {
+        if (existsSync(path.join(srcFile, 'index.ts'))) {
+          changed = true;
+          return `${prefix}${specifier}/index.js${suffix}`;
+        }
+      }
+
+      // File with .ts extension → append .js
+      if (existsSync(srcFile + '.ts')) {
+        changed = true;
+        return `${prefix}${specifier}.js${suffix}`;
+      }
+
+      return match;
+    });
+
+    if (changed) await fsp.writeFile(file, content);
+  }
+}
 
 // Read version from package.json
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
@@ -23,54 +81,6 @@ async function buildAll() {
   // Build WASM kernels (optional — skipped if Zig not installed or --skip-wasm)
   if (!skipWasm) buildWasm();
 
-  // Main bundle for Node.js (CJS) - core functionality only
-  console.log('Building Node.js CJS bundle...');
-  await build({
-    entryPoints: ['src/index.ts'],
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    outfile: 'dist/numpy-ts.node.cjs',
-    sourcemap: true,
-    minify: true,
-    define: {
-      __VERSION_PLACEHOLDER__: JSON.stringify(VERSION),
-    },
-  });
-  console.log('✓ Node.js CJS build complete');
-
-  // Node.js bundle with file IO (for import from 'numpy-ts/node')
-  console.log('Building Node.js bundle with file IO...');
-  await build({
-    entryPoints: ['src/node.ts'],
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    outfile: 'dist/numpy-ts.node-io.cjs',
-    sourcemap: true,
-    minify: true,
-    define: {
-      __VERSION_PLACEHOLDER__: JSON.stringify(VERSION),
-    },
-  });
-  console.log('✓ Node.js IO build complete');
-
-  // Node.js ESM bundle with file IO
-  console.log('Building Node.js ESM bundle with file IO...');
-  await build({
-    entryPoints: ['src/node.ts'],
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    outfile: 'dist/numpy-ts.node-io.mjs',
-    sourcemap: true,
-    minify: true,
-    define: {
-      __VERSION_PLACEHOLDER__: JSON.stringify(VERSION),
-    },
-  });
-  console.log('✓ Node.js ESM IO build complete');
-
   // Browser bundle (IIFE)
   console.log('Building browser bundle...');
   await build({
@@ -82,6 +92,7 @@ async function buildAll() {
     outfile: 'dist/numpy-ts.browser.js',
     sourcemap: false, // Browser bundles don't need source maps in npm package
     minify: true,
+    external: ['node:fs', 'node:fs/promises', 'node:module'],
     define: {
       __VERSION_PLACEHOLDER__: JSON.stringify(VERSION),
     },
@@ -127,6 +138,9 @@ async function buildAll() {
   await import('node:fs/promises').then((fs) =>
     fs.writeFile('dist/meta.json', JSON.stringify(esmResult.metafile, null, 2))
   );
+
+  // Add .js extensions to relative imports so Node's ESM loader works
+  await fixEsmExtensions('dist/esm', 'src');
   console.log('✓ Tree-shakeable ESM build complete');
 
   console.log('\n✓ All builds completed successfully!');

@@ -297,6 +297,10 @@ async function buildWithWebpack(fixtureName: string): Promise<BundleResult> {
           },
         ],
       },
+      externals: [
+        // Node built-ins used by file IO — not relevant for tree-shaking tests
+        /^node:/,
+      ],
       optimization: {
         usedExports: true,
         sideEffects: true,

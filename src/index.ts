@@ -679,6 +679,45 @@ export function fromregex(
   return upgradeToNDArray(fromregexCore(text, regexp, dtype));
 }
 
+// File IO functions (loadNpy, saveNpy, loadtxt, savetxt, etc.)
+// These use lazy fs resolution — work in Node/Bun/Deno, throw clear errors in browsers.
+// Note: genfromtxt/fromregex are excluded to avoid conflict with the buffer-based versions above.
+// Use the file-based versions via genfromtxtFile/fromregexFile, or use loadtxt for file-based text loading.
+export {
+  // Types
+  type LoadOptions,
+  type SaveNpzOptions,
+  type LoadTxtOptions,
+  type SaveTxtOptions,
+  // NPY
+  loadNpy,
+  loadNpySync,
+  saveNpy,
+  saveNpySync,
+  // NPZ
+  loadNpzFile,
+  loadNpzFileSync,
+  saveNpz as saveNpzFile,
+  saveNpzSync as saveNpzFileSync,
+  savez,
+  savez_compressed,
+  // Auto-detect
+  load,
+  loadSync,
+  save,
+  saveSync,
+  // Text
+  loadtxt,
+  loadtxtSync,
+  savetxt,
+  savetxtSync,
+  // File-based text parsers (distinct from buffer-based genfromtxt/fromregex above)
+  genfromtxt as genfromtxtFile,
+  genfromtxtSync as genfromtxtFileSync,
+  fromregex as fromregexFile,
+  fromregexSync as fromregexFileSync,
+} from './io/file-ops';
+
 // ============================================================
 // Random Namespace (np.random)
 // ============================================================

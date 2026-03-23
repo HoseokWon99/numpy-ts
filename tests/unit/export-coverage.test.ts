@@ -25,6 +25,30 @@ describe('Export Coverage', () => {
 
     // WASM runtime configuration (not a core array operation)
     'wasmConfig',
+
+    // File IO functions (require Node/Bun/Deno runtime, not available in core)
+    'loadNpy',
+    'loadNpySync',
+    'saveNpy',
+    'saveNpySync',
+    'loadNpzFile',
+    'loadNpzFileSync',
+    'saveNpzFile',
+    'saveNpzFileSync',
+    'savez',
+    'savez_compressed',
+    'load',
+    'loadSync',
+    'save',
+    'saveSync',
+    'loadtxt',
+    'loadtxtSync',
+    'savetxt',
+    'savetxtSync',
+    'genfromtxtFile',
+    'genfromtxtFileSync',
+    'fromregexFile',
+    'fromregexFileSync',
   ]);
 
   // Type-only exports (not functions, just TypeScript types)
@@ -39,6 +63,10 @@ describe('Export Coverage', () => {
     'ParseTxtOptions',
     'SerializeTxtOptions',
     'ComplexInput',
+    'LoadOptions',
+    'SaveNpzOptions',
+    'LoadTxtOptions',
+    'SaveTxtOptions',
   ]);
 
   it('should list all main exports', () => {
