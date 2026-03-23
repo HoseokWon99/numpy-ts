@@ -26,7 +26,15 @@ import {
   reduce_min_strided_u16,
   reduce_min_strided_u8,
 } from './bins/reduce_min.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';

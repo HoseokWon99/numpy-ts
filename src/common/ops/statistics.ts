@@ -6,7 +6,14 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { getTypedArrayConstructor, hasFloat16, isComplexDType, isFloatDType, throwIfComplex, TypedArray } from '../dtype';
+import {
+  getTypedArrayConstructor,
+  hasFloat16,
+  isComplexDType,
+  isFloatDType,
+  throwIfComplex,
+  TypedArray,
+} from '../dtype';
 import { wasmCorrelate } from '../wasm/correlate';
 import { wasmConvolve } from '../wasm/convolve';
 
@@ -1600,11 +1607,16 @@ export function trapezoid(
       for (let i = 0; i < axisSize - 1; i++) {
         inCoordsBase[axis] = i;
         let idx0 = 0;
-        for (let d = 0; d < ndim; d++) { idx0 += inCoordsBase[d]! * yStrides[d]!; }
+        for (let d = 0; d < ndim; d++) {
+          idx0 += inCoordsBase[d]! * yStrides[d]!;
+        }
         inCoordsBase[axis] = i + 1;
         let idx1 = 0;
-        for (let d = 0; d < ndim; d++) { idx1 += inCoordsBase[d]! * yStrides[d]!; }
-        f16[0] += 0.5 * (Number(yData[idx0]) + Number(yData[idx1])) * (xValues[i + 1]! - xValues[i]!);
+        for (let d = 0; d < ndim; d++) {
+          idx1 += inCoordsBase[d]! * yStrides[d]!;
+        }
+        f16[0] +=
+          0.5 * (Number(yData[idx0]) + Number(yData[idx1])) * (xValues[i + 1]! - xValues[i]!);
       }
       resultData[outIdx] = f16[0]!;
     } else if (useF32ND) {
@@ -1613,11 +1625,16 @@ export function trapezoid(
       for (let i = 0; i < axisSize - 1; i++) {
         inCoordsBase[axis] = i;
         let idx0 = 0;
-        for (let d = 0; d < ndim; d++) { idx0 += inCoordsBase[d]! * yStrides[d]!; }
+        for (let d = 0; d < ndim; d++) {
+          idx0 += inCoordsBase[d]! * yStrides[d]!;
+        }
         inCoordsBase[axis] = i + 1;
         let idx1 = 0;
-        for (let d = 0; d < ndim; d++) { idx1 += inCoordsBase[d]! * yStrides[d]!; }
-        f32[0] += 0.5 * (Number(yData[idx0]) + Number(yData[idx1])) * (xValues[i + 1]! - xValues[i]!);
+        for (let d = 0; d < ndim; d++) {
+          idx1 += inCoordsBase[d]! * yStrides[d]!;
+        }
+        f32[0] +=
+          0.5 * (Number(yData[idx0]) + Number(yData[idx1])) * (xValues[i + 1]! - xValues[i]!);
       }
       resultData[outIdx] = f32[0]!;
     } else {
@@ -1646,6 +1663,10 @@ export function trapezoid(
     return resultData[0]!;
   }
 
-  const outDtype = useF16ND ? 'float16' as const : useF32ND ? 'float32' as const : 'float64' as const;
+  const outDtype = useF16ND
+    ? ('float16' as const)
+    : useF32ND
+      ? ('float32' as const)
+      : ('float64' as const);
   return ArrayStorage.fromData(resultData as unknown as TypedArray, outShape, outDtype);
 }

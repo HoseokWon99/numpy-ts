@@ -28,7 +28,15 @@ import {
   partition_slices_i8,
   partition_slices_u8,
 } from './bins/partition.wasm';
-import { ensureMemory, resetAllocator, copyIn, copyOut, getSharedMemory, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -103,7 +111,9 @@ export function wasmPartitionSlices(
     const Ctor = ctorMap[dtype];
     if (!Ctor) return false;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    const inputData = isF16 ? f16ToF32Input(resultData as TypedArray, dtype) : resultData as TypedArray;
+    const inputData = isF16
+      ? f16ToF32Input(resultData as TypedArray, dtype)
+      : (resultData as TypedArray);
     const totalBytes = inputData.length * bpe;
 
     ensureMemory(totalBytes);
@@ -136,7 +146,9 @@ export function wasmPartitionSlices(
   if (!kernel || !Ctor) return false;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const inputData = isF16 ? f16ToF32Input(resultData as TypedArray, dtype) : resultData as TypedArray;
+  const inputData = isF16
+    ? f16ToF32Input(resultData as TypedArray, dtype)
+    : (resultData as TypedArray);
   const totalBytes = inputData.length * bpe;
 
   ensureMemory(totalBytes);
@@ -203,5 +215,9 @@ export function wasmPartition(a: ArrayStorage, kth: number): ArrayStorage | null
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, Array.from(a.shape), dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    Array.from(a.shape),
+    dtype
+  );
 }

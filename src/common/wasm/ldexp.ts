@@ -6,7 +6,15 @@
  */
 
 import { ldexp_scalar_f64, ldexp_scalar_f32 } from './bins/ldexp.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -45,7 +53,7 @@ export function wasmLdexpScalar(a: ArrayStorage, exp: number): ArrayStorage | nu
 
   const aData = isF16
     ? f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype)
-    : a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    : (a.data.subarray(a.offset, a.offset + size) as TypedArray);
   const aPtr = copyIn(aData);
   const outPtr = alloc(size * bpe);
   kernel(aPtr, outPtr, size, exp);

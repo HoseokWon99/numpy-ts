@@ -17,7 +17,14 @@ import {
   lexsort_i8,
   lexsort_u8,
 } from './bins/lexsort.wasm';
-import { ensureMemory, resetAllocator, alloc, copyOut, getSharedMemory, f16ToF32Input } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  alloc,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';

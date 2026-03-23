@@ -31,7 +31,10 @@ export function wasmFrexp(a: ArrayStorage): [ArrayStorage, ArrayStorage] | null 
   // If float16/float32, we need to promote to f64 for the kernel
   let aData: TypedArray;
   if (dtype === 'float16') {
-    const f32Data = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype) as Float32Array;
+    const f32Data = f16ToF32Input(
+      a.data.subarray(a.offset, a.offset + size) as TypedArray,
+      dtype
+    ) as Float32Array;
     const f64Data = new Float64Array(size);
     for (let i = 0; i < size; i++) f64Data[i] = f32Data[i]!;
     aData = f64Data;

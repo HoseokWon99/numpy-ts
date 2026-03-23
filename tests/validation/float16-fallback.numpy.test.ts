@@ -376,7 +376,9 @@ result = a * b
 
     it('add overflow', () => {
       const ts = array([65000, 65000], 'float16').add(array([1000, 1000], 'float16'));
-      const py = runNumPy(`result = np.array([65000, 65000], dtype=np.float16) + np.array([1000, 1000], dtype=np.float16)`);
+      const py = runNumPy(
+        `result = np.array([65000, 65000], dtype=np.float16) + np.array([1000, 1000], dtype=np.float16)`
+      );
       expect(ts.toArray()).toEqual(py.value);
     });
 
@@ -398,7 +400,9 @@ result = a * b
 
     it('power overflow', () => {
       const ts = np.power(array([256, 100], 'float16'), array([2, 3], 'float16'));
-      const py = runNumPy(`result = np.power(np.array([256, 100], dtype=np.float16), np.array([2, 3], dtype=np.float16))`);
+      const py = runNumPy(
+        `result = np.power(np.array([256, 100], dtype=np.float16), np.array([2, 3], dtype=np.float16))`
+      );
       for (let i = 0; i < 2; i++) {
         expect(ts.get([i])).toBe(py.value[i]);
       }
@@ -436,7 +440,9 @@ result = a * b
 
     it('underflow to zero', () => {
       const ts = array([0.0001], 'float16').multiply(array([0.0001], 'float16'));
-      const py = runNumPy(`result = np.array([0.0001], dtype=np.float16) * np.array([0.0001], dtype=np.float16)`);
+      const py = runNumPy(
+        `result = np.array([0.0001], dtype=np.float16) * np.array([0.0001], dtype=np.float16)`
+      );
       expect(ts.get([0])).toBe(py.value[0]);
     });
 

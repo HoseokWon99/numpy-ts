@@ -48,7 +48,9 @@ export function wasmConvolve(a: ArrayStorage, v: ArrayStorage): ArrayStorage | n
   if (outLen < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   // Use float64 unless both are float32 (or float16, which uses f32 kernel)
-  const bothF32Like = (a.dtype === 'float32' || a.dtype === 'float16') && (v.dtype === 'float32' || v.dtype === 'float16');
+  const bothF32Like =
+    (a.dtype === 'float32' || a.dtype === 'float16') &&
+    (v.dtype === 'float32' || v.dtype === 'float16');
   const dtype: DType = bothF32Like ? 'float32' : 'float64';
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];

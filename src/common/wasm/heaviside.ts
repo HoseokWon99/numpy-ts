@@ -12,7 +12,15 @@ import {
   heaviside_f64,
   heaviside_f32,
 } from './bins/heaviside.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -61,7 +69,7 @@ export function wasmHeavisideScalar(
 
   const x1Data = isF16
     ? f16ToF32Input(x1.data.subarray(x1.offset, x1.offset + size) as TypedArray, resultDtype)
-    : x1.data.subarray(x1.offset, x1.offset + size) as TypedArray;
+    : (x1.data.subarray(x1.offset, x1.offset + size) as TypedArray);
   const x1Ptr = copyIn(x1Data);
   const outPtr = alloc(size * bpe);
   kernel(x1Ptr, outPtr, size, x2);
@@ -95,10 +103,10 @@ export function wasmHeaviside(
 
   const x1Data = isF16
     ? f16ToF32Input(x1.data.subarray(x1.offset, x1.offset + size) as TypedArray, resultDtype)
-    : x1.data.subarray(x1.offset, x1.offset + size) as TypedArray;
+    : (x1.data.subarray(x1.offset, x1.offset + size) as TypedArray);
   const x2Data = isF16
     ? f16ToF32Input(x2.data.subarray(x2.offset, x2.offset + size) as TypedArray, resultDtype)
-    : x2.data.subarray(x2.offset, x2.offset + size) as TypedArray;
+    : (x2.data.subarray(x2.offset, x2.offset + size) as TypedArray);
   const x1Ptr = copyIn(x1Data);
   const x2Ptr = copyIn(x2Data);
   const outPtr = alloc(size * bpe);

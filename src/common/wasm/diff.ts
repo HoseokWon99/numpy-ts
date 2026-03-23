@@ -20,7 +20,15 @@ import {
   diff_2d_i16,
   diff_2d_i8,
 } from './bins/diff.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -136,5 +144,9 @@ export function wasmDiff(a: ArrayStorage, axis: number): ArrayStorage | null {
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, resultShape, dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    resultShape,
+    dtype
+  );
 }

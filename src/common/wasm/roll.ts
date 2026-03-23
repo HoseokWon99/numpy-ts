@@ -6,7 +6,15 @@
  */
 
 import { roll_f64, roll_f32, roll_i64, roll_i32, roll_i16, roll_i8 } from './bins/roll.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -82,5 +90,9 @@ export function wasmRoll(a: ArrayStorage, shift: number): ArrayStorage | null {
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, Array.from(a.shape), dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    Array.from(a.shape),
+    dtype
+  );
 }

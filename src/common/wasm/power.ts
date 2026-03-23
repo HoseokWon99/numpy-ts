@@ -20,7 +20,15 @@ import {
   power_scalar_i16,
   power_scalar_i8,
 } from './bins/power.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, isBigIntDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';

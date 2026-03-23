@@ -13,7 +13,15 @@ import {
   pad_2d_i16,
   pad_2d_i8,
 } from './bins/pad.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -97,5 +105,9 @@ export function wasmPad2D(a: ArrayStorage, padWidth: number): ArrayStorage | nul
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, [outRows, outCols], dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    [outRows, outCols],
+    dtype
+  );
 }

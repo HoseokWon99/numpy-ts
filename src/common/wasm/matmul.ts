@@ -19,7 +19,15 @@ import {
   matmul_i16,
   matmul_i8,
 } from './bins/matmul.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -170,7 +178,10 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
   const isF16 = workDtype === 'float16';
   let aData = getContiguousData(a, workDtype, factor);
   let bData = getContiguousData(b, workDtype, factor);
-  if (isF16) { aData = f16ToF32Input(aData, workDtype); bData = f16ToF32Input(bData, workDtype); }
+  if (isF16) {
+    aData = f16ToF32Input(aData, workDtype);
+    bData = f16ToF32Input(bData, workDtype);
+  }
 
   // --- Pure 2D case ---
   if (aNdim === 2 && bNdim === 2) {
@@ -180,7 +191,11 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
     else if (aWas1D) outShape = [N];
     else if (bWas1D) outShape = [M];
     else outShape = [M, N];
-    return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, workDtype) : outData, outShape, workDtype);
+    return ArrayStorage.fromData(
+      isF16 ? f32ToF16Output(outData, workDtype) : outData,
+      outShape,
+      workDtype
+    );
   }
 
   // --- Batched ND case ---
@@ -221,7 +236,11 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
   }
 
   const outShape = [...batchShape, M, N];
-  const result = ArrayStorage.fromData(isF16 ? f32ToF16Output(resultData as TypedArray, workDtype) : resultData as TypedArray, outShape, workDtype);
+  const result = ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(resultData as TypedArray, workDtype) : (resultData as TypedArray),
+    outShape,
+    workDtype
+  );
 
   if (aWas1D && bWas1D) return reshapeStorage(result, [...batchShape]);
   if (aWas1D) return reshapeStorage(result, [...batchShape, N]);

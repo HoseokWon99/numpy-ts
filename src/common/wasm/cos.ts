@@ -8,7 +8,15 @@
  */
 
 import { cos_f64, cos_f32 } from './bins/cos.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, isBigIntDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -51,7 +59,11 @@ export function wasmCos(a: ArrayStorage): ArrayStorage | null {
     const outData = copyOut(
       outPtr,
       size,
-      Float32Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      Float32Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
     return ArrayStorage.fromData(f32ToF16Output(outData, dtype), Array.from(a.shape), dtype);
   }

@@ -31,7 +31,15 @@ import {
   sort_slices_c128,
   sort_slices_c64,
 } from './bins/sort.wasm';
-import { ensureMemory, resetAllocator, copyIn, copyOut, getSharedMemory, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -116,7 +124,9 @@ export function wasmSortSlices(
     const Ctor = ctorMap[dtype];
     if (!Ctor) return false;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    const inputData = isF16 ? f16ToF32Input(resultData as TypedArray, dtype) : resultData as TypedArray;
+    const inputData = isF16
+      ? f16ToF32Input(resultData as TypedArray, dtype)
+      : (resultData as TypedArray);
     const totalBytes = inputData.length * bpe;
 
     ensureMemory(totalBytes);
@@ -152,7 +162,9 @@ export function wasmSortSlices(
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   // For complex, each logical element is 2 floats, so byte offset = logicalOffset * 2 * bpe
   const bytesPerElem = isComplex ? bpe * 2 : bpe;
-  const inputData = isF16 ? f16ToF32Input(resultData as TypedArray, dtype) : resultData as TypedArray;
+  const inputData = isF16
+    ? f16ToF32Input(resultData as TypedArray, dtype)
+    : (resultData as TypedArray);
   const totalBytes = inputData.length * bpe;
 
   ensureMemory(totalBytes);
@@ -221,5 +233,9 @@ export function wasmSort(a: ArrayStorage): ArrayStorage | null {
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, Array.from(a.shape), dtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, dtype) : outData,
+    Array.from(a.shape),
+    dtype
+  );
 }

@@ -258,8 +258,15 @@ export function pad(
   const totalSize = shape.reduce((a, b) => a * b, 1);
 
   // Float16Array optimization: bulk-convert for faster per-element access
-  if (arr.dtype === 'float16' && hasFloat16 && srcStorage.isCContiguous && resultStorage.isCContiguous) {
-    const f32Src = new Float32Array((srcStorage.data as any).subarray(srcStorage.offset, srcStorage.offset + totalSize));
+  if (
+    arr.dtype === 'float16' &&
+    hasFloat16 &&
+    srcStorage.isCContiguous &&
+    resultStorage.isCContiguous
+  ) {
+    const f32Src = new Float32Array(
+      (srcStorage.data as any).subarray(srcStorage.offset, srcStorage.offset + totalSize)
+    );
     const resultSize = resultStorage.size;
     const f32Result = new Float32Array(resultSize);
     // Pre-fill with constant value if non-zero
