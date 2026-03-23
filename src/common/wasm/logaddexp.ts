@@ -30,7 +30,15 @@ import {
   logaddexp_u8,
   logaddexp_scalar_u8,
 } from './bins/logaddexp.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';

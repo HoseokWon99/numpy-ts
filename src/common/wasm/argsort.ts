@@ -30,7 +30,15 @@ import {
   argsort_slices_c128,
   argsort_slices_c64,
 } from './bins/argsort.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, getSharedMemory, f16ToF32Input } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  getSharedMemory,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -125,7 +133,11 @@ export function wasmArgsortSlices(
     ensureMemory(inputBytes + outputBytes);
     resetAllocator();
 
-    const inputPtr = copyIn(dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : inputData as TypedArray);
+    const inputPtr = copyIn(
+      dtype === 'float16'
+        ? f16ToF32Input(inputData as TypedArray, dtype)
+        : (inputData as TypedArray)
+    );
     const outputPtr = alloc(outputBytes);
 
     sliceKernel(inputPtr, outputPtr, axisSize, outerSize);
@@ -150,7 +162,9 @@ export function wasmArgsortSlices(
   ensureMemory(inputBytes + outputBytes);
   resetAllocator();
 
-  const inputPtr = copyIn(dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : inputData as TypedArray);
+  const inputPtr = copyIn(
+    dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : (inputData as TypedArray)
+  );
   const outputPtr = alloc(outputBytes);
 
   for (let i = 0; i < outerSize; i++) {

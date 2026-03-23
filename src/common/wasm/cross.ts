@@ -15,7 +15,15 @@ import {
   cross_i16,
   cross_i8,
 } from './bins/cross.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 
@@ -101,7 +109,10 @@ export function wasmCross(
     b.offset * factor,
     b.offset * factor + totalElements * factor
   ) as TypedArray;
-  if (isF16) { aData = f16ToF32Input(aData, resultDtype); bData = f16ToF32Input(bData, resultDtype); }
+  if (isF16) {
+    aData = f16ToF32Input(aData, resultDtype);
+    bData = f16ToF32Input(bData, resultDtype);
+  }
 
   const aPtr = copyIn(aData);
   const bPtr = copyIn(bData);
@@ -115,5 +126,9 @@ export function wasmCross(
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, resultDtype) : outData, [...a.shape], resultDtype);
+  return ArrayStorage.fromData(
+    isF16 ? f32ToF16Output(outData, resultDtype) : outData,
+    [...a.shape],
+    resultDtype
+  );
 }

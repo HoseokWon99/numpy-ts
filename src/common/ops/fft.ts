@@ -672,9 +672,12 @@ function wasmBatchRfft(a: ArrayStorage, n: number): ArrayStorage | null {
   const outStride = outLen * 2; // complex values per row (interleaved)
 
   // Convert input to float64 if needed
-  const srcData = a.dtype === 'float64'
-    ? a.data as Float64Array
-    : Float64Array.from(a.data.subarray(a.offset, a.offset + a.size) as unknown as ArrayLike<number>);
+  const srcData =
+    a.dtype === 'float64'
+      ? (a.data as Float64Array)
+      : Float64Array.from(
+          a.data.subarray(a.offset, a.offset + a.size) as unknown as ArrayLike<number>
+        );
 
   const inBytes = batch * n * 8;
   const outBytes = batch * outLen * 2 * 8;

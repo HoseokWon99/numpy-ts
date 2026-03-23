@@ -8,7 +8,15 @@
  */
 
 import { cosh_f64, cosh_f32, cosh_i64, cosh_u64 } from './bins/cosh.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, isBigIntDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -51,7 +59,11 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
     const outData = copyOut(
       outPtr,
       size,
-      Float32Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      Float32Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
     return ArrayStorage.fromData(f32ToF16Output(outData, dtype), Array.from(a.shape), dtype);
   }

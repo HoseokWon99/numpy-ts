@@ -6,7 +6,13 @@
  */
 
 import { ArrayStorage, computeStrides } from '../storage';
-import { getTypedArrayConstructor, isBigIntDType, isComplexDType, hasFloat16, type TypedArray } from '../dtype';
+import {
+  getTypedArrayConstructor,
+  isBigIntDType,
+  isComplexDType,
+  hasFloat16,
+  type TypedArray,
+} from '../dtype';
 import { Complex } from '../complex';
 import { wasmFlip } from '../wasm/flip';
 import { wasmTile2D } from '../wasm/tile';
@@ -588,7 +594,9 @@ function copyToOutput(
 
   // Float16Array optimization: bulk-convert for faster per-element access
   if (dtype === 'float16' && hasFloat16 && source.isCContiguous) {
-    const f32Src = new Float32Array((source.data as any).subarray(source.offset, source.offset + sourceSize));
+    const f32Src = new Float32Array(
+      (source.data as any).subarray(source.offset, source.offset + sourceSize)
+    );
     const indices = new Array(ndim).fill(0);
     const baseOutputOffset = axisOffset * outputStrides[axis]!;
 
@@ -957,7 +965,12 @@ export function tile(storage: ArrayStorage, reps: number | number[]): ArrayStora
   // Float16Array optimization: bulk-convert to Float32Array for faster per-element access
   if (dtype === 'float16' && hasFloat16 && expandedStorage.isCContiguous) {
     const srcSize = expandedStorage.size;
-    const f32Src = new Float32Array((expandedStorage.data as any).subarray(expandedStorage.offset, expandedStorage.offset + srcSize));
+    const f32Src = new Float32Array(
+      (expandedStorage.data as any).subarray(
+        expandedStorage.offset,
+        expandedStorage.offset + srcSize
+      )
+    );
     const f32Out = new Float32Array(outputSize);
     const outputIndices = new Array(maxDim).fill(0);
 
@@ -1059,7 +1072,9 @@ export function repeat(
 
     // Float16Array optimization: bulk-convert for faster per-element access
     if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
-      const f32Src = new Float32Array((storage.data as any).subarray(storage.offset, storage.offset + flatSize));
+      const f32Src = new Float32Array(
+        (storage.data as any).subarray(storage.offset, storage.offset + flatSize)
+      );
       const f32Out = new Float32Array(outputSize);
       let outIdx = 0;
       for (let i = 0; i < flatSize; i++) {
@@ -1129,7 +1144,9 @@ export function repeat(
 
   // Float16Array optimization: bulk-convert for faster per-element access
   if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
-    const f32Src = new Float32Array((storage.data as any).subarray(storage.offset, storage.offset + size));
+    const f32Src = new Float32Array(
+      (storage.data as any).subarray(storage.offset, storage.offset + size)
+    );
     const f32Out = new Float32Array(outputSize);
 
     for (let i = 0; i < size; i++) {
@@ -1631,7 +1648,9 @@ export function roll(
 
     // Float16Array optimization: bulk-convert for faster per-element access
     if (dtype === 'float16' && hasFloat16 && flatStorage.isCContiguous) {
-      const f32Src = new Float32Array((flatStorage.data as any).subarray(flatStorage.offset, flatStorage.offset + size));
+      const f32Src = new Float32Array(
+        (flatStorage.data as any).subarray(flatStorage.offset, flatStorage.offset + size)
+      );
       const f32Out = new Float32Array(size);
       for (let i = 0; i < size; i++) {
         const sourceIdx = (((i - flatShift) % size) + size) % size;
@@ -1685,7 +1704,9 @@ export function roll(
 
   // Float16Array optimization: bulk-convert for faster per-element access
   if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
-    const f32Src = new Float32Array((storage.data as any).subarray(storage.offset, storage.offset + size));
+    const f32Src = new Float32Array(
+      (storage.data as any).subarray(storage.offset, storage.offset + size)
+    );
     const f32Out = new Float32Array(size);
     const srcStrides = storage.strides;
 

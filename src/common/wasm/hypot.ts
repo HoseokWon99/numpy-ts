@@ -22,7 +22,15 @@ import {
   hypot_i8,
   hypot_scalar_i8,
 } from './bins/hypot.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input, f32ToF16Output } from './runtime';
+import {
+  ensureMemory,
+  resetAllocator,
+  copyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+  f32ToF16Output,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';

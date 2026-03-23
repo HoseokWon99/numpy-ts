@@ -6,7 +6,16 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { getTypedArrayConstructor, hasFloat16, isBigIntDType, isComplexDType, isFloatDType, throwIfComplex, type DType, type TypedArray } from '../dtype';
+import {
+  getTypedArrayConstructor,
+  hasFloat16,
+  isBigIntDType,
+  isComplexDType,
+  isFloatDType,
+  throwIfComplex,
+  type DType,
+  type TypedArray,
+} from '../dtype';
 import { computeStrides, precomputeAxisOffsets } from '../internal/indexing';
 import { Complex } from '../complex';
 import { wasmReduceSum, wasmReduceSumStrided } from '../wasm/reduce_sum';
@@ -34,7 +43,7 @@ const f32acc = new Float32Array(2); // [0]=primary, [1]=secondary (for complex i
 // float16 at each step — matching NumPy's overflow/precision behavior exactly.
 const f16acc: Float32Array | null =
   typeof globalThis.Float16Array !== 'undefined'
-    ? new (globalThis.Float16Array as any)(2) as unknown as Float32Array
+    ? (new (globalThis.Float16Array as any)(2) as unknown as Float32Array)
     : null;
 
 /**
@@ -172,9 +181,8 @@ export function sum(
       acc[0] = 0;
       if (contiguous) {
         // Bulk-convert Float16Array to Float32Array to avoid per-element f16 overhead
-        const f32 = dtype === 'float16'
-          ? new Float32Array((data as any).subarray(off, off + size))
-          : data;
+        const f32 =
+          dtype === 'float16' ? new Float32Array((data as any).subarray(off, off + size)) : data;
         const f32off = dtype === 'float16' ? 0 : off;
         for (let i = 0; i < size; i++) {
           acc[0] += Number(f32[f32off + i]!);
@@ -439,10 +447,11 @@ export function mean(
     const off2 = storage.offset;
     if (storage.isCContiguous) {
       // Bulk-convert Float16Array→Float32Array first to avoid per-element f16 overhead
-      const src = (dtype === 'float16' && hasFloat16)
-        ? new Float32Array((srcData as any).subarray(off2, off2 + storage.size))
-        : srcData;
-      const srcOff = (dtype === 'float16' && hasFloat16) ? 0 : off2;
+      const src =
+        dtype === 'float16' && hasFloat16
+          ? new Float32Array((srcData as any).subarray(off2, off2 + storage.size))
+          : srcData;
+      const srcOff = dtype === 'float16' && hasFloat16 ? 0 : off2;
       for (let i = 0; i < storage.size; i++) dstData[i] = Number(src[srcOff + i]);
     } else {
       for (let i = 0; i < storage.size; i++) dstData[i] = Number(storage.iget(i));
@@ -459,7 +468,11 @@ export function mean(
     for (let i = 0; i < resultData.length; i++) {
       (outData as any)[i] = resultData[i]! / divisor;
     }
-    return ArrayStorage.fromData(outData as unknown as TypedArray, Array.from(sumStorage.shape), dtype);
+    return ArrayStorage.fromData(
+      outData as unknown as TypedArray,
+      Array.from(sumStorage.shape),
+      dtype
+    );
   }
 
   const sumResult = sum(storage, axis, keepdims);
@@ -1667,7 +1680,7 @@ export function variance(
           acc[0] += diff * diff;
         }
       }
-      acc[0] /= (size - ddof);
+      acc[0] /= size - ddof;
       return acc[0]!;
     }
     let sumSqDiff = 0;
@@ -1757,10 +1770,14 @@ export function variance(
           acc[0] += diff * diff;
           bufIdx += axisStr;
         }
-        acc[0] /= (axisSize - ddof);
+        acc[0] /= axisSize - ddof;
         (outData as any)[outerIdx] = acc[0]!;
       }
-      return ArrayStorage.fromData(outData as unknown as TypedArray, Array.from(outputShape), dtype);
+      return ArrayStorage.fromData(
+        outData as unknown as TypedArray,
+        Array.from(outputShape),
+        dtype
+      );
     }
     // Real variance for each position (float64)
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
@@ -2155,7 +2172,7 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
   const axisAcc = getFloatAcc(dtype);
   const axisCtor = axisAcc ? getTypedArrayConstructor(dtype)! : null;
   const resultData = axisCtor
-    ? new axisCtor(storage.size) as unknown as TypedArray
+    ? (new axisCtor(storage.size) as unknown as TypedArray)
     : new Float64Array(storage.size);
   const axisSize = shape[normalizedAxis]!;
 
@@ -3213,12 +3230,18 @@ export function nanmean(
       if (contiguous) {
         for (let i = 0; i < storage.size; i++) {
           const val = Number(data[off + i]);
-          if (!isNaN(val)) { acc[0] += val; count++; }
+          if (!isNaN(val)) {
+            acc[0] += val;
+            count++;
+          }
         }
       } else {
         for (let i = 0; i < storage.size; i++) {
           const val = Number(storage.iget(i));
-          if (!isNaN(val)) { acc[0] += val; count++; }
+          if (!isNaN(val)) {
+            acc[0] += val;
+            count++;
+          }
         }
       }
       if (count === 0) return NaN;
@@ -3229,12 +3252,18 @@ export function nanmean(
     if (contiguous) {
       for (let i = 0; i < storage.size; i++) {
         const val = Number(data[off + i]);
-        if (!isNaN(val)) { total += val; count++; }
+        if (!isNaN(val)) {
+          total += val;
+          count++;
+        }
       }
     } else {
       for (let i = 0; i < storage.size; i++) {
         const val = Number(storage.iget(i));
-        if (!isNaN(val)) { total += val; count++; }
+        if (!isNaN(val)) {
+          total += val;
+          count++;
+        }
       }
     }
     return count === 0 ? NaN : total / count;
