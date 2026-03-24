@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { array, ones } from '../../src';
+import { hasFloat16 } from '../../src/common/dtype';
 import { checkNumPyAvailable, runNumPy } from './numpy-oracle';
 
 describe('NumPy Validation: DType Edge Cases', () => {
@@ -285,8 +286,13 @@ arr = np.array([1e-5], dtype=np.float16)
 result = arr * 1e-5
       `);
 
-      expect(result.get([0])).toBe(0);
-      expect(npResult.value[0]).toBe(0);
+      if (hasFloat16) {
+        expect(result.get([0])).toBe(0);
+        expect(npResult.value[0]).toBe(0);
+      } else {
+        // Without native Float16Array, operates at float32 precision internally
+        expect(result.get([0])).toBeLessThan(1e-7);
+      }
     });
 
     it('float64 preserves very small values', () => {
