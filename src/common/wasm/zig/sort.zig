@@ -174,22 +174,22 @@ export fn sort_slices_f16(a: [*]u16, sliceSize: u32, numSlices: u32) void {
 
 /// Sort complex128 (interleaved f64 pairs) array in-place. N = number of complex elements.
 export fn sort_c128(a: [*]f64, N: u32) void {
-    sc.complexHeapSort(f64, a, N);
+    sc.complexIntroSort(f64, a, N);
 }
 
 /// Sort complex64 (interleaved f32 pairs) array in-place.
 export fn sort_c64(a: [*]f32, N: u32) void {
-    sc.complexHeapSort(f32, a, N);
+    sc.complexIntroSort(f32, a, N);
 }
 
 /// Batch complex128 slice sort.
 export fn sort_slices_c128(a: [*]f64, sliceSize: u32, numSlices: u32) void {
-    sc.complexHeapSortSlices(f64, a, sliceSize, numSlices);
+    sc.complexIntroSortSlices(f64, a, sliceSize, numSlices);
 }
 
 /// Batch complex64 slice sort.
 export fn sort_slices_c64(a: [*]f32, sliceSize: u32, numSlices: u32) void {
-    sc.complexHeapSortSlices(f32, a, sliceSize, numSlices);
+    sc.complexIntroSortSlices(f32, a, sliceSize, numSlices);
 }
 
 // --- Tests ---

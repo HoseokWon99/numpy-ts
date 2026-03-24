@@ -608,6 +608,121 @@ fn complexSiftDown(comptime T: type, a: [*]T, start: u32, end: u32) void {
     }
 }
 
+// --- Complex introsort ---
+
+fn complexInsertionSort(comptime T: type, a: [*]T, lo: u32, hi: u32) void {
+    var i: u32 = lo + 1;
+    while (i <= hi) : (i += 1) {
+        const ix2 = @as(usize, i) * 2;
+        const key_re = a[ix2];
+        const key_im = a[ix2 + 1];
+        var j: u32 = i;
+        while (j > lo) {
+            const j2 = @as(usize, j - 1) * 2;
+            // Is key < a[j-1]?
+            const b_re = a[j2];
+            const b_im = a[j2 + 1];
+            const key_nan = (key_re != key_re) or (key_im != key_im);
+            const b_nan = (b_re != b_re) or (b_im != b_im);
+            const lt = if (key_nan) false else if (b_nan) true else if (key_re < b_re) true else if (key_re > b_re) false else key_im < b_im;
+            if (!lt) break;
+            // shift a[j-1] right
+            const jj = @as(usize, j) * 2;
+            a[jj] = a[j2];
+            a[jj + 1] = a[j2 + 1];
+            j -= 1;
+        }
+        const j2 = @as(usize, j) * 2;
+        a[j2] = key_re;
+        a[j2 + 1] = key_im;
+    }
+}
+
+fn complexMedianOfThree(comptime T: type, a: [*]T, lo: u32, hi: u32) u32 {
+    const mid = lo + (hi - lo) / 2;
+    if (complexLess(T, a, hi, lo)) complexSwap(T, a, lo, hi);
+    if (complexLess(T, a, mid, lo)) complexSwap(T, a, lo, mid);
+    if (complexLess(T, a, hi, mid)) complexSwap(T, a, mid, hi);
+    return mid;
+}
+
+fn complexHoarePartition(comptime T: type, a: [*]T, lo: u32, hi: u32) u32 {
+    const mid = complexMedianOfThree(T, a, lo, hi);
+    const mid2 = @as(usize, mid) * 2;
+    const pivot_re = a[mid2];
+    const pivot_im = a[mid2 + 1];
+    var i: u32 = lo;
+    var j: u32 = hi;
+
+    while (true) {
+        // a[i] < pivot?
+        while (true) {
+            const ix2 = @as(usize, i) * 2;
+            const a_nan = (a[ix2] != a[ix2]) or (a[ix2 + 1] != a[ix2 + 1]);
+            const p_nan = (pivot_re != pivot_re) or (pivot_im != pivot_im);
+            const lt = if (a_nan) false else if (p_nan) true else if (a[ix2] < pivot_re) true else if (a[ix2] > pivot_re) false else a[ix2 + 1] < pivot_im;
+            if (!lt) break;
+            i += 1;
+        }
+        // pivot < a[j]?
+        while (true) {
+            const j2 = @as(usize, j) * 2;
+            const a_nan = (a[j2] != a[j2]) or (a[j2 + 1] != a[j2 + 1]);
+            const p_nan = (pivot_re != pivot_re) or (pivot_im != pivot_im);
+            const lt = if (p_nan) false else if (a_nan) true else if (pivot_re < a[j2]) true else if (pivot_re > a[j2]) false else pivot_im < a[j2 + 1];
+            if (!lt) break;
+            j -= 1;
+        }
+        if (i >= j) return j;
+        complexSwap(T, a, i, j);
+        i += 1;
+        j -= 1;
+    }
+}
+
+fn complexIntroSortImpl(comptime T: type, a: [*]T, lo_arg: u32, hi_arg: u32, depth: u32) void {
+    var lo = lo_arg;
+    var hi = hi_arg;
+    var d = depth;
+
+    while (hi > lo) {
+        const size = hi - lo + 1;
+        if (size <= 24) {
+            complexInsertionSort(T, a, lo, hi);
+            return;
+        }
+        if (d == 0) {
+            complexHeapSort(T, a + @as(usize, lo) * 2, size);
+            return;
+        }
+        d -= 1;
+
+        const p = complexHoarePartition(T, a, lo, hi);
+        if (p - lo < hi - p) {
+            complexIntroSortImpl(T, a, lo, p, d);
+            lo = p + 1;
+        } else {
+            complexIntroSortImpl(T, a, p + 1, hi, d);
+            hi = p;
+        }
+    }
+}
+
+/// In-place introsort for complex arrays. N = number of complex elements.
+pub fn complexIntroSort(comptime T: type, a: [*]T, N: u32) void {
+    if (N <= 1) return;
+    const depthLimit = 2 * floorLog2(N);
+    complexIntroSortImpl(T, a, 0, N - 1, depthLimit);
+}
+
+/// Batch complex introsort: sort numSlices contiguous slices.
+pub fn complexIntroSortSlices(comptime T: type, a: [*]T, sliceSize: u32, numSlices: u32) void {
+    var i: u32 = 0;
+    while (i < numSlices) : (i += 1) {
+        complexIntroSort(T, a + @as(usize, i) * @as(usize, sliceSize) * 2, sliceSize);
+    }
+}
+
 /// Heap sort for complex arrays. N = number of complex elements (buffer has 2*N floats).
 pub fn complexHeapSort(comptime T: type, a: [*]T, N: u32) void {
     if (N <= 1) return;
