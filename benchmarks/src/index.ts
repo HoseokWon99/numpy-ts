@@ -258,7 +258,6 @@ async function main() {
     ]);
     const validatableSpecs = specs.filter(
       (spec) =>
-        !Object.values(spec.setup).some((s) => s.dtype === 'int64' || s.dtype === 'uint64') &&
         spec.category !== 'io' &&
         !nonValidatableOperations.has(spec.operation)
     );
@@ -270,7 +269,7 @@ async function main() {
     const skippedCount = specs.length - validatableSpecs.length;
     if (skippedCount > 0) {
       console.log(
-        `Skipping validation for ${skippedCount} benchmarks (int64/uint64/IO/Complex linalg)\n`
+        `Skipping validation for ${skippedCount} benchmarks (IO/Complex linalg)\n`
       );
     }
 
