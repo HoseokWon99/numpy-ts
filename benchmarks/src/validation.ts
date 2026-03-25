@@ -750,11 +750,12 @@ function runNumpyTsOperation(spec: BenchmarkCase): any {
       return (result as { q: any }).q;
     }
     case 'linalg_cholesky': {
-      // Create positive definite matrix: A^T * A + n*I
+      // Create positive definite matrix: A^T * A + trace(A^T * A) * I
       const n = arrays.a.shape[0];
       const aT = arrays.a.transpose();
       const aTa = aT.matmul(arrays.a);
-      const posdef = aTa.add(np.eye(n).multiply(n));
+      const tr = np.trace(aTa);
+      const posdef = aTa.add(np.eye(n, undefined, 0, arrays.a.dtype).multiply(tr));
       return np.linalg.cholesky(posdef);
     }
     case 'linalg_svd': {

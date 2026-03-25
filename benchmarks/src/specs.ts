@@ -3804,7 +3804,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
 
   // Operations to skip for ALL auto dtype variants
   const SKIP_DTYPE_OPERATIONS = new Set([
-    'linalg_cholesky', // positive-definiteness lost in float32
+    // 'linalg_cholesky', // positive-definiteness lost in float32
     'linalg_eigh', // eigenvalue decomposition numerically sensitive
     'linalg_eigvalsh', // eigenvalue computation numerically sensitive
     'mod', // int overflow issues with narrow types

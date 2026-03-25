@@ -253,7 +253,8 @@ function executeOperation(operation: string, arrays: Record<string, any>): any {
     const n = a.shape[0];
     const aT = np.transpose(a);
     const aTa = np.matmul(aT, a);
-    const posdef = np.add(aTa, np.multiply(np.eye(n), n));
+    const tr = np.trace(aTa);
+    const posdef = np.add(aTa, np.multiply(np.eye(n, undefined, 0, a.dtype), tr));
     return np.linalg.cholesky(posdef);
   }
   if (operation === 'linalg_svd') return np.linalg.svd(arrays['a']);

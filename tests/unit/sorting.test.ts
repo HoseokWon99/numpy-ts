@@ -21,7 +21,6 @@ import {
   zeros,
   ones,
   Complex,
-  arange,
   reshape,
 } from '../../src';
 
@@ -213,7 +212,7 @@ describe('Sorting Functions', () => {
       // Verify result contains valid indices (0-4)
       const indices = result.toArray() as number[];
       expect(indices.length).toBe(5);
-      expect(indices.every(i => i >= 0 && i < 5)).toBe(true);
+      expect(indices.every((i) => i >= 0 && i < 5)).toBe(true);
     });
   });
 

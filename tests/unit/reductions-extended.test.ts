@@ -40,7 +40,6 @@ import {
   cumulative_prod,
   min,
   max,
-  arange,
   reshape,
   Complex,
 } from '../../src';
@@ -2068,7 +2067,16 @@ describe('Extended reduction tests', () => {
   // Multi-axis reductions (covers reduceMultiAxis + arrow callbacks)
   // ========================================
   describe('multi-axis reductions', () => {
-    const a3d = array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]);
+    const a3d = array([
+      [
+        [1, 2],
+        [3, 4],
+      ],
+      [
+        [5, 6],
+        [7, 8],
+      ],
+    ]);
 
     it('sum along [0,1]', () => {
       const r = sum(a3d, [0, 1] as any);
@@ -2214,7 +2222,13 @@ describe('Extended reduction tests', () => {
   // ========================================
   describe('large array reductions with keepdims', () => {
     // Use int32 so WASM strided kernels are available (float64 excluded from WASM max/min)
-    const big = reshape(array(Array.from({ length: 100 }, (_, i) => i), 'int32'), [10, 10]);
+    const big = reshape(
+      array(
+        Array.from({ length: 100 }, (_, i) => i),
+        'int32'
+      ),
+      [10, 10]
+    );
 
     it('sum with keepdims=true (WASM path)', () => {
       const r = sum(big, 0, true);

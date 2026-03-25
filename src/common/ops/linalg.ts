@@ -26,7 +26,7 @@ import { wasmVdotComplex } from '../wasm/vdot';
 import { wasmKron } from '../wasm/kron';
 import { wasmCross } from '../wasm/cross';
 import { wasmQr } from '../wasm/qr';
-import { wasmCholesky } from '../wasm/cholesky';
+import { wasmCholesky, wasmCholeskyF32 } from '../wasm/cholesky';
 import { wasmSvd } from '../wasm/svd';
 import * as shapeOps from './shape';
 import type { DType } from '../dtype';
@@ -3274,12 +3274,12 @@ export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage 
   }
 
   // WASM fast path
-  const wasmResult = wasmCholesky(a);
+  const wasmResult = a.dtype === 'float32' ? wasmCholeskyF32(a) : wasmCholesky(a);
   if (wasmResult) {
     if (upper) {
       // Transpose L to get U
       const size = m!;
-      const U = ArrayStorage.zeros([size, size], 'float64');
+      const U = ArrayStorage.zeros([size, size], wasmResult.dtype);
       for (let i = 0; i < size; i++) {
         for (let j = i; j < size; j++) {
           U.set([i, j], Number(wasmResult.get(j, i)));
