@@ -141,7 +141,7 @@ export function pcg64BoundedUint64(off: number, rng: number): bigint {
 }
 
 export function pcg64SaveState(): BigUint64Array {
-  return bulkFill(6, BigUint64Array, (p, n) => pcg64_get_state(p));
+  return bulkFill(6, BigUint64Array, (p, _) => pcg64_get_state(p));
 }
 
 export function pcg64RestoreState(state: BigUint64Array): void {
@@ -168,7 +168,8 @@ export const wasmLegacyStandardGamma: (shape: number) => number = legacy_standar
 
 export const fillUniformF64MT = (n: number) => bulkFill(n, Float64Array, fill_uniform_f64_mt);
 export const fillUniformF64PCG = (n: number) => bulkFill(n, Float64Array, fill_uniform_f64_pcg);
-export const fillStandardNormalPCG = (n: number) => bulkFill(n, Float64Array, fill_standard_normal_pcg);
+export const fillStandardNormalPCG = (n: number) =>
+  bulkFill(n, Float64Array, fill_standard_normal_pcg);
 export const fillStandardExponentialPCG = (n: number) =>
   bulkFill(n, Float64Array, fill_standard_exponential_pcg);
 export const fillLegacyGauss = (n: number) => bulkFill(n, Float64Array, fill_legacy_gauss);
@@ -227,12 +228,8 @@ export const fillBinomial = (n: number, trials: number, p: number) =>
   bulkFill(n, BigInt64Array, (ptr, nn) => fill_binomial(ptr, nn, trials, p));
 export const fillNegativeBinomial = (n: number, nn2: number, p: number) =>
   bulkFill(n, BigInt64Array, (ptr, nn) => fill_negative_binomial(ptr, nn, nn2, p));
-export const fillHypergeometric = (
-  n: number,
-  ngood: number,
-  nbad: number,
-  nsample: number
-) => bulkFill(n, BigInt64Array, (ptr, nn) => fill_hypergeometric(ptr, nn, ngood, nbad, nsample));
+export const fillHypergeometric = (n: number, ngood: number, nbad: number, nsample: number) =>
+  bulkFill(n, BigInt64Array, (ptr, nn) => fill_hypergeometric(ptr, nn, ngood, nbad, nsample));
 export const fillLogseries = (n: number, p: number) =>
   bulkFill(n, BigInt64Array, (ptr, nn) => fill_logseries(ptr, nn, p));
 export const fillZipf = (n: number, a: number) =>

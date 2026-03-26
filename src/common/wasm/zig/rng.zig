@@ -8,8 +8,59 @@ const math = std.math;
 const zt = @import("ziggurat_tables.zig");
 
 // ============================================================================
-// MT19937 (Mersenne Twister)
+// MT19937 (Mersenne Twister) Engine
 // ============================================================================
+
+// -- Exports --
+
+/// Initialize MT19937 with a 32-bit seed.
+/// Populates the 624-element state array using the same linear recurrence as
+/// NumPy's `mt19937_seed` (multiplier 1812433253).
+export fn mt19937_init(seed_val: u32) void {
+    mt_initialized = true;
+    var s: u32 = seed_val;
+    var pos: u32 = 0;
+    while (pos < MT_N) : (pos += 1) {
+        mt_key[pos] = s;
+        s = @as(u32, @truncate(@as(u64, 1812433253) *% @as(u64, s ^ (s >> 30)) +% (pos + 1)));
+    }
+    mt_pos = MT_N;
+}
+
+/// Generate a single random u32 with tempering.
+/// Equivalent to NumPy's `mt19937_next` — draws from the MT state, twisting
+/// when the 624-word buffer is exhausted.
+export fn mt19937_genrand() u32 {
+    return mt19937_next();
+}
+
+/// Generate a float64 in [0, 1) with 53-bit precision.
+/// Combines two u32 draws (27 + 26 bits) exactly as NumPy's `mt19937_next_double`.
+export fn mt19937_random_f64() f64 {
+    const a: i32 = @bitCast(mt19937_next() >> 5); // 27 bits
+    const b: i32 = @bitCast(mt19937_next() >> 6); // 26 bits
+    return (@as(f64, @floatFromInt(a)) * 67108864.0 + @as(f64, @floatFromInt(b))) / 9007199254740992.0;
+}
+
+/// Copy the full 624-element MT19937 state into `out` and return the current
+/// position index. Used for state serialization / checkpointing.
+export fn mt19937_get_state(out: [*]u32) u32 {
+    for (0..MT_N) |i| {
+        out[i] = mt_key[i];
+    }
+    return mt_pos;
+}
+
+/// Restore MT19937 state from an external 624-element array and position index.
+/// Counterpart to `mt19937_get_state` for deserialization.
+export fn mt19937_set_state(state: [*]const u32, index: u32) void {
+    for (0..MT_N) |i| {
+        mt_key[i] = state[i];
+    }
+    mt_pos = index;
+}
+
+// -- Constants & State --
 
 const MT_N: u32 = 624;
 const MT_M: u32 = 397;
@@ -21,20 +72,9 @@ var mt_key: [MT_N]u32 = [_]u32{0} ** MT_N;
 var mt_pos: u32 = MT_N + 1;
 var mt_initialized: bool = false;
 
-/// Initialize MT19937 with a seed (matches NumPy's mt19937_seed exactly).
-export fn mt19937_init(seed_val: u32) void {
-    mt_initialized = true;
-    var s: u32 = seed_val;
-    var pos: u32 = 0;
-    while (pos < MT_N) : (pos += 1) {
-        mt_key[pos] = s;
-        // s = (1812433253 * (s ^ (s >> 30)) + pos + 1) & 0xffffffff
-        s = @as(u32, @truncate(@as(u64, 1812433253) *% @as(u64, s ^ (s >> 30)) +% (pos + 1)));
-    }
-    mt_pos = MT_N;
-}
+// -- Internal --
 
-/// Generate (twist) the next 624 values.
+/// Twist: regenerate the next 624 values in the state array.
 fn mt19937_gen() void {
     var i: u32 = 0;
     while (i < MT_N - MT_M) : (i += 1) {
@@ -50,11 +90,11 @@ fn mt19937_gen() void {
     mt_pos = 0;
 }
 
-/// Generate next u32 with tempering (matches NumPy's mt19937_next).
+/// Draw and temper the next u32 from the MT state.
+/// Auto-seeds with 5489 if never initialized (matches NumPy legacy default).
 fn mt19937_next() u32 {
     if (mt_pos >= MT_N) {
         if (!mt_initialized) {
-            // Auto-seed with default value (matches NumPy's legacy behavior)
             mt19937_init(5489);
         }
         mt19937_gen();
@@ -70,63 +110,18 @@ fn mt19937_next() u32 {
     return y;
 }
 
-/// Generate u32 (exported for external use).
-export fn mt19937_genrand() u32 {
-    return mt19937_next();
-}
-
-/// Generate float64 in [0, 1) with 53-bit precision (matches NumPy's mt19937_next_double).
-export fn mt19937_random_f64() f64 {
-    const a: i32 = @bitCast(mt19937_next() >> 5); // 27 bits
-    const b: i32 = @bitCast(mt19937_next() >> 6); // 26 bits
-    return (@as(f64, @floatFromInt(a)) * 67108864.0 + @as(f64, @floatFromInt(b))) / 9007199254740992.0;
-}
-
-/// Get MT19937 state: copies 624 u32 values to out, returns current position.
-export fn mt19937_get_state(out: [*]u32) u32 {
-    for (0..MT_N) |i| {
-        out[i] = mt_key[i];
-    }
-    return mt_pos;
-}
-
-/// Set MT19937 state from external data.
-export fn mt19937_set_state(state: [*]const u32, index: u32) void {
-    for (0..MT_N) |i| {
-        mt_key[i] = state[i];
-    }
-    mt_pos = index;
-}
-
 // ============================================================================
 // SeedSequence (NumPy's seed expansion algorithm)
 // ============================================================================
 
-const SS_MULT_A: u32 = 0x931e8875;
-const SS_MULT_B: u32 = 0x58f38ded;
-const SS_INIT_A: u32 = 0x43b0d7e5;
-const SS_INIT_B: u32 = 0x8b51f9dd;
-const SS_MIX_MULT_L: u32 = 0xca01f9dd;
-const SS_MIX_MULT_R: u32 = 0x4973f715;
-const SS_XSHIFT: u5 = 16;
-const SS_POOL_SIZE: u32 = 4;
+// -- Exports --
 
-fn ss_hashmix(value: u32, hash_const: *u32) u32 {
-    var v = value ^ hash_const.*;
-    hash_const.* = hash_const.* *% SS_MULT_A;
-    v = v *% hash_const.*;
-    v = v ^ (v >> SS_XSHIFT);
-    return v;
-}
-
-fn ss_mix(x: u32, y: u32) u32 {
-    var result = (SS_MIX_MULT_L *% x) -% (SS_MIX_MULT_R *% y);
-    result = result ^ (result >> SS_XSHIFT);
-    return result;
-}
-
-/// Run SeedSequence: expand a single u32 seed into n_words output u32s.
-/// Writes result to out_ptr. Matches NumPy's SeedSequence exactly.
+/// Expand a single u32 seed into `n_words` output u32s using NumPy's
+/// SeedSequence algorithm. The result in `out_ptr` is suitable for
+/// initializing bit generators like PCG64 (which needs 8 words).
+///
+/// Implements the three-phase algorithm: initial hash mixing into a 4-word
+/// pool, cross-mixing, then output generation with a separate multiplier.
 export fn seed_sequence(seed: u32, out_ptr: [*]u32, n_words: u32) void {
     var mixer: [SS_POOL_SIZE]u32 = undefined;
     var hash_const: u32 = SS_INIT_A;
@@ -147,7 +142,7 @@ export fn seed_sequence(seed: u32, out_ptr: [*]u32, n_words: u32) void {
         }
     }
 
-    // Generate state using MULT_B (not MULT_A)
+    // Phase 3: generate output using MULT_B
     var hc: u32 = SS_INIT_B;
     for (0..n_words) |i| {
         const data_val = mixer[i % SS_POOL_SIZE];
@@ -159,38 +154,43 @@ export fn seed_sequence(seed: u32, out_ptr: [*]u32, n_words: u32) void {
     }
 }
 
+// -- Constants --
+
+const SS_MULT_A: u32 = 0x931e8875;
+const SS_MULT_B: u32 = 0x58f38ded;
+const SS_INIT_A: u32 = 0x43b0d7e5;
+const SS_INIT_B: u32 = 0x8b51f9dd;
+const SS_MIX_MULT_L: u32 = 0xca01f9dd;
+const SS_MIX_MULT_R: u32 = 0x4973f715;
+const SS_XSHIFT: u5 = 16;
+const SS_POOL_SIZE: u32 = 4;
+
+// -- Internal --
+
+fn ss_hashmix(value: u32, hash_const: *u32) u32 {
+    var v = value ^ hash_const.*;
+    hash_const.* = hash_const.* *% SS_MULT_A;
+    v = v *% hash_const.*;
+    v = v ^ (v >> SS_XSHIFT);
+    return v;
+}
+
+fn ss_mix(x: u32, y: u32) u32 {
+    var result = (SS_MIX_MULT_L *% x) -% (SS_MIX_MULT_R *% y);
+    result = result ^ (result >> SS_XSHIFT);
+    return result;
+}
+
 // ============================================================================
 // PCG64 (XSL-RR 128/64 variant)
 // ============================================================================
 
-const PCG64_MULT: u128 = (@as(u128, 2549297995355413924) << 64) | 4865540595714422341;
-
-var pcg_state: u128 = 0;
-var pcg_inc: u128 = 0;
-var pcg_has_uint32: bool = false;
-var pcg_uinteger: u32 = 0;
-
-fn pcg64_step_internal() void {
-    pcg_state = pcg_state *% PCG64_MULT +% pcg_inc;
-}
-
-fn pcg64_output(state: u128) u64 {
-    const hi: u64 = @truncate(state >> 64);
-    const lo: u64 = @truncate(state);
-    const xored = hi ^ lo;
-    const rot: u6 = @truncate(state >> 122);
-    return math.rotr(u64, xored, rot);
-}
-
-/// Combine 2 u32 values into a u64 (little-endian: lo + hi<<32).
-fn combine_u32_to_u64(lo: u32, hi: u32) u64 {
-    return @as(u64, lo) | (@as(u64, hi) << 32);
-}
+// -- Exports --
 
 /// Initialize PCG64 from SeedSequence output (8 u32 words).
-/// This avoids JS number precision loss by keeping all combining in Zig.
-/// Words layout matches NumPy: [s0_lo, s0_hi, s1_lo, s1_hi, s2_lo, s2_hi, s3_lo, s3_hi]
-/// initState = (s0 << 64) | s1, initSeq = (s2 << 64) | s3
+/// Keeps all 64-bit combining in Zig to avoid JS number precision loss.
+/// Word layout matches NumPy: [s0_lo, s0_hi, s1_lo, s1_hi, s2_lo, s2_hi, s3_lo, s3_hi]
+/// where initState = (s0 << 64) | s1, initSeq = (s2 << 64) | s3.
 export fn pcg64_init_from_ss(words: [*]const u32) void {
     const s0 = combine_u32_to_u64(words[0], words[1]);
     const s1 = combine_u32_to_u64(words[2], words[3]);
@@ -203,43 +203,116 @@ export fn pcg64_init_from_ss(words: [*]const u32) void {
     pcg64_init_raw(init_state, init_seq);
 }
 
-/// Raw PCG64 init from 128-bit state and sequence.
-fn pcg64_init_raw(init_state: u128, init_seq: u128) void {
-    // Matches NumPy: inc = (initseq << 1) | 1
-    pcg_inc = (init_seq << 1) | 1;
-    pcg_state = 0;
-    pcg_has_uint32 = false;
-    pcg_uinteger = 0;
-
-    // Bump 1
-    pcg64_step_internal();
-    // Add init_state
-    pcg_state +%= init_state;
-    // Bump 2
-    pcg64_step_internal();
-}
-
-/// Initialize PCG64 with pre-computed state and increment (as two u64 pairs).
-/// Performs the 2-bump seeded initialization matching NumPy's pcg_setseq_128_srandom_r.
+/// Initialize PCG64 with pre-computed 128-bit state and increment, passed as
+/// two u64 pairs. Performs the 2-bump seeded initialization matching
+/// NumPy's `pcg_setseq_128_srandom_r`.
 export fn pcg64_init(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
     const init_state: u128 = (@as(u128, state_hi) << 64) | @as(u128, state_lo);
     const init_seq: u128 = (@as(u128, inc_hi) << 64) | @as(u128, inc_lo);
     pcg64_init_raw(init_state, init_seq);
 }
 
-/// PCG64 next u64: advance-then-output (XSL-RR), matching NumPy's pcg64_random_r.
+/// Advance the PCG64 state and return the next u64 (XSL-RR output function).
+/// Matches NumPy's `pcg64_random_r`.
 export fn pcg64_step() u64 {
     pcg64_step_internal();
     return pcg64_output(pcg_state);
 }
 
-/// Generate float64 in [0, 1) with 53-bit precision.
+/// Generate a float64 in [0, 1) with 53-bit precision from PCG64.
+/// Drops the low 11 bits of the u64 and divides by 2^53.
 export fn pcg64_random_f64() f64 {
     return @as(f64, @floatFromInt(pcg64_step() >> 11)) / 9007199254740992.0;
 }
 
-/// PCG64 next_uint32 with buffering (matches NumPy's pcg64_next32).
-/// Returns lower 32 bits first, caches upper 32 bits.
+/// Return a random integer in [off, off + rng] inclusive.
+/// Dispatches to 32-bit or 64-bit Lemire rejection depending on range size.
+/// Matches NumPy's `random_bounded_uint64` (use_masked=false).
+export fn pcg64_bounded_uint64(off: u64, rng: u64) u64 {
+    if (rng == 0) {
+        return off;
+    } else if (rng <= 0xFFFFFFFF) {
+        if (rng == 0xFFFFFFFF) {
+            return off + @as(u64, pcg64_next_uint32());
+        }
+        return off + @as(u64, bounded_lemire_uint32(@truncate(rng)));
+    } else {
+        return off + bounded_lemire_uint64(rng);
+    }
+}
+
+/// Serialize PCG64 state to 6 u64 values:
+/// [state_lo, state_hi, inc_lo, inc_hi, has_uint32, cached_uinteger].
+export fn pcg64_get_state(out: [*]u64) void {
+    out[0] = @truncate(pcg_state);
+    out[1] = @truncate(pcg_state >> 64);
+    out[2] = @truncate(pcg_inc);
+    out[3] = @truncate(pcg_inc >> 64);
+    out[4] = if (pcg_has_uint32) 1 else 0;
+    out[5] = @as(u64, pcg_uinteger);
+}
+
+/// Set PCG64 state directly from u64 pairs (no initialization bumps).
+/// Use this to restore a previously serialized state mid-stream.
+export fn pcg64_set_state(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
+    pcg_state = (@as(u128, state_hi) << 64) | @as(u128, state_lo);
+    pcg_inc = (@as(u128, inc_hi) << 64) | @as(u128, inc_lo);
+}
+
+/// Set PCG64 state from a pointer to 6 u64 values (avoids JS BigInt precision loss).
+/// Layout: [state_lo, state_hi, inc_lo, inc_hi, has_uint32, cached_uinteger].
+export fn pcg64_set_state_ptr(data: [*]const u64) void {
+    pcg_state = (@as(u128, data[1]) << 64) | @as(u128, data[0]);
+    pcg_inc = (@as(u128, data[3]) << 64) | @as(u128, data[2]);
+    pcg_has_uint32 = data[4] != 0;
+    pcg_uinteger = @truncate(data[5]);
+}
+
+// -- Constants & State --
+
+const PCG64_MULT: u128 = (@as(u128, 2549297995355413924) << 64) | 4865540595714422341;
+
+var pcg_state: u128 = 0;
+var pcg_inc: u128 = 0;
+var pcg_has_uint32: bool = false;
+var pcg_uinteger: u32 = 0;
+
+// -- Internal --
+
+/// Single LCG step: state = state * MULT + inc.
+fn pcg64_step_internal() void {
+    pcg_state = pcg_state *% PCG64_MULT +% pcg_inc;
+}
+
+/// XSL-RR output permutation: XOR high and low halves, then rotate.
+fn pcg64_output(state: u128) u64 {
+    const hi: u64 = @truncate(state >> 64);
+    const lo: u64 = @truncate(state);
+    const xored = hi ^ lo;
+    const rot: u6 = @truncate(state >> 122);
+    return math.rotr(u64, xored, rot);
+}
+
+/// Combine two u32 values into a u64 (little-endian: lo + hi<<32).
+fn combine_u32_to_u64(lo: u32, hi: u32) u64 {
+    return @as(u64, lo) | (@as(u64, hi) << 32);
+}
+
+/// 2-bump seeded initialization matching NumPy's pcg64 seeding.
+/// inc = (initseq << 1) | 1, then two LCG steps with state addition between.
+fn pcg64_init_raw(init_state: u128, init_seq: u128) void {
+    pcg_inc = (init_seq << 1) | 1;
+    pcg_state = 0;
+    pcg_has_uint32 = false;
+    pcg_uinteger = 0;
+
+    pcg64_step_internal();
+    pcg_state +%= init_state;
+    pcg64_step_internal();
+}
+
+/// Buffered u32 from PCG64: returns lower 32 bits first, caches upper 32 bits.
+/// Matches NumPy's `pcg64_next32`.
 fn pcg64_next_uint32() u32 {
     if (pcg_has_uint32) {
         pcg_has_uint32 = false;
@@ -251,7 +324,7 @@ fn pcg64_next_uint32() u32 {
     return @truncate(next);
 }
 
-/// Lemire's bounded uint32 rejection sampling (matches NumPy's buffered_bounded_lemire_uint32).
+/// Lemire's nearly-divisionless bounded u32 rejection sampling.
 /// `rng` is the inclusive max (range - 1). Must not be 0xFFFFFFFF.
 fn bounded_lemire_uint32(rng: u32) u32 {
     const rng_excl: u64 = @as(u64, rng) + 1;
@@ -270,28 +343,11 @@ fn bounded_lemire_uint32(rng: u32) u32 {
     return @truncate(m >> 32);
 }
 
-/// Bounded uint64 matching NumPy's random_bounded_uint64 (use_masked=false, Lemire).
-/// Returns a random integer in [off, off + rng] inclusive.
-export fn pcg64_bounded_uint64(off: u64, rng: u64) u64 {
-    if (rng == 0) {
-        return off;
-    } else if (rng <= 0xFFFFFFFF) {
-        if (rng == 0xFFFFFFFF) {
-            return off + @as(u64, pcg64_next_uint32());
-        }
-        return off + @as(u64, bounded_lemire_uint32(@truncate(rng)));
-    } else {
-        // 64-bit Lemire for large ranges
-        return off + bounded_lemire_uint64(rng);
-    }
-}
-
-/// 64-bit Lemire rejection for ranges > 2^32.
+/// Lemire's bounded u64 rejection for ranges > 2^32.
 fn bounded_lemire_uint64(rng: u64) u64 {
     const rng_excl: u64 = rng +% 1;
 
     var x: u64 = pcg64_step();
-    // 128-bit multiply: m = x * rng_excl
     var m: u128 = @as(u128, x) * @as(u128, rng_excl);
     var leftover: u64 = @truncate(m);
 
@@ -307,37 +363,41 @@ fn bounded_lemire_uint64(rng: u64) u64 {
     return @truncate(m >> 64);
 }
 
-/// Get PCG64 state: 4 u64 values + has_uint32 flag + cached uint32.
-/// Layout: [state_lo, state_hi, inc_lo, inc_hi, has_uint32, uinteger]
-export fn pcg64_get_state(out: [*]u64) void {
-    out[0] = @truncate(pcg_state);
-    out[1] = @truncate(pcg_state >> 64);
-    out[2] = @truncate(pcg_inc);
-    out[3] = @truncate(pcg_inc >> 64);
-    out[4] = if (pcg_has_uint32) 1 else 0;
-    out[5] = @as(u64, pcg_uinteger);
-}
-
-/// Set PCG64 state directly (no initialization bumps).
-export fn pcg64_set_state(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
-    pcg_state = (@as(u128, state_hi) << 64) | @as(u128, state_lo);
-    pcg_inc = (@as(u128, inc_hi) << 64) | @as(u128, inc_lo);
-}
-
-/// Set PCG64 state from a pointer to 6 u64 values (avoids JS number precision loss).
-/// Layout: [state_lo, state_hi, inc_lo, inc_hi, has_uint32, uinteger]
-export fn pcg64_set_state_ptr(data: [*]const u64) void {
-    pcg_state = (@as(u128, data[1]) << 64) | @as(u128, data[0]);
-    pcg_inc = (@as(u128, data[3]) << 64) | @as(u128, data[2]);
-    pcg_has_uint32 = data[4] != 0;
-    pcg_uinteger = @truncate(data[5]);
-}
-
 // ============================================================================
-// Ziggurat distributions (matching NumPy exactly)
+// Ziggurat Distributions (Standard Normal & Exponential)
 // ============================================================================
 
-// Helper: next_double for each generator type
+// -- Exports --
+
+/// Draw a single standard normal variate using the Ziggurat method with PCG64.
+/// Matches NumPy's `random_standard_normal` from the Generator API.
+export fn standard_normal_pcg() f64 {
+    return standard_normal_impl(.pcg);
+}
+
+/// Draw a single standard exponential variate using the Ziggurat method with PCG64.
+/// Matches NumPy's `random_standard_exponential` from the Generator API.
+export fn standard_exponential_pcg() f64 {
+    return standard_exponential_impl(.pcg);
+}
+
+/// Fill `out[0..n]` with standard normal variates (PCG64 + Ziggurat).
+export fn fill_standard_normal_pcg(out: [*]f64, n: u32) void {
+    for (0..n) |i| {
+        out[i] = standard_normal_impl(.pcg);
+    }
+}
+
+/// Fill `out[0..n]` with standard exponential variates (PCG64 + Ziggurat).
+export fn fill_standard_exponential_pcg(out: [*]f64, n: u32) void {
+    for (0..n) |i| {
+        out[i] = standard_exponential_impl(.pcg);
+    }
+}
+
+// -- Internal --
+
+/// Selects which engine to use for the generic distribution implementations.
 const GenType = enum(u8) { mt = 0, pcg = 1 };
 
 fn next_u64(gen: GenType) u64 {
@@ -351,7 +411,9 @@ fn next_double(gen: GenType) f64 {
     return @as(f64, @floatFromInt(next_u64(gen) >> 11)) / 9007199254740992.0;
 }
 
-/// Standard normal using Ziggurat method (matches NumPy's random_standard_normal).
+/// Ziggurat algorithm for standard normal. 99.3% of draws take the fast path
+/// (single compare against the rectangle boundary). Tail sampling uses the
+/// standard rejection method with exponential proposals.
 fn standard_normal_impl(gen: GenType) f64 {
     while (true) {
         const r = next_u64(gen);
@@ -368,7 +430,6 @@ fn standard_normal_impl(gen: GenType) f64 {
         if (idx == 0) {
             // Tail sampling
             while (true) {
-                // Use 1.0 - U to avoid log(0.0)
                 const xx = -zt.ziggurat_nor_inv_r * math.log1p(-next_double(gen));
                 const yy = -math.log1p(-next_double(gen));
                 if (yy + yy > xx * xx) {
@@ -386,7 +447,7 @@ fn standard_normal_impl(gen: GenType) f64 {
     }
 }
 
-/// Standard exponential using Ziggurat method (matches NumPy's random_standard_exponential).
+/// Ziggurat algorithm for standard exponential. 98.9% fast path.
 fn standard_exponential_impl(gen: GenType) f64 {
     while (true) {
         var ri = next_u64(gen);
@@ -408,15 +469,74 @@ fn standard_exponential_impl(gen: GenType) f64 {
 }
 
 // ============================================================================
-// Legacy distributions (polar method for normal, -log(1-U) for exponential)
-// Matches NumPy's RandomState (legacy API) exactly.
+// Legacy Distributions (MT19937-based, matching NumPy's RandomState API)
 // ============================================================================
+
+// -- Exports --
+
+/// Draw a single standard normal using the polar (Box-Muller) method.
+/// Matches NumPy's `legacy_gauss` / `rk_gauss` — produces values in pairs and
+/// caches the second value for the next call.
+export fn legacy_gauss() f64 {
+    return legacy_gauss_impl();
+}
+
+/// Draw a single standard exponential: -log(1 - U).
+/// Matches NumPy's legacy `rk_standard_exponential`.
+export fn legacy_standard_exponential() f64 {
+    return legacy_standard_exponential_impl();
+}
+
+/// Reset the legacy Gauss cache. Must be called when re-seeding MT19937 to
+/// avoid stale cached values contaminating the new stream.
+export fn legacy_gauss_reset() void {
+    legacy_has_gauss = false;
+    legacy_gauss_cached = 0.0;
+}
+
+/// Fill `out[0..n]` with legacy standard normal variates (MT19937 + polar method).
+export fn fill_legacy_gauss(out: [*]f64, n: u32) void {
+    for (0..n) |i| {
+        out[i] = legacy_gauss_impl();
+    }
+}
+
+/// Fill `out[0..n]` with legacy standard exponential variates (MT19937).
+export fn fill_legacy_standard_exponential(out: [*]f64, n: u32) void {
+    for (0..n) |i| {
+        out[i] = legacy_standard_exponential_impl();
+    }
+}
+
+/// Draw a single legacy standard gamma variate.
+/// Marsaglia & Tsang for shape >= 1, rejection for shape < 1.
+export fn legacy_standard_gamma(shape: f64) f64 {
+    return legacy_standard_gamma_impl(shape);
+}
+
+/// Fill `out[0..n]` with legacy standard gamma variates with given shape.
+export fn fill_legacy_standard_gamma(out: [*]f64, n: u32, shape: f64) void {
+    for (0..n) |i| {
+        out[i] = legacy_standard_gamma_impl(shape);
+    }
+}
+
+/// Fill `out[0..n]` with legacy chi-square variates: 2 * Gamma(df/2).
+export fn fill_legacy_chisquare(out: [*]f64, n: u32, df: f64) void {
+    const half_df = df / 2.0;
+    for (0..n) |i| {
+        out[i] = 2.0 * legacy_standard_gamma_impl(half_df);
+    }
+}
+
+// -- State --
 
 var legacy_has_gauss: bool = false;
 var legacy_gauss_cached: f64 = 0.0;
 
-/// Legacy standard normal using polar (Box-Muller) method with caching.
-/// Matches NumPy's legacy_gauss / rk_gauss exactly.
+// -- Internal --
+
+/// Polar (Box-Muller) method with caching for legacy standard normal.
 fn legacy_gauss_impl() f64 {
     if (legacy_has_gauss) {
         const temp = legacy_gauss_cached;
@@ -441,79 +561,80 @@ fn legacy_gauss_impl() f64 {
     return f * x2;
 }
 
-/// Legacy standard exponential: -log(1-U)
+/// Legacy standard exponential: -log(1 - U).
 fn legacy_standard_exponential_impl() f64 {
     return -@log(1.0 - mt19937_random_f64());
 }
 
-export fn legacy_gauss() f64 {
-    return legacy_gauss_impl();
-}
-
-export fn legacy_standard_exponential() f64 {
-    return legacy_standard_exponential_impl();
-}
-
-/// Reset the legacy gauss cache (needed when re-seeding).
-export fn legacy_gauss_reset() void {
-    legacy_has_gauss = false;
-    legacy_gauss_cached = 0.0;
-}
-
-export fn fill_legacy_gauss(out: [*]f64, n: u32) void {
-    for (0..n) |i| {
-        out[i] = legacy_gauss_impl();
+/// Legacy standard gamma using Marsaglia & Tsang (shape >= 1) or rejection (shape < 1).
+fn legacy_standard_gamma_impl(shape: f64) f64 {
+    if (shape == 1.0) {
+        return legacy_standard_exponential_impl();
+    } else if (shape == 0.0) {
+        return 0.0;
+    } else if (shape < 1.0) {
+        while (true) {
+            const U = mt19937_random_f64();
+            const V = legacy_standard_exponential_impl();
+            if (U <= 1.0 - shape) {
+                const X = math.pow(f64, U, 1.0 / shape);
+                if (X <= V) return X;
+            } else {
+                const Y = -@log((1.0 - U) / shape);
+                const X = math.pow(f64, 1.0 - shape + shape * Y, 1.0 / shape);
+                if (X <= V + Y) return X;
+            }
+        }
+    } else {
+        const b = shape - 1.0 / 3.0;
+        const c = 1.0 / @sqrt(9.0 * b);
+        while (true) {
+            var X: f64 = undefined;
+            var V: f64 = undefined;
+            while (true) {
+                X = legacy_gauss_impl();
+                V = 1.0 + c * X;
+                if (V > 0.0) break;
+            }
+            V = V * V * V;
+            const U = mt19937_random_f64();
+            if (U < 1.0 - 0.0331 * (X * X) * (X * X)) return b * V;
+            if (@log(U) < 0.5 * X * X + b * (1.0 - V + @log(V))) return b * V;
+        }
     }
 }
 
-export fn fill_legacy_standard_exponential(out: [*]f64, n: u32) void {
-    for (0..n) |i| {
-        out[i] = legacy_standard_exponential_impl();
-    }
+/// Legacy chi-square: 2 * Gamma(df/2).
+fn legacy_chisquare_impl(df: f64) f64 {
+    return 2.0 * legacy_standard_gamma_impl(df / 2.0);
 }
 
-// --- Exported distribution functions (separate _mt/_pcg to avoid branching) ---
+// ============================================================================
+// Bulk Uniform Fill
+// ============================================================================
 
-export fn standard_normal_pcg() f64 {
-    return standard_normal_impl(.pcg);
-}
-
-export fn standard_exponential_pcg() f64 {
-    return standard_exponential_impl(.pcg);
-}
-
-// --- Bulk fill functions ---
-
+/// Fill `out[0..n]` with uniform f64 in [0, 1) using MT19937.
 export fn fill_uniform_f64_mt(out: [*]f64, n: u32) void {
     for (0..n) |i| {
         out[i] = mt19937_random_f64();
     }
 }
 
+/// Fill `out[0..n]` with uniform f64 in [0, 1) using PCG64.
 export fn fill_uniform_f64_pcg(out: [*]f64, n: u32) void {
     for (0..n) |i| {
         out[i] = pcg64_random_f64();
     }
 }
 
-export fn fill_standard_normal_pcg(out: [*]f64, n: u32) void {
-    for (0..n) |i| {
-        out[i] = standard_normal_impl(.pcg);
-    }
-}
-
-export fn fill_standard_exponential_pcg(out: [*]f64, n: u32) void {
-    for (0..n) |i| {
-        out[i] = standard_exponential_impl(.pcg);
-    }
-}
-
 // ============================================================================
-// Bulk optimized operations (avoid per-element JS↔WASM boundary)
+// Bounded Integer Generation
 // ============================================================================
 
-/// Bulk rk_interval: fill out[0..n] with bounded random u32 in [0, max] inclusive.
-/// Matches NumPy's rk_interval (rejection sampling with bitmask).
+// -- Exports --
+
+/// Fill `out[0..n]` with bounded random u32 in [0, max] inclusive using MT19937.
+/// Uses bitmask rejection sampling matching NumPy's `rk_interval`.
 export fn fill_rk_interval(out: [*]u32, n: u32, max: u32) void {
     if (max == 0) {
         for (0..n) |i| {
@@ -538,8 +659,9 @@ export fn fill_rk_interval(out: [*]u32, n: u32, max: u32) void {
     }
 }
 
-/// Buffered bounded masked uint8 fill — matches NumPy's legacy randint for int8/uint8.
-/// Extracts 4 uint8 values from each mt19937_next() u32, with masked rejection.
+/// Fill `out[0..n]` with bounded random u8 in [off, off + rng_val] using MT19937.
+/// Extracts 4 bytes from each u32 draw for efficiency. Matches NumPy's legacy
+/// buffered bounded masked uint8 for randint with int8/uint8 dtype.
 export fn fill_randint_u8(out: [*]u8, n: u32, rng_val: u8, off: u8) void {
     if (rng_val == 0) {
         for (0..n) |i| {
@@ -560,7 +682,6 @@ export fn fill_randint_u8(out: [*]u8, n: u32, rng_val: u8, off: u8) void {
 
     for (0..n) |i| {
         while (true) {
-            // Buffered uint8: extract 4 bytes from one u32
             if (bcnt == 0) {
                 buf = mt19937_next();
                 bcnt = 3;
@@ -577,8 +698,9 @@ export fn fill_randint_u8(out: [*]u8, n: u32, rng_val: u8, off: u8) void {
     }
 }
 
-/// Buffered bounded masked uint16 fill — matches NumPy's legacy randint for int16/uint16.
-/// Extracts 2 uint16 values from each mt19937_next() u32, with masked rejection.
+/// Fill `out[0..n]` with bounded random u16 in [off, off + rng_val] using MT19937.
+/// Extracts 2 uint16 values from each u32 draw. Matches NumPy's legacy buffered
+/// bounded masked uint16 for randint with int16/uint16 dtype.
 export fn fill_randint_u16(out: [*]u16, n: u32, rng_val: u16, off: u16) void {
     if (rng_val == 0) {
         for (0..n) |i| {
@@ -616,101 +738,62 @@ export fn fill_randint_u16(out: [*]u16, n: u32, rng_val: u16, off: u16) void {
     }
 }
 
-/// Legacy standard gamma (Marsaglia & Tsang for shape >= 1, rejection for shape < 1).
-/// Matches NumPy's legacy_standard_gamma exactly.
-fn legacy_standard_gamma_impl(shape: f64) f64 {
-    if (shape == 1.0) {
-        return legacy_standard_exponential_impl();
-    } else if (shape == 0.0) {
-        return 0.0;
-    } else if (shape < 1.0) {
-        // Rejection method for shape < 1
-        while (true) {
-            const U = mt19937_random_f64();
-            const V = legacy_standard_exponential_impl();
-            if (U <= 1.0 - shape) {
-                const X = math.pow(f64, U, 1.0 / shape);
-                if (X <= V) return X;
-            } else {
-                const Y = -@log((1.0 - U) / shape);
-                const X = math.pow(f64, 1.0 - shape + shape * Y, 1.0 / shape);
-                if (X <= V + Y) return X;
-            }
+/// Fill `out[0..n]` with bounded random i64 in [low, low + max] using MT19937.
+/// Uses bitmask rejection (same as `fill_rk_interval`) then adds the `low` offset.
+/// Eliminates the JS BigInt conversion loop for randint.
+export fn fill_randint_i64(out: [*]i64, n: u32, max: u32, low: i64) void {
+    if (max == 0) {
+        for (0..n) |i| {
+            out[i] = low;
         }
-    } else {
-        // Marsaglia & Tsang method for shape >= 1
-        const b = shape - 1.0 / 3.0;
-        const c = 1.0 / @sqrt(9.0 * b);
-        while (true) {
-            var X: f64 = undefined;
-            var V: f64 = undefined;
-            while (true) {
-                X = legacy_gauss_impl();
-                V = 1.0 + c * X;
-                if (V > 0.0) break;
-            }
-            V = V * V * V;
-            const U = mt19937_random_f64();
-            if (U < 1.0 - 0.0331 * (X * X) * (X * X)) return b * V;
-            if (@log(U) < 0.5 * X * X + b * (1.0 - V + @log(V))) return b * V;
+        return;
+    }
+    var mask: u32 = max;
+    mask |= mask >> 1;
+    mask |= mask >> 2;
+    mask |= mask >> 4;
+    mask |= mask >> 8;
+    mask |= mask >> 16;
+
+    for (0..n) |i| {
+        var value: u32 = mt19937_next() & mask;
+        while (value > max) {
+            value = mt19937_next() & mask;
         }
-    }
-}
-
-export fn legacy_standard_gamma(shape: f64) f64 {
-    return legacy_standard_gamma_impl(shape);
-}
-
-export fn fill_legacy_standard_gamma(out: [*]f64, n: u32, shape: f64) void {
-    for (0..n) |i| {
-        out[i] = legacy_standard_gamma_impl(shape);
-    }
-}
-
-export fn fill_legacy_chisquare(out: [*]f64, n: u32, df: f64) void {
-    const half_df = df / 2.0;
-    for (0..n) |i| {
-        out[i] = 2.0 * legacy_standard_gamma_impl(half_df);
+        out[i] = @as(i64, value) + low;
     }
 }
 
 // ============================================================================
-// Additional legacy distributions
+// Continuous Distributions (all MT19937 legacy unless noted)
 // ============================================================================
 
-// --- Helper: legacy chisquare (inline) ---
-fn legacy_chisquare_impl(df: f64) f64 {
-    return 2.0 * legacy_standard_gamma_impl(df / 2.0);
-}
-
-// --- 1. Pareto ---
+/// Fill with Pareto variates: exp(Exp(1)/a) - 1.
 export fn fill_pareto(out: [*]f64, n: u32, a: f64) void {
     for (0..n) |i| {
         out[i] = @exp(legacy_standard_exponential_impl() / a) - 1.0;
     }
 }
 
-// --- 2. Power ---
+/// Fill with power-distribution variates: (1 - exp(-Exp(1)))^(1/a).
 export fn fill_power(out: [*]f64, n: u32, a: f64) void {
     for (0..n) |i| {
-        // pow(x, 1/a) = exp(log(x)/a) — avoids slow generic pow
         out[i] = @exp(@log(1.0 - @exp(-legacy_standard_exponential_impl())) / a);
     }
 }
 
-// --- 3. Weibull ---
+/// Fill with Weibull variates: Exp(1)^(1/a).
 export fn fill_weibull(out: [*]f64, n: u32, a: f64) void {
     for (0..n) |i| {
         if (a == 0.0) {
             out[i] = 0.0;
         } else {
-            // pow(x, 1/a) = exp(log(x)/a) — avoids slow generic pow
             out[i] = @exp(@log(legacy_standard_exponential_impl()) / a);
         }
     }
 }
 
-// --- 4. Logistic ---
+/// Fill with logistic variates: loc + scale * log(U / (1 - U)).
 export fn fill_logistic(out: [*]f64, n: u32, loc: f64, scale: f64) void {
     for (0..n) |i| {
         while (true) {
@@ -723,7 +806,7 @@ export fn fill_logistic(out: [*]f64, n: u32, loc: f64, scale: f64) void {
     }
 }
 
-// --- 5. Gumbel ---
+/// Fill with Gumbel (extreme value type I) variates: loc - scale * log(-log(1-U)).
 export fn fill_gumbel(out: [*]f64, n: u32, loc: f64, scale: f64) void {
     for (0..n) |i| {
         while (true) {
@@ -736,7 +819,7 @@ export fn fill_gumbel(out: [*]f64, n: u32, loc: f64, scale: f64) void {
     }
 }
 
-// --- 6. Laplace ---
+/// Fill with Laplace variates: loc +/- scale * log(2U) depending on sign of U - 0.5.
 export fn fill_laplace(out: [*]f64, n: u32, loc: f64, scale: f64) void {
     for (0..n) |i| {
         while (true) {
@@ -752,14 +835,15 @@ export fn fill_laplace(out: [*]f64, n: u32, loc: f64, scale: f64) void {
     }
 }
 
-// --- 7. Rayleigh ---
+/// Fill with Rayleigh variates: scale * sqrt(2 * Exp(1)).
 export fn fill_rayleigh(out: [*]f64, n: u32, scale: f64) void {
     for (0..n) |i| {
         out[i] = scale * @sqrt(2.0 * legacy_standard_exponential_impl());
     }
 }
 
-// --- 8. Triangular ---
+/// Fill with triangular distribution variates over [left, right] with given mode.
+/// Uses the inverse-CDF method with a uniform draw.
 export fn fill_triangular(out: [*]f64, n: u32, left: f64, mode: f64, right: f64) void {
     const base = right - left;
     const leftbase = mode - left;
@@ -776,21 +860,21 @@ export fn fill_triangular(out: [*]f64, n: u32, left: f64, mode: f64, right: f64)
     }
 }
 
-// --- 9. Standard Cauchy ---
+/// Fill with standard Cauchy variates: ratio of two independent normals.
 export fn fill_standard_cauchy(out: [*]f64, n: u32) void {
     for (0..n) |i| {
         out[i] = legacy_gauss_impl() / legacy_gauss_impl();
     }
 }
 
-// --- 10. Lognormal ---
+/// Fill with lognormal variates: exp(mean + sigma * N(0,1)).
 export fn fill_lognormal(out: [*]f64, n: u32, mean: f64, sigma: f64) void {
     for (0..n) |i| {
         out[i] = @exp(mean + sigma * legacy_gauss_impl());
     }
 }
 
-// --- 11. Wald (Inverse Gaussian) ---
+/// Fill with Wald (inverse Gaussian) variates using the Micheal/Schucany/Haas method.
 export fn fill_wald(out: [*]f64, n: u32, mean: f64, scale: f64) void {
     const mu_2l = mean / (2.0 * scale);
     for (0..n) |i| {
@@ -806,7 +890,7 @@ export fn fill_wald(out: [*]f64, n: u32, mean: f64, scale: f64) void {
     }
 }
 
-// --- 12. Standard t ---
+/// Fill with Student's t variates: N(0,1) * sqrt(df / Gamma(df/2)) / sqrt(Gamma(df/2)).
 export fn fill_standard_t(out: [*]f64, n: u32, df: f64) void {
     for (0..n) |i| {
         const num = legacy_gauss_impl();
@@ -815,7 +899,8 @@ export fn fill_standard_t(out: [*]f64, n: u32, df: f64) void {
     }
 }
 
-// --- 13. Beta ---
+/// Fill with Beta variates. Uses Johnk's algorithm when both a,b <= 1,
+/// otherwise the Gamma ratio method.
 export fn fill_beta(out: [*]f64, n: u32, a: f64, b: f64) void {
     for (0..n) |i| {
         if (a <= 1.0 and b <= 1.0) {
@@ -848,14 +933,204 @@ export fn fill_beta(out: [*]f64, n: u32, a: f64, b: f64) void {
     }
 }
 
-// --- 14. F ---
+/// Fill with F-distribution variates: (ChiSq(dfnum)/dfnum) / (ChiSq(dfden)/dfden).
 export fn fill_f(out: [*]f64, n: u32, dfnum: f64, dfden: f64) void {
     for (0..n) |i| {
         out[i] = (legacy_chisquare_impl(dfnum) * dfden) / (legacy_chisquare_impl(dfden) * dfnum);
     }
 }
 
-// --- Helper: Poisson (needed for noncentral_chisquare and negative_binomial) ---
+/// Fill with noncentral chi-square variates.
+/// Uses the decomposition: ChiSq(df-1) + (N(0,1) + sqrt(nonc))^2 when df > 1,
+/// or ChiSq(df + 2*Poisson(nonc/2)) otherwise.
+export fn fill_noncentral_chisquare(out: [*]f64, n: u32, df: f64, nonc: f64) void {
+    for (0..n) |i| {
+        out[i] = legacy_noncentral_chisquare_impl(df, nonc);
+    }
+}
+
+/// Fill with noncentral F variates: (NoncentralChiSq(dfnum,nonc)/dfnum) / (ChiSq(dfden)/dfden).
+export fn fill_noncentral_f(out: [*]f64, n: u32, dfnum: f64, dfden: f64, nonc: f64) void {
+    for (0..n) |i| {
+        const t = legacy_noncentral_chisquare_impl(dfnum, nonc) * dfden;
+        out[i] = t / (legacy_chisquare_impl(dfden) * dfnum);
+    }
+}
+
+/// Fill with von Mises (circular normal) variates with mean `mu` and
+/// concentration `kappa`. For very small kappa, falls back to uniform on (-pi, pi).
+export fn fill_vonmises(out: [*]f64, n: u32, mu: f64, kappa: f64) void {
+    for (0..n) |i| {
+        if (kappa < 1e-8) {
+            out[i] = math.pi * (2.0 * mt19937_random_f64() - 1.0);
+            continue;
+        }
+
+        var s: f64 = undefined;
+        if (kappa < 1e-5) {
+            s = 1.0 / kappa + kappa;
+        } else {
+            const r = 1.0 + @sqrt(1.0 + 4.0 * kappa * kappa);
+            const rho = (r - @sqrt(2.0 * r)) / (2.0 * kappa);
+            s = (1.0 + rho * rho) / (2.0 * rho);
+        }
+
+        var W: f64 = undefined;
+        while (true) {
+            const U = mt19937_random_f64();
+            const Z = @cos(math.pi * U);
+            W = (1.0 + s * Z) / (s + Z);
+            const Y = kappa * (s - W);
+            const V = mt19937_random_f64();
+            if ((Y * (2.0 - Y) - V >= 0.0) or (@log(Y / V) + 1.0 - Y >= 0.0)) {
+                break;
+            }
+        }
+
+        const U2 = mt19937_random_f64();
+        var result = math.acos(W);
+        if (U2 < 0.5) result = -result;
+        result += mu;
+        const neg = result < 0.0;
+        var mod_val = @abs(result);
+        mod_val = @mod(mod_val + math.pi, 2.0 * math.pi) - math.pi;
+        if (neg) mod_val = -mod_val;
+        out[i] = mod_val;
+    }
+}
+
+// -- Internal (continuous) --
+
+fn legacy_noncentral_chisquare_impl(df: f64, nonc: f64) f64 {
+    if (nonc == 0.0) {
+        return legacy_chisquare_impl(df);
+    }
+    if (1.0 < df) {
+        const Chi2 = legacy_chisquare_impl(df - 1.0);
+        const nn = legacy_gauss_impl() + @sqrt(nonc);
+        return Chi2 + nn * nn;
+    } else {
+        const i = random_poisson_impl(nonc / 2.0);
+        return legacy_chisquare_impl(df + 2.0 * @as(f64, @floatFromInt(i)));
+    }
+}
+
+// ============================================================================
+// Discrete Distributions (all MT19937 legacy)
+// ============================================================================
+
+// -- Exports --
+
+/// Fill with Poisson variates. Uses multiplication method for lam < 10,
+/// PTRS (transformed rejection with squeeze) for lam >= 10.
+export fn fill_poisson(out: [*]i64, n: u32, lam: f64) void {
+    for (0..n) |i| {
+        out[i] = random_poisson_impl(lam);
+    }
+}
+
+/// Fill with binomial variates. Dispatches to inversion (n*p <= 30) or
+/// BTPE algorithm (n*p > 30) after folding p > 0.5 to 1-p.
+export fn fill_binomial(out: [*]i64, n: u32, trials: i64, p: f64) void {
+    for (0..n) |i| {
+        out[i] = legacy_random_binomial_original(p, trials);
+    }
+}
+
+/// Fill with negative binomial variates: Poisson(Gamma(n, (1-p)/p)).
+export fn fill_negative_binomial(out: [*]i64, n: u32, nn: f64, p: f64) void {
+    for (0..n) |i| {
+        const Y = legacy_standard_gamma_impl(nn) * ((1.0 - p) / p);
+        out[i] = random_poisson_impl(Y);
+    }
+}
+
+/// Fill with geometric variates. Uses search for p >= 1/3, inversion otherwise.
+export fn fill_geometric(out: [*]i64, n: u32, p: f64) void {
+    for (0..n) |i| {
+        if (p >= 0.333333333333333333333333) {
+            out[i] = random_geometric_search_impl(p);
+        } else {
+            out[i] = legacy_geometric_inversion_impl(p);
+        }
+    }
+}
+
+/// Fill with hypergeometric variates. Uses the simple HYP algorithm for
+/// sample <= 10, or the ratio-of-uniforms HRUA algorithm for larger samples.
+export fn fill_hypergeometric(out: [*]i64, n: u32, good: i64, bad: i64, sample: i64) void {
+    for (0..n) |i| {
+        if (sample > 10) {
+            out[i] = random_hypergeometric_hrua(good, bad, sample);
+        } else if (sample > 0) {
+            out[i] = random_hypergeometric_hyp(good, bad, sample);
+        } else {
+            out[i] = 0;
+        }
+    }
+}
+
+/// Fill with logarithmic series variates using the rejection method.
+export fn fill_logseries(out: [*]i64, n: u32, p: f64) void {
+    const r = math.log1p(-p);
+    for (0..n) |i| {
+        while (true) {
+            const V = mt19937_random_f64();
+            if (V >= p) {
+                out[i] = 1;
+                break;
+            }
+            const U = mt19937_random_f64();
+            const q = -math.expm1(r * U);
+            if (V <= q * q) {
+                const result: i64 = @intFromFloat(@floor(1.0 + @log(V) / @log(q)));
+                if (result < 1 or V == 0.0) continue;
+                out[i] = result;
+                break;
+            }
+            if (V >= q) {
+                out[i] = 1;
+                break;
+            }
+            out[i] = 2;
+            break;
+        }
+    }
+}
+
+/// Fill with Zipf (zeta) variates using rejection.
+export fn fill_zipf(out: [*]i64, n: u32, a: f64) void {
+    const am1 = a - 1.0;
+    const b = math.pow(f64, 2.0, am1);
+    for (0..n) |i| {
+        while (true) {
+            const U = 1.0 - mt19937_random_f64();
+            const V = mt19937_random_f64();
+            const X = @floor(math.pow(f64, U, -1.0 / am1));
+            if (X > 9007199254740992.0 or X < 1.0) continue;
+            const T = math.pow(f64, 1.0 + 1.0 / X, am1);
+            if (V * X * (T - 1.0) / (b - 1.0) <= T / b) {
+                out[i] = @intFromFloat(X);
+                break;
+            }
+        }
+    }
+}
+
+// -- Internal (discrete) --
+
+/// Poisson dispatch: PTRS for lam >= 10, multiplication method for small lam.
+fn random_poisson_impl(lam: f64) i64 {
+    if (lam >= 10.0) {
+        return random_poisson_ptrs_impl(lam);
+    } else if (lam == 0.0) {
+        return 0;
+    } else {
+        return random_poisson_mult_impl(lam);
+    }
+}
+
+/// Poisson via multiplication of uniform draws (small lambda).
 fn random_poisson_mult_impl(lam: f64) i64 {
     const enlam = @exp(-lam);
     var X: i64 = 0;
@@ -871,10 +1146,10 @@ fn random_poisson_mult_impl(lam: f64) i64 {
     }
 }
 
-// log-gamma for poisson PTRS
 const LS2PI: f64 = 0.91893853320467267;
 const TWELFTH: f64 = 0.083333333333333333333333;
 
+/// Log-gamma function used by Poisson PTRS and hypergeometric HRUA.
 fn random_loggam(x: f64) f64 {
     const a = [10]f64{
         8.333333333333333e-02, -2.777777777777778e-03,
@@ -909,6 +1184,7 @@ fn random_loggam(x: f64) f64 {
     return gl;
 }
 
+/// Poisson PTRS: transformed rejection with squeeze for lam >= 10.
 fn random_poisson_ptrs_impl(lam: f64) i64 {
     const slam = @sqrt(lam);
     const loglam = @log(lam);
@@ -936,86 +1212,24 @@ fn random_poisson_ptrs_impl(lam: f64) i64 {
     }
 }
 
-fn random_poisson_impl(lam: f64) i64 {
-    if (lam >= 10.0) {
-        return random_poisson_ptrs_impl(lam);
-    } else if (lam == 0.0) {
-        return 0;
-    } else {
-        return random_poisson_mult_impl(lam);
-    }
-}
-
-// --- 15. Noncentral Chisquare ---
-fn legacy_noncentral_chisquare_impl(df: f64, nonc: f64) f64 {
-    if (nonc == 0.0) {
-        return legacy_chisquare_impl(df);
-    }
-    if (1.0 < df) {
-        const Chi2 = legacy_chisquare_impl(df - 1.0);
-        const nn = legacy_gauss_impl() + @sqrt(nonc);
-        return Chi2 + nn * nn;
-    } else {
-        const i = random_poisson_impl(nonc / 2.0);
-        return legacy_chisquare_impl(df + 2.0 * @as(f64, @floatFromInt(i)));
-    }
-}
-
-export fn fill_noncentral_chisquare(out: [*]f64, n: u32, df: f64, nonc: f64) void {
-    for (0..n) |i| {
-        out[i] = legacy_noncentral_chisquare_impl(df, nonc);
-    }
-}
-
-// --- 16. Noncentral F ---
-export fn fill_noncentral_f(out: [*]f64, n: u32, dfnum: f64, dfden: f64, nonc: f64) void {
-    for (0..n) |i| {
-        const t = legacy_noncentral_chisquare_impl(dfnum, nonc) * dfden;
-        out[i] = t / (legacy_chisquare_impl(dfden) * dfnum);
-    }
-}
-
-// --- 17. Geometric ---
-fn random_geometric_search_impl(p: f64) i64 {
-    var X: i64 = 1;
-    const q = 1.0 - p;
-    var sum: f64 = p;
-    var prod: f64 = p;
-    const U = mt19937_random_f64();
-    while (U > sum) {
-        prod *= q;
-        sum += prod;
-        X += 1;
-    }
-    return X;
-}
-
-fn legacy_geometric_inversion_impl(p: f64) i64 {
-    const z = @ceil(math.log1p(-mt19937_random_f64()) / @log(1.0 - p));
-    if (z >= 9.223372036854776e+18) {
-        return math.maxInt(i64);
-    }
-    return @intFromFloat(z);
-}
-
-export fn fill_geometric(out: [*]i64, n: u32, p: f64) void {
-    for (0..n) |i| {
-        if (p >= 0.333333333333333333333333) {
-            out[i] = random_geometric_search_impl(p);
+/// Binomial dispatch: fold p > 0.5, then choose inversion or BTPE.
+fn legacy_random_binomial_original(p: f64, nn: i64) i64 {
+    if (p <= 0.5) {
+        if (p * @as(f64, @floatFromInt(nn)) <= 30.0) {
+            return legacy_random_binomial_inversion(nn, p);
         } else {
-            out[i] = legacy_geometric_inversion_impl(p);
+            return random_binomial_btpe_impl(nn, p);
+        }
+    } else {
+        const q = 1.0 - p;
+        if (q * @as(f64, @floatFromInt(nn)) <= 30.0) {
+            return nn - legacy_random_binomial_inversion(nn, q);
+        } else {
+            return nn - random_binomial_btpe_impl(nn, q);
         }
     }
 }
 
-// --- 18. Poisson ---
-export fn fill_poisson(out: [*]i64, n: u32, lam: f64) void {
-    for (0..n) |i| {
-        out[i] = random_poisson_impl(lam);
-    }
-}
-
-// --- 19. Binomial ---
 const BinomialState = struct {
     has_binomial: bool = false,
     nsave: i64 = 0,
@@ -1038,6 +1252,7 @@ const BinomialState = struct {
 
 var binomial_state: BinomialState = .{};
 
+/// Binomial inversion method for small n*p.
 fn legacy_random_binomial_inversion(nn: i64, p: f64) i64 {
     const n_f = @as(f64, @floatFromInt(nn));
     var q: f64 = undefined;
@@ -1081,6 +1296,7 @@ fn legacy_random_binomial_inversion(nn: i64, p: f64) i64 {
     return X;
 }
 
+/// BTPE algorithm for binomial (Kachitvichyanukul & Schmeiser) for large n*p.
 fn random_binomial_btpe_impl(nn: i64, p: f64) i64 {
     const n_f = @as(f64, @floatFromInt(nn));
     var r: f64 = undefined;
@@ -1159,39 +1375,33 @@ fn random_binomial_btpe_impl(nn: i64, p: f64) i64 {
         var y: i64 = undefined;
 
         if (u <= p1) {
-            // Step 10
             y = @intFromFloat(@floor(xm - p1 * v + u));
         } else if (u <= p2) {
-            // Step 20
             const x = xl + (u - p1) / c;
             v = v * c + 1.0 - @abs(m_f - x + 0.5) / p1;
             if (v > 1.0) continue;
             y = @intFromFloat(@floor(x));
         } else if (u <= p3) {
-            // Step 30
             y = @intFromFloat(@floor(xl + @log(v) / laml));
             if (y < 0 or v == 0.0) continue;
             v = v * (u - p2) * laml;
         } else {
-            // Step 40
             y = @intFromFloat(@floor(xr - @log(v) / lamr));
             if (y > nn or v == 0.0) continue;
             v = v * (u - p3) * lamr;
         }
 
-        // Step 50
         const k_val: i64 = if (y > m) y - m else m - y;
         const k_f = @as(f64, @floatFromInt(k_val));
 
         if (k_val > 20 and @as(f64, @floatFromInt(k_val)) < (nrq / 2.0 - 1.0)) {
-            // Step 52
             const rho = (k_f / nrq) * ((k_f * (k_f / 3.0 + 0.625) + 0.16666666666666666) / nrq + 0.5);
             const t = -k_f * k_f / (2.0 * nrq);
             const A = @log(v);
             if (A < t - rho) {
-                // accept → step 60
+                // accept
             } else if (A > t + rho) {
-                continue; // reject → step 10
+                continue;
             } else {
                 // Full Stirling check
                 const y_f = @as(f64, @floatFromInt(y));
@@ -1214,7 +1424,6 @@ fn random_binomial_btpe_impl(nn: i64, p: f64) i64 {
                 }
             }
         } else {
-            // Direct computation (k <= 20 or k >= nrq/2-1)
             const s = r / q;
             const a_val2 = s * (n_f + 1.0);
             var F: f64 = 1.0;
@@ -1232,7 +1441,6 @@ fn random_binomial_btpe_impl(nn: i64, p: f64) i64 {
             if (v > F) continue;
         }
 
-        // Step 60
         if (p > 0.5) {
             return nn - y;
         }
@@ -1240,38 +1448,31 @@ fn random_binomial_btpe_impl(nn: i64, p: f64) i64 {
     }
 }
 
-fn legacy_random_binomial_original(p: f64, nn: i64) i64 {
-    if (p <= 0.5) {
-        if (p * @as(f64, @floatFromInt(nn)) <= 30.0) {
-            return legacy_random_binomial_inversion(nn, p);
-        } else {
-            return random_binomial_btpe_impl(nn, p);
-        }
-    } else {
-        const q = 1.0 - p;
-        if (q * @as(f64, @floatFromInt(nn)) <= 30.0) {
-            return nn - legacy_random_binomial_inversion(nn, q);
-        } else {
-            return nn - random_binomial_btpe_impl(nn, q);
-        }
+/// Geometric via sequential search (for p >= 1/3).
+fn random_geometric_search_impl(p: f64) i64 {
+    var X: i64 = 1;
+    const q = 1.0 - p;
+    var sum: f64 = p;
+    var prod: f64 = p;
+    const U = mt19937_random_f64();
+    while (U > sum) {
+        prod *= q;
+        sum += prod;
+        X += 1;
     }
+    return X;
 }
 
-export fn fill_binomial(out: [*]i64, n: u32, trials: i64, p: f64) void {
-    for (0..n) |i| {
-        out[i] = legacy_random_binomial_original(p, trials);
+/// Geometric via inversion of the CDF (for p < 1/3).
+fn legacy_geometric_inversion_impl(p: f64) i64 {
+    const z = @ceil(math.log1p(-mt19937_random_f64()) / @log(1.0 - p));
+    if (z >= 9.223372036854776e+18) {
+        return math.maxInt(i64);
     }
+    return @intFromFloat(z);
 }
 
-// --- 20. Negative Binomial ---
-export fn fill_negative_binomial(out: [*]i64, n: u32, nn: f64, p: f64) void {
-    for (0..n) |i| {
-        const Y = legacy_standard_gamma_impl(nn) * ((1.0 - p) / p);
-        out[i] = random_poisson_impl(Y);
-    }
-}
-
-// --- 21. Hypergeometric ---
+/// Hypergeometric HYP algorithm (simple, for small samples).
 fn random_hypergeometric_hyp(good: i64, bad: i64, sample: i64) i64 {
     const d1 = bad + good - sample;
     const d2_init: f64 = @floatFromInt(@min(bad, good));
@@ -1294,6 +1495,7 @@ fn random_hypergeometric_hyp(good: i64, bad: i64, sample: i64) i64 {
 const D1_HRUA: f64 = 1.7155277699214135;
 const D2_HRUA: f64 = 0.8989161620588988;
 
+/// Hypergeometric HRUA (ratio-of-uniforms) for larger samples.
 fn random_hypergeometric_hrua(good: i64, bad: i64, sample: i64) i64 {
     const mingoodbad = @min(good, bad);
     const popsize = good + bad;
@@ -1329,7 +1531,6 @@ fn random_hypergeometric_hrua(good: i64, bad: i64, sample: i64) i64 {
             random_loggam(m_f - Z_f + 1.0) + random_loggam(maxgoodbad_f - m_f + Z_f + 1.0));
 
         if ((X * (4.0 - X) - 3.0) <= T) {
-            // fast accept
             var result = Z;
             if (good > bad) result = m - result;
             if (m < sample) result = good - result;
@@ -1345,137 +1546,12 @@ fn random_hypergeometric_hrua(good: i64, bad: i64, sample: i64) i64 {
     }
 }
 
-export fn fill_hypergeometric(out: [*]i64, n: u32, good: i64, bad: i64, sample: i64) void {
-    for (0..n) |i| {
-        if (sample > 10) {
-            out[i] = random_hypergeometric_hrua(good, bad, sample);
-        } else if (sample > 0) {
-            out[i] = random_hypergeometric_hyp(good, bad, sample);
-        } else {
-            out[i] = 0;
-        }
-    }
-}
-
-// --- 22. Logseries ---
-export fn fill_logseries(out: [*]i64, n: u32, p: f64) void {
-    const r = math.log1p(-p);
-    for (0..n) |i| {
-        while (true) {
-            const V = mt19937_random_f64();
-            if (V >= p) {
-                out[i] = 1;
-                break;
-            }
-            const U = mt19937_random_f64();
-            const q = -math.expm1(r * U);
-            if (V <= q * q) {
-                const result: i64 = @intFromFloat(@floor(1.0 + @log(V) / @log(q)));
-                if (result < 1 or V == 0.0) continue;
-                out[i] = result;
-                break;
-            }
-            if (V >= q) {
-                out[i] = 1;
-                break;
-            }
-            out[i] = 2;
-            break;
-        }
-    }
-}
-
-// --- 23. Zipf ---
-export fn fill_zipf(out: [*]i64, n: u32, a: f64) void {
-    const am1 = a - 1.0;
-    const b = math.pow(f64, 2.0, am1);
-    for (0..n) |i| {
-        while (true) {
-            const U = 1.0 - mt19937_random_f64();
-            const V = mt19937_random_f64();
-            const X = @floor(math.pow(f64, U, -1.0 / am1));
-            if (X > 9007199254740992.0 or X < 1.0) continue;
-            const T = math.pow(f64, 1.0 + 1.0 / X, am1);
-            if (V * X * (T - 1.0) / (b - 1.0) <= T / b) {
-                out[i] = @intFromFloat(X);
-                break;
-            }
-        }
-    }
-}
-
-// --- 24. Von Mises ---
-export fn fill_vonmises(out: [*]f64, n: u32, mu: f64, kappa: f64) void {
-    for (0..n) |i| {
-        if (kappa < 1e-8) {
-            out[i] = math.pi * (2.0 * mt19937_random_f64() - 1.0);
-            continue;
-        }
-
-        var s: f64 = undefined;
-        if (kappa < 1e-5) {
-            s = 1.0 / kappa + kappa;
-        } else {
-            const r = 1.0 + @sqrt(1.0 + 4.0 * kappa * kappa);
-            const rho = (r - @sqrt(2.0 * r)) / (2.0 * kappa);
-            s = (1.0 + rho * rho) / (2.0 * rho);
-        }
-
-        var W: f64 = undefined;
-        while (true) {
-            const U = mt19937_random_f64();
-            const Z = @cos(math.pi * U);
-            W = (1.0 + s * Z) / (s + Z);
-            const Y = kappa * (s - W);
-            const V = mt19937_random_f64();
-            if ((Y * (2.0 - Y) - V >= 0.0) or (@log(Y / V) + 1.0 - Y >= 0.0)) {
-                break;
-            }
-        }
-
-        const U2 = mt19937_random_f64();
-        var result = math.acos(W);
-        if (U2 < 0.5) result = -result;
-        result += mu;
-        const neg = result < 0.0;
-        var mod_val = @abs(result);
-        mod_val = @mod(mod_val + math.pi, 2.0 * math.pi) - math.pi;
-        if (neg) mod_val = -mod_val;
-        out[i] = mod_val;
-    }
-}
-
 // ============================================================================
-// Additional bulk operations
+// Utility
 // ============================================================================
-
-/// Bulk rk_interval writing i64 with offset: out[i] = rk_interval(max) + low.
-/// Eliminates the JS BigInt conversion loop for randint.
-export fn fill_randint_i64(out: [*]i64, n: u32, max: u32, low: i64) void {
-    if (max == 0) {
-        for (0..n) |i| {
-            out[i] = low;
-        }
-        return;
-    }
-    var mask: u32 = max;
-    mask |= mask >> 1;
-    mask |= mask >> 2;
-    mask |= mask >> 4;
-    mask |= mask >> 8;
-    mask |= mask >> 16;
-
-    for (0..n) |i| {
-        var value: u32 = mt19937_next() & mask;
-        while (value > max) {
-            value = mt19937_next() & mask;
-        }
-        out[i] = @as(i64, value) + low;
-    }
-}
 
 /// Fisher-Yates shuffle of an f64 arange [0, n) in-place.
-/// Writes shuffled result to out. Matches NumPy's permutation(n).
+/// Writes the shuffled result to `out`. Matches NumPy's `permutation(n)`.
 export fn fill_permutation(out: [*]f64, n: u32) void {
     // Initialize arange
     for (0..n) |i| {
