@@ -11,6 +11,7 @@
  */
 
 import { ArrayStorage } from '../storage';
+import { svd } from '../ops/linalg';
 import { type DType, isBigIntDType } from '../dtype';
 import {
   initMT19937,
@@ -66,6 +67,8 @@ import {
   fillRandintU8,
   fillRandintU16,
   fillPermutation,
+  fillPermutationPCG,
+  fillBoundedUint64PCG,
 } from '../wasm/rng';
 
 // ============================================================================
@@ -117,12 +120,8 @@ export class Generator {
       }
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
-      const result = ArrayStorage.zeros(shape, 'int64');
-      const data = result.data as BigInt64Array;
-      for (let i = 0; i < totalSize; i++) {
-        data[i] = pcg64BoundedUint64(low, rng);
-      }
-      return result;
+      const data = fillBoundedUint64PCG(totalSize, low, rng);
+      return ArrayStorage.fromData(new BigInt64Array(data), shape, 'int64');
     });
   }
 
@@ -177,16 +176,16 @@ export class Generator {
     replace: boolean = true,
     p?: ArrayStorage | number[]
   ): ArrayStorage | number {
-    return this._withState(() => choiceImpl(a, size, replace, p, pcg64Float64));
+    return this._withState(() => choiceImpl(a, size, replace, p, pcg64Float64, true));
   }
 
   permutation(x: number | ArrayStorage): ArrayStorage {
-    return this._withState(() => permutationImpl(x, pcg64Float64));
+    return this._withState(() => permutationImpl(x, pcg64Float64, true));
   }
 
   shuffle(x: ArrayStorage): void {
     this._withState(() => {
-      shuffleImpl(x, pcg64Float64);
+      shuffleImpl(x, pcg64Float64, true);
     });
   }
 
@@ -1019,23 +1018,31 @@ function choiceImpl(
   size?: number | number[],
   replace: boolean = true,
   p?: ArrayStorage | number[],
-  rng: () => number = mt19937Float64
+  rng: () => number = mt19937Float64,
+  usePCG: boolean = false
 ): ArrayStorage | number {
-  // Fast path: integer a, replace=true, no p — skip building population array
+  // Fast path: integer a, replace=true, no p — use randint/integers (matches NumPy)
   const n = typeof a === 'number' ? a : a.size;
   if (typeof a === 'number' && replace && p === undefined) {
     if (n === 0) throw new Error('cannot take a sample from an empty sequence');
+    if (usePCG) {
+      if (size === undefined) {
+        return Number(pcg64BoundedUint64(0, n - 1));
+      }
+      const shape = Array.isArray(size) ? size : [size];
+      const totalSize = shape.reduce((s, d) => s * d, 1);
+      const result = ArrayStorage.zeros(shape, 'int64');
+      const data = result.data as BigInt64Array;
+      for (let i = 0; i < totalSize; i++) {
+        data[i] = pcg64BoundedUint64(0, n - 1);
+      }
+      return result;
+    }
+    // Legacy: use randint(0, n, size) which matches NumPy's choice exactly
     if (size === undefined) {
-      return Math.floor(rng() * n);
+      return randint(0, n) as number;
     }
-    const shape = Array.isArray(size) ? size : [size];
-    const totalSize = shape.reduce((s, d) => s * d, 1);
-    const result = ArrayStorage.zeros(shape, 'float64');
-    const data = result.data as Float64Array;
-    for (let i = 0; i < totalSize; i++) {
-      data[i] = Math.floor(rng() * n);
-    }
-    return result;
+    return randint(0, n, Array.isArray(size) ? size : [size]);
   }
 
   let population: number[];
@@ -1118,16 +1125,74 @@ function choiceImpl(
       }
     }
   } else {
-    const available = [...population];
-    const availableProbs = probabilities ? [...probabilities] : undefined;
+    if (!probabilities) {
+      if (usePCG) {
+        // NumPy Generator.choice(replace=False) uses two algorithms:
+        // 1. Floyd's algorithm for small pop or small sample (pop_size <= 10000 or size <= pop_size/50)
+        // 2. Tail-shuffle for large pop with large sample (pop_size > 10000 and size > pop_size/50)
+        const CUTOFF = 50;
+        if (n > 10000 && totalSize > n / CUTOFF) {
+          // Large pop_size path: full Fisher-Yates shuffle, take last `size` elements
+          const perm = fillPermutationPCG(n);
+          for (let i = 0; i < totalSize; i++) {
+            const permIdx = Number(perm[n - totalSize + i]!);
+            if (typeof a === 'number') {
+              data[i] = permIdx;
+            } else {
+              data[i] = Number(a.iget(permIdx));
+            }
+          }
+        } else {
+          // Floyd's algorithm: efficient for small pop or small sample
+          const idx = new Array<number>(totalSize);
+          const hashSet = new Set<number>();
+          for (let j = n - totalSize; j < n; j++) {
+            const val = Number(pcg64BoundedUint64(0, j));
+            if (!hashSet.has(val)) {
+              hashSet.add(val);
+              idx[j - (n - totalSize)] = val;
+            } else {
+              hashSet.add(j);
+              idx[j - (n - totalSize)] = j;
+            }
+          }
+          // Shuffle the result (NumPy always shuffles Floyd output)
+          for (let i = totalSize - 1; i > 0; i--) {
+            const j = Number(pcg64BoundedUint64(0, i));
+            const tmp = idx[i]!;
+            idx[i] = idx[j]!;
+            idx[j] = tmp;
+          }
+          for (let i = 0; i < totalSize; i++) {
+            if (typeof a === 'number') {
+              data[i] = idx[i]!;
+            } else {
+              data[i] = Number(a.iget(idx[i]!));
+            }
+          }
+        }
+      } else {
+        // Legacy: permutation(pop_size)[:size] — use WASM permutation for exact match
+        const perm = permutationImpl(n, rng, false);
+        const permData = perm.data;
+        for (let i = 0; i < totalSize; i++) {
+          const permIdx = Number(permData instanceof BigInt64Array ? permData[i]! : permData[i]!);
+          if (typeof a === 'number') {
+            data[i] = permIdx;
+          } else {
+            data[i] = Number(a.iget(permIdx));
+          }
+        }
+      }
+    } else {
+      const available = [...population];
+      const availableProbs = [...probabilities];
 
-    for (let i = 0; i < totalSize; i++) {
-      let idx: number;
-      if (availableProbs) {
+      for (let i = 0; i < totalSize; i++) {
         const sum = availableProbs.reduce((a, b) => a + b, 0);
         const r = rng() * sum;
         let cumsum = 0;
-        idx = 0;
+        let idx = 0;
         for (let j = 0; j < available.length; j++) {
           cumsum += availableProbs[j]!;
           if (r < cumsum) {
@@ -1138,13 +1203,9 @@ function choiceImpl(
         if (idx === 0 && r >= cumsum) {
           idx = available.length - 1;
         }
-      } else {
-        idx = Math.floor(rng() * available.length);
-      }
 
-      data[i] = available[idx]!;
-      available.splice(idx, 1);
-      if (availableProbs) {
+        data[i] = available[idx]!;
+        available.splice(idx, 1);
         availableProbs.splice(idx, 1);
       }
     }
@@ -1174,12 +1235,19 @@ export function choice(
  */
 function permutationImpl(
   x: number | ArrayStorage,
-  rng: () => number = mt19937Float64
+  rng: () => number = mt19937Float64,
+  usePCG: boolean = false
 ): ArrayStorage {
-  // Fast path: integer n with MT19937 — do entire shuffle in WASM
-  if (typeof x === 'number' && rng === mt19937Float64) {
-    const data = fillPermutation(x);
-    return ArrayStorage.fromData(new Float64Array(data), [x], 'float64');
+  // Fast path: integer n — do entire shuffle in WASM
+  if (typeof x === 'number') {
+    if (usePCG) {
+      const data = fillPermutationPCG(x);
+      return ArrayStorage.fromData(new BigInt64Array(data), [x], 'int64');
+    }
+    if (rng === mt19937Float64) {
+      const data = fillPermutation(x);
+      return ArrayStorage.fromData(new Float64Array(data), [x], 'float64');
+    }
   }
 
   let arr: ArrayStorage;
@@ -1213,15 +1281,29 @@ export function permutation(x: number | ArrayStorage): ArrayStorage {
 }
 
 /**
- * Implementation of shuffle (in-place)
+ * Implementation of shuffle (in-place).
+ * Uses WASM permutation to generate index order, then applies it.
+ * Matches NumPy's shuffle exactly (rk_interval for legacy, random_interval for Generator).
  */
-function shuffleImpl(x: ArrayStorage, rng: () => number = mt19937Float64): void {
+function shuffleImpl(
+  x: ArrayStorage,
+  rng: () => number = mt19937Float64,
+  usePCG: boolean = false
+): void {
   const n = x.size;
-  for (let i = n - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    const temp = x.iget(i);
-    x.iset(i, x.iget(j));
-    x.iset(j, temp);
+  if (n <= 1) return;
+  // Generate a permutation of indices via WASM, then reorder x in-place
+  const perm = permutationImpl(n, rng, usePCG);
+  const permData = perm.data;
+  // Copy original values
+  const orig = new Array(n);
+  for (let i = 0; i < n; i++) {
+    orig[i] = x.iget(i);
+  }
+  // Apply permutation
+  for (let i = 0; i < n; i++) {
+    const idx = Number(permData instanceof BigInt64Array ? permData[i]! : permData[i]!);
+    x.iset(i, orig[idx]!);
   }
 }
 
@@ -2251,44 +2333,48 @@ export function multivariate_normal(
     }
   }
 
-  // Simple Cholesky decomposition
-  const L: number[][] = Array(n)
-    .fill(0)
-    .map(() => Array(n).fill(0) as number[]);
+  // SVD decomposition of covariance matrix (matches NumPy's approach)
+  const covStorage = ArrayStorage.fromData(new Float64Array(covArr.flat()), [n, n], 'float64');
 
+  const { s: singVals, vt } = svd(covStorage, true, true) as {
+    u: ArrayStorage;
+    s: ArrayStorage;
+    vt: ArrayStorage;
+  };
+
+  const vtData_ = vt.data as Float64Array;
+
+  // Check for negative singular values
+  const sData = singVals.data as Float64Array;
   for (let i = 0; i < n; i++) {
-    for (let j = 0; j <= i; j++) {
-      let sum = covArr[i]![j]!;
-      for (let k = 0; k < j; k++) {
-        sum -= L[i]![k]! * L[j]![k]!;
-      }
-      if (i === j) {
-        if (sum < -tol) {
-          if (check_valid === 'raise') {
-            throw new Error('covariance matrix is not positive semi-definite');
-          } else if (check_valid === 'warn') {
-            console.warn('covariance matrix is not positive semi-definite');
-          }
-          sum = 0;
-        }
-        L[i]![j] = Math.sqrt(Math.max(0, sum));
-      } else {
-        L[i]![j] = L[j]![j]! !== 0 ? sum / L[j]![j]! : 0;
+    if (sData[i]! < -tol) {
+      if (check_valid === 'raise') {
+        throw new Error('covariance matrix is not positive semi-definite');
+      } else if (check_valid === 'warn') {
+        console.warn('covariance matrix is not positive semi-definite');
       }
     }
   }
 
+  // Build transform matrix: sqrt(s)[:, None] * v  →  each row i of vt scaled by sqrt(s[i])
+  // Result is n x n matrix T where T[i][j] = sqrt(s[i]) * vt[i][j]
+  const vtData = vtData_;
+  const sqrtS = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    sqrtS[i] = Math.sqrt(Math.max(0, sData[i]!));
+  }
+
   if (size === undefined) {
-    const z = fillLegacyGauss(n);
+    const x = fillLegacyGauss(n);
     const result = ArrayStorage.zeros([n], 'float64');
     const data = result.data as Float64Array;
-    // Transform in-place: z holds normals, overwrite with L*z + mean
-    for (let i = n - 1; i >= 0; i--) {
-      let val = meanArr[i]!;
-      for (let j = 0; j <= i; j++) {
-        val += L[i]![j]! * z[j]!;
+    // x_out[j] = sum_i(x[i] * sqrtS[i] * vt[i][j]) + mean[j]
+    for (let j = 0; j < n; j++) {
+      let val = meanArr[j]!;
+      for (let i = 0; i < n; i++) {
+        val += x[i]! * sqrtS[i]! * vtData[i * n + j]!;
       }
-      data[i] = val;
+      data[j] = val;
     }
     return result;
   }
@@ -2296,17 +2382,17 @@ export function multivariate_normal(
   const shapeArr = Array.isArray(size) ? size : [size];
   const numSamples = shapeArr.reduce((a, b) => a * b, 1);
   const outShape = [...shapeArr, n];
-  const allZ = fillLegacyGauss(numSamples * n);
+  const allX = fillLegacyGauss(numSamples * n);
   const data = new Float64Array(numSamples * n);
 
   for (let s = 0; s < numSamples; s++) {
     const base = s * n;
-    for (let i = 0; i < n; i++) {
-      let val = meanArr[i]!;
-      for (let j = 0; j <= i; j++) {
-        val += L[i]![j]! * allZ[base + j]!;
+    for (let j = 0; j < n; j++) {
+      let val = meanArr[j]!;
+      for (let i = 0; i < n; i++) {
+        val += allX[base + i]! * sqrtS[i]! * vtData[i * n + j]!;
       }
-      data[base + i] = val;
+      data[base + j] = val;
     }
   }
 

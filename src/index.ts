@@ -743,7 +743,54 @@ export const random = {
   set_state: randomOps.set_state,
   get_bit_generator: randomOps.get_bit_generator,
   set_bit_generator: randomOps.set_bit_generator,
-  default_rng: randomOps.default_rng,
+  default_rng: (seedValue?: number) => {
+    type ArrayLike = NDArrayClass | NDArrayCore | ArrayStorage;
+    const gen = randomOps.default_rng(seedValue);
+    const unwrap = (x: number | ArrayLike): number | ArrayStorage =>
+      x instanceof NDArrayClass
+        ? x.storage
+        : x instanceof NDArrayCore
+          ? x.storage
+          : (x as number | ArrayStorage);
+    return {
+      random: (size?: number | number[]) => wrapResult(gen.random(size)),
+      integers: (low: number, high?: number, size?: number | number[]) =>
+        wrapResult(gen.integers(low, high, size)),
+      standard_normal: (size?: number | number[]) => wrapResult(gen.standard_normal(size)),
+      normal: (loc?: number, scale?: number, size?: number | number[]) =>
+        wrapResult(gen.normal(loc, scale, size)),
+      uniform: (low?: number, high?: number, size?: number | number[]) =>
+        wrapResult(gen.uniform(low, high, size)),
+      choice: (
+        a: number | ArrayLike,
+        size?: number | number[],
+        replace?: boolean,
+        p?: ArrayLike | number[]
+      ) =>
+        wrapResult(
+          gen.choice(
+            unwrap(a),
+            size,
+            replace,
+            p instanceof NDArrayClass
+              ? p.storage
+              : p instanceof NDArrayCore
+                ? p.storage
+                : (p as ArrayStorage | number[] | undefined)
+          )
+        ),
+      permutation: (x: number | ArrayLike) => wrapResult(gen.permutation(unwrap(x))),
+      shuffle: (x: ArrayLike) =>
+        gen.shuffle(
+          x instanceof NDArrayClass ? x.storage : x instanceof NDArrayCore ? x.storage : x
+        ),
+      exponential: (scale?: number, size?: number | number[]) =>
+        wrapResult(gen.exponential(scale, size)),
+      poisson: (lam?: number, size?: number | number[]) => wrapResult(gen.poisson(lam, size)),
+      binomial: (n: number, p: number, size?: number | number[]) =>
+        wrapResult(gen.binomial(n, p, size)),
+    };
+  },
   Generator: randomOps.Generator,
 
   // Basic random functions
@@ -844,7 +891,10 @@ export const random = {
     p?: ArrayStorage | number[]
   ) => wrapResult(randomOps.choice(a, size, replace, p)),
   permutation: (x: number | ArrayStorage) => wrapResult(randomOps.permutation(x)),
-  shuffle: randomOps.shuffle,
+  shuffle: (x: NDArrayClass | NDArrayCore | ArrayStorage) =>
+    randomOps.shuffle(
+      x instanceof NDArrayClass ? x.storage : x instanceof NDArrayCore ? x.storage : x
+    ),
 };
 
 // ============================================================
