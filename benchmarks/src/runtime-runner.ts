@@ -53,6 +53,8 @@ function setupArrays(setup: BenchmarkSetup, operation?: string): Record<string, 
       arrays[key] = shape[0];
       if (key === 'new_shape' || key === 'shape' || key === 'target_shape' || key === 'dims') {
         arrays[key] = shape;
+        // Store dtype for operations that need it (e.g., randint)
+        if (dtype) arrays['dtype'] = dtype;
       }
       continue;
     }
@@ -412,12 +414,18 @@ function executeOperation(operation: string, arrays: Record<string, any>): any {
 
   // Logic
   if (operation === 'logical_and')
-    return arrays['b'] ? np.logical_and(arrays['a'], arrays['b']) : np.logical_and(arrays['a'], arrays['scalar']);
+    return arrays['b']
+      ? np.logical_and(arrays['a'], arrays['b'])
+      : np.logical_and(arrays['a'], arrays['scalar']);
   if (operation === 'logical_or')
-    return arrays['b'] ? np.logical_or(arrays['a'], arrays['b']) : np.logical_or(arrays['a'], arrays['scalar']);
+    return arrays['b']
+      ? np.logical_or(arrays['a'], arrays['b'])
+      : np.logical_or(arrays['a'], arrays['scalar']);
   if (operation === 'logical_not') return np.logical_not(arrays['a']);
   if (operation === 'logical_xor')
-    return arrays['b'] ? np.logical_xor(arrays['a'], arrays['b']) : np.logical_xor(arrays['a'], arrays['scalar']);
+    return arrays['b']
+      ? np.logical_xor(arrays['a'], arrays['b'])
+      : np.logical_xor(arrays['a'], arrays['scalar']);
   if (operation === 'isfinite') return np.isfinite(arrays['a']);
   if (operation === 'isinf') return np.isinf(arrays['a']);
   if (operation === 'isnan') return np.isnan(arrays['a']);
@@ -426,13 +434,16 @@ function executeOperation(operation: string, arrays: Record<string, any>): any {
   if (operation === 'isreal') return np.isreal(arrays['a']);
   if (operation === 'signbit') return np.signbit(arrays['a']);
   if (operation === 'copysign')
-    return arrays['b'] ? np.copysign(arrays['a'], arrays['b']) : np.copysign(arrays['a'], arrays['scalar']);
+    return arrays['b']
+      ? np.copysign(arrays['a'], arrays['b'])
+      : np.copysign(arrays['a'], arrays['scalar']);
 
   // Random
   if (operation === 'random_random') return np.random.random(arrays['shape']);
   if (operation === 'random_rand') return np.random.rand(...arrays['shape']);
   if (operation === 'random_randn') return np.random.randn(...arrays['shape']);
-  if (operation === 'random_randint') return np.random.randint(0, 100, arrays['shape']);
+  if (operation === 'random_randint')
+    return np.random.randint(0, 100, arrays['shape'], arrays['dtype'] || 'int64');
   if (operation === 'random_uniform') return np.random.uniform(0, 1, arrays['shape']);
   if (operation === 'random_normal') return np.random.normal(0, 1, arrays['shape']);
   if (operation === 'random_standard_normal') return np.random.standard_normal(arrays['shape']);
@@ -447,6 +458,51 @@ function executeOperation(operation: string, arrays: Record<string, any>): any {
   if (operation === 'random_laplace') return np.random.laplace(0, 1, arrays['shape']);
   if (operation === 'random_geometric') return np.random.geometric(0.5, arrays['shape']);
   if (operation === 'random_dirichlet') return np.random.dirichlet([1, 2, 3], arrays['shape'][0]);
+  if (operation === 'random_standard_exponential')
+    return np.random.standard_exponential(arrays['shape']);
+  if (operation === 'random_logistic') return np.random.logistic(0, 1, arrays['shape']);
+  if (operation === 'random_lognormal') return np.random.lognormal(0, 1, arrays['shape']);
+  if (operation === 'random_gumbel') return np.random.gumbel(0, 1, arrays['shape']);
+  if (operation === 'random_pareto') return np.random.pareto(3, arrays['shape']);
+  if (operation === 'random_power') return np.random.power(3, arrays['shape']);
+  if (operation === 'random_rayleigh') return np.random.rayleigh(1, arrays['shape']);
+  if (operation === 'random_weibull') return np.random.weibull(3, arrays['shape']);
+  if (operation === 'random_triangular') return np.random.triangular(0, 0.5, 1, arrays['shape']);
+  if (operation === 'random_standard_cauchy') return np.random.standard_cauchy(arrays['shape']);
+  if (operation === 'random_standard_t') return np.random.standard_t(5, arrays['shape']);
+  if (operation === 'random_wald') return np.random.wald(1, 1, arrays['shape']);
+  if (operation === 'random_vonmises') return np.random.vonmises(0, 1, arrays['shape']);
+  if (operation === 'random_zipf') return np.random.zipf(2, arrays['shape']);
+
+  // Generator (PCG64) random
+  if (operation === 'gen_random') {
+    const rng = np.random.default_rng(42);
+    return rng.random(arrays['shape']);
+  }
+  if (operation === 'gen_uniform') {
+    const rng = np.random.default_rng(42);
+    return rng.uniform(0, 1, arrays['shape']);
+  }
+  if (operation === 'gen_standard_normal') {
+    const rng = np.random.default_rng(42);
+    return rng.standard_normal(arrays['shape']);
+  }
+  if (operation === 'gen_normal') {
+    const rng = np.random.default_rng(42);
+    return rng.normal(0, 1, arrays['shape']);
+  }
+  if (operation === 'gen_exponential') {
+    const rng = np.random.default_rng(42);
+    return rng.exponential(1, arrays['shape']);
+  }
+  if (operation === 'gen_integers') {
+    const rng = np.random.default_rng(42);
+    return rng.integers(0, 100, arrays['shape']);
+  }
+  if (operation === 'gen_permutation') {
+    const rng = np.random.default_rng(42);
+    return rng.permutation(arrays['n']);
+  }
 
   // Complex
   if (operation === 'complex_zeros') return np.zeros(arrays['shape'], 'complex128');
@@ -627,9 +683,7 @@ async function main() {
   }
 
   console.error(`${runtimeName} ${runtimeVersion}`);
-  console.error(
-    `Running ${specs.length} benchmarks with auto-calibration...`
-  );
+  console.error(`Running ${specs.length} benchmarks with auto-calibration...`);
   console.error(
     `Target: ${MIN_SAMPLE_TIME_MS}ms per sample, ${TARGET_SAMPLES} samples per benchmark\n`
   );
