@@ -1916,4 +1916,130 @@ result = np.random.choice(5, 10, p=[0.1, 0.2, 0.3, 0.2, 0.2])
       }
     });
   });
+
+  // ============================================================
+  // JS scalar path coverage — exercises JS-side distribution
+  // implementations (poissonPtrs, binomialBtpe, hypergeometric,
+  // randomLoggam, etc.) that are only hit via size=undefined.
+  // ============================================================
+
+  describe('EXACT MATCH: scalar distribution paths (size=undefined)', () => {
+    it('poisson scalar (lam >= 10, PTRS path) matches NumPy', () => {
+      for (const lam of [10, 50, 200]) {
+        random.seed(42);
+        const js = random.poisson(lam) as number;
+        const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.poisson(${lam}))
+        `);
+        expect(js).toBe(py.value);
+      }
+    });
+
+    it('poisson scalar (lam < 10, mult path) matches NumPy', () => {
+      for (const lam of [0.5, 3, 9]) {
+        random.seed(42);
+        const js = random.poisson(lam) as number;
+        const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.poisson(${lam}))
+        `);
+        expect(js).toBe(py.value);
+      }
+    });
+
+    it('binomial scalar (n*p > 30, BTPE path) matches NumPy', () => {
+      for (const [n, p] of [[100, 0.5], [200, 0.3], [50, 0.8]] as const) {
+        random.seed(42);
+        const js = random.binomial(n, p) as number;
+        const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.binomial(${n}, ${p}))
+        `);
+        expect(js).toBe(py.value);
+      }
+    });
+
+    it('binomial scalar (n*p <= 30, inversion path) matches NumPy', () => {
+      for (const [n, p] of [[10, 0.3], [5, 0.5], [20, 0.1]] as const) {
+        random.seed(42);
+        const js = random.binomial(n, p) as number;
+        const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.binomial(${n}, ${p}))
+        `);
+        expect(js).toBe(py.value);
+      }
+    });
+
+    it('hypergeometric scalar (sample > 10, HRUA path) matches NumPy', () => {
+      random.seed(42);
+      const js = random.hypergeometric(50, 50, 20) as number;
+      const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.hypergeometric(50, 50, 20))
+      `);
+      expect(js).toBe(py.value);
+    });
+
+    it('hypergeometric scalar (sample <= 10, HYP path) matches NumPy', () => {
+      random.seed(42);
+      const js = random.hypergeometric(50, 50, 5) as number;
+      const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.hypergeometric(50, 50, 5))
+      `);
+      expect(js).toBe(py.value);
+    });
+
+    it('negative_binomial scalar matches NumPy', () => {
+      random.seed(42);
+      const js = random.negative_binomial(5, 0.5) as number;
+      const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.negative_binomial(5, 0.5))
+      `);
+      expect(js).toBe(py.value);
+    });
+
+    it('noncentral_chisquare scalar (df > 1) matches NumPy', () => {
+      random.seed(42);
+      const js = random.noncentral_chisquare(5, 2) as number;
+      const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.noncentral_chisquare(5, 2))
+      `);
+      expect(js).toBeCloseTo(py.value, 14);
+    });
+
+    it('noncentral_chisquare scalar (df <= 1, Poisson path) matches NumPy', () => {
+      random.seed(42);
+      const js = random.noncentral_chisquare(0.5, 2) as number;
+      const py = runNumPy(`
+np.random.seed(42)
+result = float(np.random.noncentral_chisquare(0.5, 2))
+      `);
+      expect(js).toBeCloseTo(py.value, 14);
+    });
+
+    it('Generator.poisson scalar (lam >= 10) matches NumPy', () => {
+      const rng = random.default_rng(42);
+      const js = rng.poisson(50) as number;
+      const py = runNumPy(`
+rng = np.random.default_rng(42)
+result = float(rng.poisson(50))
+      `);
+      expect(js).toBe(py.value);
+    });
+
+    it('Generator.binomial scalar (BTPE path) matches NumPy', () => {
+      const rng = random.default_rng(42);
+      const js = rng.binomial(100, 0.5) as number;
+      const py = runNumPy(`
+rng = np.random.default_rng(42)
+result = float(rng.binomial(100, 0.5))
+      `);
+      expect(js).toBe(py.value);
+    });
+  });
 });

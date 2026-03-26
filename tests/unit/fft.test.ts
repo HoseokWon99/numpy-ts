@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { array, fft, arange, Complex } from '../../src/index';
 // Import from core to get NDArrayCore instances
 import { array as arrayCoreLib } from '../../src/core/creation';
+import { fft as coreFft } from '../../src/core/index';
 
 // Helper to check if two complex values are close
 function complexClose(
@@ -1024,6 +1025,79 @@ describe('FFT Operations', () => {
       const result = fft.fft(coreArr);
       expect(result.shape).toEqual([4]);
       expect(result.dtype).toBe('complex128');
+    });
+  });
+
+  describe('core/index.ts fft namespace coverage', () => {
+    const a = arrayCoreLib([1, 2, 3, 4]);
+    const c = arrayCoreLib([new Complex(1, 0), new Complex(2, 0), new Complex(3, 0), new Complex(4, 0)]);
+    const a2d = arrayCoreLib([
+      [1, 2, 3, 4],
+      [5, 6, 7, 8],
+    ]);
+
+    it('coreFft.fft / ifft', () => {
+      const f = coreFft.fft(a);
+      expect(f.shape).toEqual([4]);
+      const inv = coreFft.ifft(f);
+      expect(inv.shape).toEqual([4]);
+    });
+
+    it('coreFft.rfft / irfft', () => {
+      const f = coreFft.rfft(a);
+      expect(f.shape).toEqual([3]);
+      const inv = coreFft.irfft(f);
+      expect(inv.shape).toEqual([4]);
+    });
+
+    it('coreFft.fft2 / ifft2', () => {
+      const f = coreFft.fft2(a2d);
+      expect(f.shape).toEqual([2, 4]);
+      const inv = coreFft.ifft2(f);
+      expect(inv.shape).toEqual([2, 4]);
+    });
+
+    it('coreFft.rfft2 / irfft2', () => {
+      const f = coreFft.rfft2(a2d);
+      expect(f.shape).toEqual([2, 3]);
+      const inv = coreFft.irfft2(f);
+      expect(inv.shape).toEqual([2, 4]);
+    });
+
+    it('coreFft.fftn / ifftn', () => {
+      const f = coreFft.fftn(a2d);
+      expect(f.shape).toEqual([2, 4]);
+      const inv = coreFft.ifftn(f);
+      expect(inv.shape).toEqual([2, 4]);
+    });
+
+    it('coreFft.rfftn / irfftn', () => {
+      const f = coreFft.rfftn(a2d);
+      expect(f.shape).toEqual([2, 3]);
+      const inv = coreFft.irfftn(f);
+      expect(inv.shape).toEqual([2, 4]);
+    });
+
+    it('coreFft.hfft / ihfft', () => {
+      const f = coreFft.ihfft(a);
+      expect(f.shape).toEqual([3]);
+      const inv = coreFft.hfft(f);
+      expect(inv.shape).toEqual([4]);
+    });
+
+    it('coreFft.fftfreq / rfftfreq', () => {
+      const f1 = coreFft.fftfreq(8);
+      expect(f1.shape).toEqual([8]);
+      const f2 = coreFft.rfftfreq(8);
+      expect(f2.shape).toEqual([5]);
+    });
+
+    it('coreFft.fftshift / ifftshift', () => {
+      const f = coreFft.fftfreq(8);
+      const shifted = coreFft.fftshift(f);
+      expect(shifted.shape).toEqual([8]);
+      const unshifted = coreFft.ifftshift(shifted);
+      expect(unshifted.shape).toEqual([8]);
     });
   });
 });
