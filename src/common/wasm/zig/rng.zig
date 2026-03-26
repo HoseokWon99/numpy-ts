@@ -241,6 +241,14 @@ export fn pcg64_bounded_uint64(off: u64, rng: u64) u64 {
     }
 }
 
+/// Fill `out[0..n]` with bounded random i64 in [off, off + rng] using PCG64 Lemire rejection.
+/// Eliminates per-element JS↔WASM overhead for Generator.integers().
+export fn fill_bounded_uint64_pcg(out: [*]i64, n: u32, off: u64, rng: u64) void {
+    for (0..n) |i| {
+        out[i] = @bitCast(pcg64_bounded_uint64(off, rng));
+    }
+}
+
 /// Serialize PCG64 state to 6 u64 values:
 /// [state_lo, state_hi, inc_lo, inc_hi, has_uint32, cached_uinteger].
 export fn pcg64_get_state(out: [*]u64) void {
@@ -636,26 +644,8 @@ export fn fill_uniform_f64_pcg(out: [*]f64, n: u32) void {
 /// Fill `out[0..n]` with bounded random u32 in [0, max] inclusive using MT19937.
 /// Uses bitmask rejection sampling matching NumPy's `rk_interval`.
 export fn fill_rk_interval(out: [*]u32, n: u32, max: u32) void {
-    if (max == 0) {
-        for (0..n) |i| {
-            out[i] = 0;
-        }
-        return;
-    }
-    // Smallest bitmask >= max
-    var mask: u32 = max;
-    mask |= mask >> 1;
-    mask |= mask >> 2;
-    mask |= mask >> 4;
-    mask |= mask >> 8;
-    mask |= mask >> 16;
-
     for (0..n) |i| {
-        var value: u32 = mt19937_next() & mask;
-        while (value > max) {
-            value = mt19937_next() & mask;
-        }
-        out[i] = value;
+        out[i] = rk_interval(max);
     }
 }
 
@@ -742,25 +732,8 @@ export fn fill_randint_u16(out: [*]u16, n: u32, rng_val: u16, off: u16) void {
 /// Uses bitmask rejection (same as `fill_rk_interval`) then adds the `low` offset.
 /// Eliminates the JS BigInt conversion loop for randint.
 export fn fill_randint_i64(out: [*]i64, n: u32, max: u32, low: i64) void {
-    if (max == 0) {
-        for (0..n) |i| {
-            out[i] = low;
-        }
-        return;
-    }
-    var mask: u32 = max;
-    mask |= mask >> 1;
-    mask |= mask >> 2;
-    mask |= mask >> 4;
-    mask |= mask >> 8;
-    mask |= mask >> 16;
-
     for (0..n) |i| {
-        var value: u32 = mt19937_next() & mask;
-        while (value > max) {
-            value = mt19937_next() & mask;
-        }
-        out[i] = @as(i64, value) + low;
+        out[i] = @as(i64, rk_interval(max)) + low;
     }
 }
 
@@ -1552,18 +1525,584 @@ fn random_hypergeometric_hrua(good: i64, bad: i64, sample: i64) i64 {
 
 /// Fisher-Yates shuffle of an f64 arange [0, n) in-place.
 /// Writes the shuffled result to `out`. Matches NumPy's `permutation(n)`.
+/// Uses `rk_interval` (bitmask rejection) for index selection, matching NumPy exactly.
 export fn fill_permutation(out: [*]f64, n: u32) void {
     // Initialize arange
     for (0..n) |i| {
         out[i] = @floatFromInt(i);
     }
-    // Fisher-Yates shuffle using mt19937
+    // Fisher-Yates shuffle using rk_interval (bounded rejection with bitmask)
     if (n <= 1) return;
     var i: u32 = n - 1;
     while (i > 0) : (i -= 1) {
-        const j: u32 = @intFromFloat(@floor(mt19937_random_f64() * @as(f64, @floatFromInt(i + 1))));
+        const j = rk_interval(i);
         const tmp = out[i];
         out[i] = out[j];
         out[j] = tmp;
     }
+}
+
+/// Fisher-Yates shuffle of an i64 arange [0, n) using PCG64.
+/// Uses `random_interval` (buffered uint32 bitmask rejection), matching
+/// NumPy's `Generator.permutation(n)` / `_shuffle_raw` exactly.
+export fn fill_permutation_pcg(out: [*]i64, n: u32) void {
+    for (0..n) |i| {
+        out[i] = @intCast(i);
+    }
+    if (n <= 1) return;
+    var i: u32 = n - 1;
+    while (i > 0) : (i -= 1) {
+        const j = pcg_random_interval(i);
+        const tmp = out[i];
+        out[i] = out[j];
+        out[j] = tmp;
+    }
+}
+
+/// Bounded random u32 in [0, max] using PCG64's buffered uint32 with bitmask rejection.
+/// Matches NumPy's `random_interval` for the PCG64 bit generator exactly.
+fn pcg_random_interval(max: u32) u32 {
+    if (max == 0) return 0;
+    var mask: u32 = max;
+    mask |= mask >> 1;
+    mask |= mask >> 2;
+    mask |= mask >> 4;
+    mask |= mask >> 8;
+    mask |= mask >> 16;
+    var value: u32 = pcg64_next_uint32() & mask;
+    while (value > max) {
+        value = pcg64_next_uint32() & mask;
+    }
+    return value;
+}
+
+/// Draw a single bounded random u32 in [0, max] using MT19937 bitmask rejection.
+/// Matches NumPy's `rk_interval` exactly.
+fn rk_interval(max: u32) u32 {
+    if (max == 0) return 0;
+    var mask: u32 = max;
+    mask |= mask >> 1;
+    mask |= mask >> 2;
+    mask |= mask >> 4;
+    mask |= mask >> 8;
+    mask |= mask >> 16;
+    var value: u32 = mt19937_next() & mask;
+    while (value > max) {
+        value = mt19937_next() & mask;
+    }
+    return value;
+}
+
+// --- Tests ---
+
+const testing = std.testing;
+
+/// Helper: compare f64 with tolerance (14 decimal digits, matching NumPy validation suite).
+fn expectCloseF64(actual: f64, expected: f64) !void {
+    const tol = 1e-14;
+    if (@abs(actual - expected) > tol * @max(@abs(expected), 1.0)) {
+        std.debug.print("expected {d}, got {d}\n", .{ expected, actual });
+        return error.TestExpectedApproxEql;
+    }
+}
+
+// MT19937 Engine
+
+test "MT19937 seed=42: first 5 raw u32 match NumPy" {
+    mt19937_init(42);
+    try testing.expectEqual(@as(u32, 1608637542), mt19937_next());
+    try testing.expectEqual(@as(u32, 3421126067), mt19937_next());
+    try testing.expectEqual(@as(u32, 4083286876), mt19937_next());
+    try testing.expectEqual(@as(u32, 787846414), mt19937_next());
+    try testing.expectEqual(@as(u32, 3143890026), mt19937_next());
+}
+
+test "MT19937 seed=0: first 3 raw u32 match NumPy" {
+    mt19937_init(0);
+    try testing.expectEqual(@as(u32, 2357136044), mt19937_next());
+    try testing.expectEqual(@as(u32, 2546248239), mt19937_next());
+    try testing.expectEqual(@as(u32, 3071714933), mt19937_next());
+}
+
+test "MT19937 seed=42: first 5 f64 match NumPy random()" {
+    mt19937_init(42);
+    const expected = [5]f64{
+        0.3745401188473625,
+        0.9507143064099162,
+        0.7319939418114051,
+        0.5986584841970366,
+        0.15601864044243652,
+    };
+    for (expected) |e| {
+        try expectCloseF64(mt19937_random_f64(), e);
+    }
+}
+
+test "MT19937 state save/restore produces identical stream" {
+    mt19937_init(42);
+    // Advance 100 steps
+    for (0..100) |_| _ = mt19937_next();
+
+    // Save state
+    var saved_key: [MT_N]u32 = undefined;
+    for (0..MT_N) |i| saved_key[i] = mt_key[i];
+    const saved_pos = mt_pos;
+
+    // Draw 5 values
+    var ref: [5]u32 = undefined;
+    for (0..5) |i| ref[i] = mt19937_next();
+
+    // Restore and verify identical
+    for (0..MT_N) |i| mt_key[i] = saved_key[i];
+    mt_pos = saved_pos;
+    for (0..5) |i| {
+        try testing.expectEqual(ref[i], mt19937_next());
+    }
+}
+
+// SeedSequence
+
+test "SeedSequence(42) produces 8 words matching NumPy" {
+    var out: [8]u32 = undefined;
+    seed_sequence(42, &out, 8);
+    const expected = [8]u32{
+        3444837047, 2669555309, 2046530742, 3581440988,
+        1691623607, 2099784219, 1184028159, 862288241,
+    };
+    try testing.expectEqualSlices(u32, &expected, &out);
+}
+
+test "SeedSequence(0) is deterministic and non-trivial" {
+    var out1: [8]u32 = undefined;
+    var out2: [8]u32 = undefined;
+    seed_sequence(0, &out1, 8);
+    seed_sequence(0, &out2, 8);
+    try testing.expectEqualSlices(u32, &out1, &out2);
+    // At least one word should be nonzero
+    var any_nonzero = false;
+    for (out1) |w| {
+        if (w != 0) any_nonzero = true;
+    }
+    try testing.expect(any_nonzero);
+}
+
+// PCG64 Engine
+
+test "PCG64 seed=42: first 5 f64 match NumPy default_rng(42).random()" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    const expected = [5]f64{
+        0.7739560485559633,
+        0.4388784397520523,
+        0.8585979199113825,
+        0.6973680290593639,
+        0.09417734788764953,
+    };
+    for (expected) |e| {
+        try expectCloseF64(pcg64_random_f64(), e);
+    }
+}
+
+test "PCG64 seed=0: first 3 f64 match NumPy default_rng(0).random()" {
+    var words: [8]u32 = undefined;
+    seed_sequence(0, &words, 8);
+    pcg64_init_from_ss(&words);
+    const expected = [3]f64{
+        0.6369616873214543,
+        0.2697867137638703,
+        0.04097352393619469,
+    };
+    for (expected) |e| {
+        try expectCloseF64(pcg64_random_f64(), e);
+    }
+}
+
+test "PCG64 state save/restore produces identical stream" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    // Advance 50 steps
+    for (0..50) |_| _ = pcg64_step();
+
+    // Save state
+    var state_buf: [6]u64 = undefined;
+    pcg64_get_state(&state_buf);
+
+    // Draw 5 values
+    var ref: [5]u64 = undefined;
+    for (0..5) |i| ref[i] = pcg64_step();
+
+    // Restore and verify identical
+    pcg64_set_state_ptr(&state_buf);
+    for (0..5) |i| {
+        try testing.expectEqual(ref[i], pcg64_step());
+    }
+}
+
+test "PCG64 bounded_uint64 stays in range" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    // Draw 1000 bounded values and check range
+    for (0..1000) |_| {
+        const v = pcg64_bounded_uint64(10, 89); // [10, 99]
+        try testing.expect(v >= 10);
+        try testing.expect(v <= 99);
+    }
+}
+
+// Ziggurat Distributions (PCG64)
+
+test "PCG64 standard_normal seed=42: first 3 match NumPy" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    const expected = [3]f64{
+        0.30471707975443135,
+        -1.0399841062404955,
+        0.7504511958064572,
+    };
+    for (expected) |e| {
+        try expectCloseF64(standard_normal_impl(.pcg), e);
+    }
+}
+
+test "PCG64 standard_exponential seed=42: first 3 match NumPy" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    const expected = [3]f64{
+        2.4042086039659947,
+        2.3361896558244535,
+        2.384760999874255,
+    };
+    for (expected) |e| {
+        try expectCloseF64(standard_exponential_impl(.pcg), e);
+    }
+}
+
+// Legacy Distributions (MT19937)
+
+test "Legacy gauss seed=42: first 5 match NumPy randn()" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    const expected = [5]f64{
+        0.4967141530112327,
+        -0.13826430117118466,
+        0.6476885381006925,
+        1.5230298564080254,
+        -0.23415337472333597,
+    };
+    for (expected) |e| {
+        try expectCloseF64(legacy_gauss_impl(), e);
+    }
+}
+
+test "Legacy standard_exponential seed=42: first 3 match NumPy" {
+    mt19937_init(42);
+    const expected = [3]f64{
+        0.4692680899768591,
+        3.010121430917521,
+        1.3167456935454493,
+    };
+    for (expected) |e| {
+        try expectCloseF64(legacy_standard_exponential_impl(), e);
+    }
+}
+
+test "Legacy standard_gamma seed=42, shape=2.0: first 3 match NumPy" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    const expected = [3]f64{
+        2.3936793898692366,
+        1.4944647302155876,
+        1.3822835843709536,
+    };
+    for (expected) |e| {
+        try expectCloseF64(legacy_standard_gamma_impl(2.0), e);
+    }
+}
+
+test "Legacy gauss_reset clears cached value" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    _ = legacy_gauss_impl(); // produces pair, caches one
+    try testing.expect(legacy_has_gauss);
+    legacy_gauss_reset();
+    try testing.expect(!legacy_has_gauss);
+    try testing.expectEqual(@as(f64, 0.0), legacy_gauss_cached);
+}
+
+// Bulk Fill — Bounded Integers
+
+test "fill_rk_interval seed=42, max=9: first 10 match NumPy randint(0,10)" {
+    mt19937_init(42);
+    var out: [10]u32 = undefined;
+    fill_rk_interval(&out, 10, 9);
+    const expected = [10]u32{ 6, 3, 7, 4, 6, 9, 2, 6, 7, 4 };
+    try testing.expectEqualSlices(u32, &expected, &out);
+}
+
+test "fill_rk_interval max=0 produces all zeros" {
+    mt19937_init(0);
+    var out: [5]u32 = undefined;
+    fill_rk_interval(&out, 5, 0);
+    for (out) |v| try testing.expectEqual(@as(u32, 0), v);
+}
+
+test "fill_randint_u8 stays in range" {
+    mt19937_init(42);
+    var out: [100]u8 = undefined;
+    fill_randint_u8(&out, 100, 49, 10); // [10, 59]
+    for (out) |v| {
+        try testing.expect(v >= 10);
+        try testing.expect(v <= 59);
+    }
+}
+
+test "fill_randint_u16 stays in range" {
+    mt19937_init(42);
+    var out: [100]u16 = undefined;
+    fill_randint_u16(&out, 100, 999, 100); // [100, 1099]
+    for (out) |v| {
+        try testing.expect(v >= 100);
+        try testing.expect(v <= 1099);
+    }
+}
+
+test "fill_randint_i64 stays in range" {
+    mt19937_init(42);
+    var out: [100]i64 = undefined;
+    fill_randint_i64(&out, 100, 49, -20); // [-20, 29]
+    for (out) |v| {
+        try testing.expect(v >= -20);
+        try testing.expect(v <= 29);
+    }
+}
+
+// Bulk Fill — Uniform
+
+test "fill_uniform_f64_mt seed=42 matches sequential mt19937_random_f64" {
+    mt19937_init(42);
+    var bulk: [10]f64 = undefined;
+    fill_uniform_f64_mt(&bulk, 10);
+
+    mt19937_init(42);
+    for (0..10) |i| {
+        try expectCloseF64(bulk[i], mt19937_random_f64());
+    }
+}
+
+test "fill_uniform_f64_pcg seed=42 matches sequential pcg64_random_f64" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    var bulk: [10]f64 = undefined;
+    fill_uniform_f64_pcg(&bulk, 10);
+
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    for (0..10) |i| {
+        try expectCloseF64(bulk[i], pcg64_random_f64());
+    }
+}
+
+// Continuous Distributions — range & basic sanity
+
+test "fill_pareto produces positive values" {
+    mt19937_init(42);
+    var out: [100]f64 = undefined;
+    fill_pareto(&out, 100, 2.0);
+    for (out) |v| try testing.expect(v >= 0.0);
+}
+
+test "fill_weibull produces non-negative values" {
+    mt19937_init(42);
+    var out: [100]f64 = undefined;
+    fill_weibull(&out, 100, 1.5);
+    for (out) |v| try testing.expect(v >= 0.0);
+}
+
+test "fill_rayleigh produces non-negative values" {
+    mt19937_init(42);
+    var out: [100]f64 = undefined;
+    fill_rayleigh(&out, 100, 2.0);
+    for (out) |v| try testing.expect(v >= 0.0);
+}
+
+test "fill_beta produces values in (0, 1)" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    var out: [200]f64 = undefined;
+    fill_beta(&out, 200, 2.0, 5.0);
+    for (out) |v| {
+        try testing.expect(v > 0.0);
+        try testing.expect(v < 1.0);
+    }
+}
+
+test "fill_power produces values in (0, 1)" {
+    mt19937_init(42);
+    var out: [100]f64 = undefined;
+    fill_power(&out, 100, 3.0);
+    for (out) |v| {
+        try testing.expect(v > 0.0);
+        try testing.expect(v < 1.0);
+    }
+}
+
+test "fill_triangular produces values in [left, right]" {
+    mt19937_init(42);
+    var out: [200]f64 = undefined;
+    fill_triangular(&out, 200, 1.0, 5.0, 10.0);
+    for (out) |v| {
+        try testing.expect(v >= 1.0);
+        try testing.expect(v <= 10.0);
+    }
+}
+
+test "fill_standard_t has mean near zero" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    var out: [5000]f64 = undefined;
+    fill_standard_t(&out, 5000, 10.0);
+    var sum: f64 = 0;
+    for (out) |v| sum += v;
+    const mean = sum / 5000.0;
+    try testing.expect(@abs(mean) < 0.1);
+}
+
+test "fill_f produces positive values" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    var out: [100]f64 = undefined;
+    fill_f(&out, 100, 5.0, 10.0);
+    for (out) |v| try testing.expect(v > 0.0);
+}
+
+// Discrete Distributions — range & basic sanity
+
+test "fill_poisson produces non-negative values" {
+    mt19937_init(42);
+    var out: [200]i64 = undefined;
+    fill_poisson(&out, 200, 5.0);
+    for (out) |v| try testing.expect(v >= 0);
+}
+
+test "fill_poisson lam=0 produces all zeros" {
+    mt19937_init(42);
+    var out: [10]i64 = undefined;
+    fill_poisson(&out, 10, 0.0);
+    for (out) |v| try testing.expectEqual(@as(i64, 0), v);
+}
+
+test "fill_binomial stays in [0, trials]" {
+    mt19937_init(42);
+    var out: [200]i64 = undefined;
+    fill_binomial(&out, 200, 20, 0.3);
+    for (out) |v| {
+        try testing.expect(v >= 0);
+        try testing.expect(v <= 20);
+    }
+}
+
+test "fill_geometric produces values >= 1" {
+    mt19937_init(42);
+    var out: [200]i64 = undefined;
+    fill_geometric(&out, 200, 0.5);
+    for (out) |v| try testing.expect(v >= 1);
+}
+
+test "fill_negative_binomial produces non-negative values" {
+    mt19937_init(42);
+    legacy_gauss_reset();
+    var out: [200]i64 = undefined;
+    fill_negative_binomial(&out, 200, 5.0, 0.5);
+    for (out) |v| try testing.expect(v >= 0);
+}
+
+test "fill_hypergeometric stays in [0, min(ngood, nsample)]" {
+    mt19937_init(42);
+    var out: [200]i64 = undefined;
+    fill_hypergeometric(&out, 200, 30, 70, 20);
+    for (out) |v| {
+        try testing.expect(v >= 0);
+        try testing.expect(v <= 20);
+    }
+}
+
+test "fill_logseries produces values >= 1" {
+    mt19937_init(42);
+    var out: [200]i64 = undefined;
+    fill_logseries(&out, 200, 0.6);
+    for (out) |v| try testing.expect(v >= 1);
+}
+
+test "fill_zipf produces values >= 1" {
+    mt19937_init(42);
+    var out: [200]i64 = undefined;
+    fill_zipf(&out, 200, 2.0);
+    for (out) |v| try testing.expect(v >= 1);
+}
+
+// Utility
+
+test "fill_permutation seed=42, n=6 matches NumPy" {
+    mt19937_init(42);
+    var out: [6]f64 = undefined;
+    fill_permutation(&out, 6);
+    const expected = [6]f64{ 0.0, 1.0, 5.0, 2.0, 4.0, 3.0 };
+    try testing.expectEqualSlices(f64, &expected, &out);
+}
+
+test "fill_permutation is a valid permutation" {
+    mt19937_init(123);
+    const n = 10;
+    var out: [n]f64 = undefined;
+    fill_permutation(&out, n);
+    // Every integer 0..9 should appear exactly once
+    var seen: [n]bool = [_]bool{false} ** n;
+    for (out) |v| {
+        const idx: usize = @intFromFloat(v);
+        try testing.expect(!seen[idx]);
+        seen[idx] = true;
+    }
+    for (seen) |s| try testing.expect(s);
+}
+
+test "fill_permutation_pcg seed=42, n=10 matches NumPy Generator.permutation(10)" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    var out: [10]i64 = undefined;
+    fill_permutation_pcg(&out, 10);
+    const expected = [10]i64{ 5, 6, 0, 7, 3, 2, 4, 9, 1, 8 };
+    try testing.expectEqualSlices(i64, &expected, &out);
+}
+
+test "fill_permutation_pcg seed=42, n=20 matches NumPy Generator.permutation(20)" {
+    var words: [8]u32 = undefined;
+    seed_sequence(42, &words, 8);
+    pcg64_init_from_ss(&words);
+    var out: [20]i64 = undefined;
+    fill_permutation_pcg(&out, 20);
+    const expected = [20]i64{ 15, 9, 14, 7, 12, 10, 6, 19, 3, 0, 16, 5, 11, 18, 2, 4, 17, 1, 13, 8 };
+    try testing.expectEqualSlices(i64, &expected, &out);
+}
+
+test "fill_permutation_pcg is a valid permutation" {
+    var words: [8]u32 = undefined;
+    seed_sequence(123, &words, 8);
+    pcg64_init_from_ss(&words);
+    const n = 15;
+    var out: [n]i64 = undefined;
+    fill_permutation_pcg(&out, n);
+    var seen: [n]bool = [_]bool{false} ** n;
+    for (out) |v| {
+        const idx: usize = @intCast(v);
+        try testing.expect(!seen[idx]);
+        seen[idx] = true;
+    }
+    for (seen) |s| try testing.expect(s);
 }

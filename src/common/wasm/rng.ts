@@ -60,6 +60,8 @@ import {
   fill_randint_u8,
   fill_randint_u16,
   fill_permutation,
+  fill_permutation_pcg,
+  fill_bounded_uint64_pcg,
 } from './bins/rng.wasm';
 import { ensureMemory, resetAllocator, alloc, copyOut, copyIn } from './runtime';
 import type { TypedArray } from '../dtype';
@@ -177,6 +179,7 @@ export const fillLegacyStandardExponential = (n: number) =>
   bulkFill(n, Float64Array, fill_legacy_standard_exponential);
 export const fillStandardCauchy = (n: number) => bulkFill(n, Float64Array, fill_standard_cauchy);
 export const fillPermutation = (n: number) => bulkFill(n, Float64Array, fill_permutation);
+export const fillPermutationPCG = (n: number) => bulkFill(n, BigInt64Array, fill_permutation_pcg);
 
 // Float64 fills with parameters — use closures to pass extra args
 export const fillLegacyStandardGamma = (n: number, shape: number) =>
@@ -247,3 +250,5 @@ export const fillRandintU8 = (n: number, rng: number, off: number) =>
   bulkFill(n, Uint8Array, (ptr, nn) => fill_randint_u8(ptr, nn, rng, off));
 export const fillRandintU16 = (n: number, rng: number, off: number) =>
   bulkFill(n, Uint16Array, (ptr, nn) => fill_randint_u16(ptr, nn, rng, off));
+export const fillBoundedUint64PCG = (n: number, off: number, rng: number) =>
+  bulkFill(n, BigInt64Array, (ptr, nn) => fill_bounded_uint64_pcg(ptr, nn, off, rng));
