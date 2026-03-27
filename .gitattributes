@@ -3,3 +3,6 @@
 *.cjs linguist-vendored
 *.html linguist-vendored
 *.mdx linguist-documentation
+scripts/** linguist-vendored
+benchmarks/** linguist-vendored
+wasm-bench/** linguist-vendored
