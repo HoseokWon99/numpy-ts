@@ -374,7 +374,7 @@ export {
 // Rounding Functions
 // ============================================================
 
-export { around, round_, ceil, fix, floor, rint, trunc } from './full';
+export { around, ceil, fix, floor, rint, trunc } from './full';
 
 // Alias
 export { around as round } from './full';
@@ -1012,4 +1012,4 @@ export const fft = {
 
 declare const __VERSION_PLACEHOLDER__: string;
 export const __version__ =
-  typeof __VERSION_PLACEHOLDER__ !== 'undefined' ? __VERSION_PLACEHOLDER__ : '1.1.0';
+  typeof __VERSION_PLACEHOLDER__ !== 'undefined' ? __VERSION_PLACEHOLDER__ : '1.2.0';

@@ -2,3 +2,7 @@
 div[class*="mt-8"][class*="lg:mt-0"][class*="flex"][class*="xl:hidden"] {
     display: none !important;
 }
+
+.chat-assistant-floating-input {
+  display: none !important;
+}
