@@ -46,6 +46,12 @@ export const benchmarkData = {
           "numpyTsOps": 1000235.4
         },
         {
+          "name": "arange(1000) float16",
+          "ratio": 2.7702,
+          "numpyOps": 2825756.1,
+          "numpyTsOps": 1020045.4
+        },
+        {
           "name": "arange(1000) int64",
           "ratio": 2.814,
           "numpyOps": 2777535.4,
@@ -94,12 +100,6 @@ export const benchmarkData = {
           "numpyTsOps": 994868.1
         },
         {
-          "name": "arange(1000) float16",
-          "ratio": 2.7702,
-          "numpyOps": 2825756.1,
-          "numpyTsOps": 1020045.4
-        },
-        {
           "name": "asarray_chkfinite [100x100]",
           "ratio": 3.0405,
           "numpyOps": 428498.8,
@@ -128,6 +128,12 @@ export const benchmarkData = {
           "ratio": 2.7363,
           "numpyOps": 1395395.6,
           "numpyTsOps": 509965.8
+        },
+        {
+          "name": "copy [100x100] float16",
+          "ratio": 2.1022,
+          "numpyOps": 1811480.7,
+          "numpyTsOps": 861699.0
         },
         {
           "name": "copy [100x100] int64",
@@ -178,12 +184,6 @@ export const benchmarkData = {
           "numpyTsOps": 1143914.1
         },
         {
-          "name": "copy [100x100] float16",
-          "ratio": 2.1022,
-          "numpyOps": 1811480.7,
-          "numpyTsOps": 861699.0
-        },
-        {
           "name": "diag [100]",
           "ratio": 1.1728,
           "numpyOps": 443850.7,
@@ -194,6 +194,12 @@ export const benchmarkData = {
           "ratio": 0.8947,
           "numpyOps": 451822.4,
           "numpyTsOps": 504996.8
+        },
+        {
+          "name": "diag [100] float16",
+          "ratio": 0.7658,
+          "numpyOps": 523331.1,
+          "numpyTsOps": 683413.1
         },
         {
           "name": "diag [100] int64",
@@ -244,12 +250,6 @@ export const benchmarkData = {
           "numpyTsOps": 324096.8
         },
         {
-          "name": "diag [100] float16",
-          "ratio": 0.7658,
-          "numpyOps": 523331.1,
-          "numpyTsOps": 683413.1
-        },
-        {
           "name": "empty [100x100]",
           "ratio": 10.6299,
           "numpyOps": 6681038.4,
@@ -260,6 +260,12 @@ export const benchmarkData = {
           "ratio": 10.8207,
           "numpyOps": 6460233.4,
           "numpyTsOps": 597025.1
+        },
+        {
+          "name": "empty [100x100] float16",
+          "ratio": 11.6262,
+          "numpyOps": 6471291.1,
+          "numpyTsOps": 556611.4
         },
         {
           "name": "empty [100x100] int64",
@@ -322,12 +328,6 @@ export const benchmarkData = {
           "numpyTsOps": 592274.2
         },
         {
-          "name": "empty [100x100] float16",
-          "ratio": 11.6262,
-          "numpyOps": 6471291.1,
-          "numpyTsOps": 556611.4
-        },
-        {
           "name": "eye(100)",
           "ratio": 1.0778,
           "numpyOps": 494555.9,
@@ -338,6 +338,12 @@ export const benchmarkData = {
           "ratio": 1.0331,
           "numpyOps": 498235.2,
           "numpyTsOps": 482284.1
+        },
+        {
+          "name": "eye(100) float16",
+          "ratio": 1.1563,
+          "numpyOps": 494349.6,
+          "numpyTsOps": 427526.5
         },
         {
           "name": "eye(100) int64",
@@ -388,12 +394,6 @@ export const benchmarkData = {
           "numpyTsOps": 486045.1
         },
         {
-          "name": "eye(100) float16",
-          "ratio": 1.1563,
-          "numpyOps": 494349.6,
-          "numpyTsOps": 427526.5
-        },
-        {
           "name": "full [100x100]",
           "ratio": 1.5199,
           "numpyOps": 823633.3,
@@ -404,6 +404,12 @@ export const benchmarkData = {
           "ratio": 1.5152,
           "numpyOps": 825359.4,
           "numpyTsOps": 544721.2
+        },
+        {
+          "name": "full [100x100] float16",
+          "ratio": 1.4607,
+          "numpyOps": 820387.7,
+          "numpyTsOps": 561637.8
         },
         {
           "name": "full [100x100] int64",
@@ -466,12 +472,6 @@ export const benchmarkData = {
           "numpyTsOps": 501818.1
         },
         {
-          "name": "full [100x100] float16",
-          "ratio": 1.4607,
-          "numpyOps": 820387.7,
-          "numpyTsOps": 561637.8
-        },
-        {
           "name": "geomspace(1, 1000, 1000)",
           "ratio": 0.2382,
           "numpyOps": 71029.8,
@@ -482,6 +482,12 @@ export const benchmarkData = {
           "ratio": 0.2432,
           "numpyOps": 72403.6,
           "numpyTsOps": 297666.8
+        },
+        {
+          "name": "geomspace(1, 1000, 1000) float16",
+          "ratio": 0.2486,
+          "numpyOps": 72840.4,
+          "numpyTsOps": 292997.6
         },
         {
           "name": "geomspace(1, 1000, 1000) int64",
@@ -532,12 +538,6 @@ export const benchmarkData = {
           "numpyTsOps": 295164.7
         },
         {
-          "name": "geomspace(1, 1000, 1000) float16",
-          "ratio": 0.2486,
-          "numpyOps": 72840.4,
-          "numpyTsOps": 292997.6
-        },
-        {
           "name": "identity(100)",
           "ratio": 0.9765,
           "numpyOps": 455111.6,
@@ -548,6 +548,12 @@ export const benchmarkData = {
           "ratio": 0.9891,
           "numpyOps": 454893.9,
           "numpyTsOps": 459922.2
+        },
+        {
+          "name": "identity(100) float16",
+          "ratio": 0.9976,
+          "numpyOps": 457606.7,
+          "numpyTsOps": 458717.3
         },
         {
           "name": "identity(100) int64",
@@ -598,12 +604,6 @@ export const benchmarkData = {
           "numpyTsOps": 453348.5
         },
         {
-          "name": "identity(100) float16",
-          "ratio": 0.9976,
-          "numpyOps": 457606.7,
-          "numpyTsOps": 458717.3
-        },
-        {
           "name": "linspace(0, 100, 1000)",
           "ratio": 0.3056,
           "numpyOps": 382254.0,
@@ -614,6 +614,12 @@ export const benchmarkData = {
           "ratio": 0.3029,
           "numpyOps": 382518.0,
           "numpyTsOps": 1263054.9
+        },
+        {
+          "name": "linspace(0, 100, 1000) float16",
+          "ratio": 0.3025,
+          "numpyOps": 379400.0,
+          "numpyTsOps": 1254419.0
         },
         {
           "name": "linspace(0, 100, 1000) int64",
@@ -664,12 +670,6 @@ export const benchmarkData = {
           "numpyTsOps": 1276465.9
         },
         {
-          "name": "linspace(0, 100, 1000) float16",
-          "ratio": 0.3025,
-          "numpyOps": 379400.0,
-          "numpyTsOps": 1254419.0
-        },
-        {
           "name": "logspace(0, 3, 1000)",
           "ratio": 0.7178,
           "numpyOps": 124713.8,
@@ -680,6 +680,12 @@ export const benchmarkData = {
           "ratio": 0.7259,
           "numpyOps": 122699.8,
           "numpyTsOps": 169035.2
+        },
+        {
+          "name": "logspace(0, 3, 1000) float16",
+          "ratio": 0.7369,
+          "numpyOps": 125889.7,
+          "numpyTsOps": 170846.9
         },
         {
           "name": "logspace(0, 3, 1000) int64",
@@ -730,12 +736,6 @@ export const benchmarkData = {
           "numpyTsOps": 171502.3
         },
         {
-          "name": "logspace(0, 3, 1000) float16",
-          "ratio": 0.7369,
-          "numpyOps": 125889.7,
-          "numpyTsOps": 170846.9
-        },
-        {
           "name": "ones [100x100]",
           "ratio": 1.9754,
           "numpyOps": 808154.9,
@@ -746,6 +746,12 @@ export const benchmarkData = {
           "ratio": 1.8804,
           "numpyOps": 805878.3,
           "numpyTsOps": 428577.0
+        },
+        {
+          "name": "ones [100x100] float16",
+          "ratio": 1.9213,
+          "numpyOps": 789981.7,
+          "numpyTsOps": 411173.6
         },
         {
           "name": "ones [100x100] int64",
@@ -814,12 +820,6 @@ export const benchmarkData = {
           "numpyTsOps": 430079.7
         },
         {
-          "name": "ones [100x100] float16",
-          "ratio": 1.9213,
-          "numpyOps": 789981.7,
-          "numpyTsOps": 411173.6
-        },
-        {
           "name": "require [100x100]",
           "ratio": 0.0675,
           "numpyOps": 1083845.2,
@@ -830,6 +830,12 @@ export const benchmarkData = {
           "ratio": 0.0655,
           "numpyOps": 1074657.8,
           "numpyTsOps": 16409582.7
+        },
+        {
+          "name": "require [100x100] float16",
+          "ratio": 0.0659,
+          "numpyOps": 1082875.2,
+          "numpyTsOps": 16420383.4
         },
         {
           "name": "require [100x100] int64",
@@ -880,12 +886,6 @@ export const benchmarkData = {
           "numpyTsOps": 16087450.9
         },
         {
-          "name": "require [100x100] float16",
-          "ratio": 0.0659,
-          "numpyOps": 1082875.2,
-          "numpyTsOps": 16420383.4
-        },
-        {
           "name": "tri [100x100]",
           "ratio": 0.9339,
           "numpyOps": 182040.0,
@@ -896,6 +896,12 @@ export const benchmarkData = {
           "ratio": 0.9283,
           "numpyOps": 182346.6,
           "numpyTsOps": 196423.5
+        },
+        {
+          "name": "tri [100x100] float16",
+          "ratio": 0.9324,
+          "numpyOps": 181171.2,
+          "numpyTsOps": 194310.9
         },
         {
           "name": "tri [100x100] int64",
@@ -946,12 +952,6 @@ export const benchmarkData = {
           "numpyTsOps": 204748.7
         },
         {
-          "name": "tri [100x100] float16",
-          "ratio": 0.9324,
-          "numpyOps": 181171.2,
-          "numpyTsOps": 194310.9
-        },
-        {
           "name": "tril [100x100]",
           "ratio": 0.7994,
           "numpyOps": 149868.1,
@@ -962,6 +962,12 @@ export const benchmarkData = {
           "ratio": 0.587,
           "numpyOps": 154430.5,
           "numpyTsOps": 263085.2
+        },
+        {
+          "name": "tril [100x100] float16",
+          "ratio": 0.4985,
+          "numpyOps": 156932.9,
+          "numpyTsOps": 314800.6
         },
         {
           "name": "tril [100x100] int64",
@@ -1012,12 +1018,6 @@ export const benchmarkData = {
           "numpyTsOps": 358612.4
         },
         {
-          "name": "tril [100x100] float16",
-          "ratio": 0.4985,
-          "numpyOps": 156932.9,
-          "numpyTsOps": 314800.6
-        },
-        {
           "name": "triu [100x100]",
           "ratio": 0.8832,
           "numpyOps": 151233.6,
@@ -1028,6 +1028,12 @@ export const benchmarkData = {
           "ratio": 0.6637,
           "numpyOps": 156276.3,
           "numpyTsOps": 235458.9
+        },
+        {
+          "name": "triu [100x100] float16",
+          "ratio": 0.4921,
+          "numpyOps": 156250.3,
+          "numpyTsOps": 317525.3
         },
         {
           "name": "triu [100x100] int64",
@@ -1078,12 +1084,6 @@ export const benchmarkData = {
           "numpyTsOps": 360512.4
         },
         {
-          "name": "triu [100x100] float16",
-          "ratio": 0.4921,
-          "numpyOps": 156250.3,
-          "numpyTsOps": 317525.3
-        },
-        {
           "name": "zeros [1000]",
           "ratio": 1.8974,
           "numpyOps": 3825540.0,
@@ -1094,6 +1094,12 @@ export const benchmarkData = {
           "ratio": 1.8286,
           "numpyOps": 3894817.8,
           "numpyTsOps": 2129934.9
+        },
+        {
+          "name": "zeros [1000] float16",
+          "ratio": 1.7253,
+          "numpyOps": 3929394.0,
+          "numpyTsOps": 2277477.6
         },
         {
           "name": "zeros [1000] int64",
@@ -1156,12 +1162,6 @@ export const benchmarkData = {
           "numpyTsOps": 2204691.3
         },
         {
-          "name": "zeros [1000] float16",
-          "ratio": 1.7253,
-          "numpyOps": 3929394.0,
-          "numpyTsOps": 2277477.6
-        },
-        {
           "name": "zeros [100x100]",
           "ratio": 1.5815,
           "numpyOps": 1331857.2,
@@ -1172,6 +1172,12 @@ export const benchmarkData = {
           "ratio": 1.6085,
           "numpyOps": 1355884.4,
           "numpyTsOps": 842970.3
+        },
+        {
+          "name": "zeros [100x100] float16",
+          "ratio": 1.6227,
+          "numpyOps": 1354938.4,
+          "numpyTsOps": 834987.3
         },
         {
           "name": "zeros [100x100] int64",
@@ -1240,12 +1246,6 @@ export const benchmarkData = {
           "numpyTsOps": 823588.1
         },
         {
-          "name": "zeros [100x100] float16",
-          "ratio": 1.6227,
-          "numpyOps": 1354938.4,
-          "numpyTsOps": 834987.3
-        },
-        {
           "name": "zeros_like [100x100]",
           "ratio": 1.4753,
           "numpyOps": 768583.8,
@@ -1256,6 +1256,12 @@ export const benchmarkData = {
           "ratio": 1.3917,
           "numpyOps": 1019129.8,
           "numpyTsOps": 732304.9
+        },
+        {
+          "name": "zeros_like [100x100] float16",
+          "ratio": 1.2166,
+          "numpyOps": 1236489.6,
+          "numpyTsOps": 1016362.2
         },
         {
           "name": "zeros_like [100x100] int64",
@@ -1316,12 +1322,6 @@ export const benchmarkData = {
           "ratio": 0.5936,
           "numpyOps": 315240.0,
           "numpyTsOps": 531025.3
-        },
-        {
-          "name": "zeros_like [100x100] float16",
-          "ratio": 1.2166,
-          "numpyOps": 1236489.6,
-          "numpyTsOps": 1016362.2
         }
       ]
     },
@@ -1343,6 +1343,12 @@ export const benchmarkData = {
           "ratio": 3.869,
           "numpyOps": 1132575.6,
           "numpyTsOps": 292731.2
+        },
+        {
+          "name": "absolute [100x100] float16",
+          "ratio": 7.8673,
+          "numpyOps": 1466758.3,
+          "numpyTsOps": 186437.2
         },
         {
           "name": "absolute [100x100] int64",
@@ -1405,12 +1411,6 @@ export const benchmarkData = {
           "numpyTsOps": 52009.2
         },
         {
-          "name": "absolute [100x100] float16",
-          "ratio": 7.8673,
-          "numpyOps": 1466758.3,
-          "numpyTsOps": 186437.2
-        },
-        {
           "name": "add [100x100] + [100x100]",
           "ratio": 4.0335,
           "numpyOps": 490861.0,
@@ -1421,6 +1421,12 @@ export const benchmarkData = {
           "ratio": 5.8147,
           "numpyOps": 1097320.4,
           "numpyTsOps": 188716.4
+        },
+        {
+          "name": "add [100x100] + [100x100] float16",
+          "ratio": 0.2614,
+          "numpyOps": 30241.1,
+          "numpyTsOps": 115708.6
         },
         {
           "name": "add [100x100] + [100x100] int64",
@@ -1483,12 +1489,6 @@ export const benchmarkData = {
           "numpyTsOps": 124624.7
         },
         {
-          "name": "add [100x100] + [100x100] float16",
-          "ratio": 0.2614,
-          "numpyOps": 30241.1,
-          "numpyTsOps": 115708.6
-        },
-        {
           "name": "add [100x100] + scalar",
           "ratio": 4.7145,
           "numpyOps": 742816.3,
@@ -1499,6 +1499,12 @@ export const benchmarkData = {
           "ratio": 4.1912,
           "numpyOps": 1034762.0,
           "numpyTsOps": 246891.7
+        },
+        {
+          "name": "add [100x100] + scalar float16",
+          "ratio": 0.2563,
+          "numpyOps": 29799.2,
+          "numpyTsOps": 116273.7
         },
         {
           "name": "add [100x100] + scalar int64",
@@ -1549,12 +1555,6 @@ export const benchmarkData = {
           "numpyTsOps": 723221.5
         },
         {
-          "name": "add [100x100] + scalar float16",
-          "ratio": 0.2563,
-          "numpyOps": 29799.2,
-          "numpyTsOps": 116273.7
-        },
-        {
           "name": "clip [100x100]",
           "ratio": 1.1218,
           "numpyOps": 169981.4,
@@ -1565,6 +1565,12 @@ export const benchmarkData = {
           "ratio": 0.6303,
           "numpyOps": 154632.6,
           "numpyTsOps": 245327.6
+        },
+        {
+          "name": "clip [100x100] float16",
+          "ratio": 0.5496,
+          "numpyOps": 28538.6,
+          "numpyTsOps": 51925.2
         },
         {
           "name": "clip [100x100] int64",
@@ -1615,12 +1621,6 @@ export const benchmarkData = {
           "numpyTsOps": 743084.1
         },
         {
-          "name": "clip [100x100] float16",
-          "ratio": 0.5496,
-          "numpyOps": 28538.6,
-          "numpyTsOps": 51925.2
-        },
-        {
           "name": "divide [100x100] / [100x100]",
           "ratio": 4.2044,
           "numpyOps": 528663.7,
@@ -1631,6 +1631,12 @@ export const benchmarkData = {
           "ratio": 5.2629,
           "numpyOps": 954599.5,
           "numpyTsOps": 181383.3
+        },
+        {
+          "name": "divide [100x100] / [100x100] float16",
+          "ratio": 1.1464,
+          "numpyOps": 30618.4,
+          "numpyTsOps": 26708.3
         },
         {
           "name": "divide [100x100] / [100x100] int64",
@@ -1693,12 +1699,6 @@ export const benchmarkData = {
           "numpyTsOps": 71522.3
         },
         {
-          "name": "divide [100x100] / [100x100] float16",
-          "ratio": 1.1464,
-          "numpyOps": 30618.4,
-          "numpyTsOps": 26708.3
-        },
-        {
           "name": "divide [100x100] / scalar",
           "ratio": 3.7296,
           "numpyOps": 543186.7,
@@ -1709,6 +1709,12 @@ export const benchmarkData = {
           "ratio": 3.3765,
           "numpyOps": 823715.8,
           "numpyTsOps": 243957.1
+        },
+        {
+          "name": "divide [100x100] / scalar float16",
+          "ratio": 0.267,
+          "numpyOps": 30387.8,
+          "numpyTsOps": 113824.3
         },
         {
           "name": "divide [100x100] / scalar int64",
@@ -1757,12 +1763,6 @@ export const benchmarkData = {
           "ratio": 1.3575,
           "numpyOps": 216068.0,
           "numpyTsOps": 159161.2
-        },
-        {
-          "name": "divide [100x100] / scalar float16",
-          "ratio": 0.267,
-          "numpyOps": 30387.8,
-          "numpyTsOps": 113824.3
         },
         {
           "name": "divmod [100x100] [100x100]",
@@ -1819,6 +1819,12 @@ export const benchmarkData = {
           "numpyTsOps": 187934.0
         },
         {
+          "name": "fmax [100x100] [100x100] float16",
+          "ratio": 1.8637,
+          "numpyOps": 74405.1,
+          "numpyTsOps": 39922.3
+        },
+        {
           "name": "fmax [100x100] [100x100] int64",
           "ratio": 2.2948,
           "numpyOps": 302776.1,
@@ -1867,12 +1873,6 @@ export const benchmarkData = {
           "numpyTsOps": 555820.3
         },
         {
-          "name": "fmax [100x100] [100x100] float16",
-          "ratio": 1.8637,
-          "numpyOps": 74405.1,
-          "numpyTsOps": 39922.3
-        },
-        {
           "name": "fmax [100x100] scalar",
           "ratio": 1.5169,
           "numpyOps": 252629.9,
@@ -1883,6 +1883,12 @@ export const benchmarkData = {
           "ratio": 0.9888,
           "numpyOps": 264742.1,
           "numpyTsOps": 267745.7
+        },
+        {
+          "name": "fmax [100x100] scalar float16",
+          "ratio": 1.3508,
+          "numpyOps": 75185.5,
+          "numpyTsOps": 55659.0
         },
         {
           "name": "fmax [100x100] scalar int64",
@@ -1933,12 +1939,6 @@ export const benchmarkData = {
           "numpyTsOps": 635173.4
         },
         {
-          "name": "fmax [100x100] scalar float16",
-          "ratio": 1.3508,
-          "numpyOps": 75185.5,
-          "numpyTsOps": 55659.0
-        },
-        {
           "name": "fmin [100x100] [100x100]",
           "ratio": 2.4468,
           "numpyOps": 297519.9,
@@ -1949,6 +1949,12 @@ export const benchmarkData = {
           "ratio": 2.2392,
           "numpyOps": 406063.1,
           "numpyTsOps": 181340.2
+        },
+        {
+          "name": "fmin [100x100] [100x100] float16",
+          "ratio": 1.4693,
+          "numpyOps": 57652.5,
+          "numpyTsOps": 39239.2
         },
         {
           "name": "fmin [100x100] [100x100] int64",
@@ -1999,12 +2005,6 @@ export const benchmarkData = {
           "numpyTsOps": 525014.0
         },
         {
-          "name": "fmin [100x100] [100x100] float16",
-          "ratio": 1.4693,
-          "numpyOps": 57652.5,
-          "numpyTsOps": 39239.2
-        },
-        {
           "name": "fmin [100x100] scalar",
           "ratio": 1.5139,
           "numpyOps": 245882.3,
@@ -2015,6 +2015,12 @@ export const benchmarkData = {
           "ratio": 0.973,
           "numpyOps": 256057.9,
           "numpyTsOps": 263155.9
+        },
+        {
+          "name": "fmin [100x100] scalar float16",
+          "ratio": 1.0236,
+          "numpyOps": 55479.7,
+          "numpyTsOps": 54200.2
         },
         {
           "name": "fmin [100x100] scalar int64",
@@ -2063,12 +2069,6 @@ export const benchmarkData = {
           "ratio": 0.354,
           "numpyOps": 230367.2,
           "numpyTsOps": 650716.5
-        },
-        {
-          "name": "fmin [100x100] scalar float16",
-          "ratio": 1.0236,
-          "numpyOps": 55479.7,
-          "numpyTsOps": 54200.2
         },
         {
           "name": "fmod [100x100] % [100x100]",
@@ -2137,6 +2137,12 @@ export const benchmarkData = {
           "numpyTsOps": 204154.3
         },
         {
+          "name": "maximum [100x100] [100x100] float16",
+          "ratio": 1.877,
+          "numpyOps": 73164.9,
+          "numpyTsOps": 38979.4
+        },
+        {
           "name": "maximum [100x100] [100x100] int64",
           "ratio": 2.2624,
           "numpyOps": 304560.9,
@@ -2185,12 +2191,6 @@ export const benchmarkData = {
           "numpyTsOps": 542643.6
         },
         {
-          "name": "maximum [100x100] [100x100] float16",
-          "ratio": 1.877,
-          "numpyOps": 73164.9,
-          "numpyTsOps": 38979.4
-        },
-        {
           "name": "maximum [100x100] scalar",
           "ratio": 1.2839,
           "numpyOps": 217234.8,
@@ -2201,6 +2201,12 @@ export const benchmarkData = {
           "ratio": 0.9296,
           "numpyOps": 229704.3,
           "numpyTsOps": 247108.9
+        },
+        {
+          "name": "maximum [100x100] scalar float16",
+          "ratio": 1.3714,
+          "numpyOps": 75558.2,
+          "numpyTsOps": 55094.8
         },
         {
           "name": "maximum [100x100] scalar int64",
@@ -2251,12 +2257,6 @@ export const benchmarkData = {
           "numpyTsOps": 688905.8
         },
         {
-          "name": "maximum [100x100] scalar float16",
-          "ratio": 1.3714,
-          "numpyOps": 75558.2,
-          "numpyTsOps": 55094.8
-        },
-        {
           "name": "minimum [100x100] [100x100]",
           "ratio": 2.3043,
           "numpyOps": 309536.6,
@@ -2267,6 +2267,12 @@ export const benchmarkData = {
           "ratio": 2.1112,
           "numpyOps": 425281.9,
           "numpyTsOps": 201445.6
+        },
+        {
+          "name": "minimum [100x100] [100x100] float16",
+          "ratio": 1.4198,
+          "numpyOps": 57484.2,
+          "numpyTsOps": 40486.1
         },
         {
           "name": "minimum [100x100] [100x100] int64",
@@ -2317,12 +2323,6 @@ export const benchmarkData = {
           "numpyTsOps": 561927.4
         },
         {
-          "name": "minimum [100x100] [100x100] float16",
-          "ratio": 1.4198,
-          "numpyOps": 57484.2,
-          "numpyTsOps": 40486.1
-        },
-        {
           "name": "minimum [100x100] scalar",
           "ratio": 1.5334,
           "numpyOps": 219749.7,
@@ -2333,6 +2333,12 @@ export const benchmarkData = {
           "ratio": 0.965,
           "numpyOps": 225888.5,
           "numpyTsOps": 234073.7
+        },
+        {
+          "name": "minimum [100x100] scalar float16",
+          "ratio": 1.0789,
+          "numpyOps": 57307.4,
+          "numpyTsOps": 53117.7
         },
         {
           "name": "minimum [100x100] scalar int64",
@@ -2383,12 +2389,6 @@ export const benchmarkData = {
           "numpyTsOps": 705477.3
         },
         {
-          "name": "minimum [100x100] scalar float16",
-          "ratio": 1.0789,
-          "numpyOps": 57307.4,
-          "numpyTsOps": 53117.7
-        },
-        {
           "name": "mod [100x100] % [100x100]",
           "ratio": 1.1335,
           "numpyOps": 12177.5,
@@ -2417,6 +2417,12 @@ export const benchmarkData = {
           "ratio": 6.0105,
           "numpyOps": 1071020.2,
           "numpyTsOps": 178190.8
+        },
+        {
+          "name": "multiply [100x100] * [100x100] float16",
+          "ratio": 0.1985,
+          "numpyOps": 21942.4,
+          "numpyTsOps": 110531.5
         },
         {
           "name": "multiply [100x100] * [100x100] int64",
@@ -2479,12 +2485,6 @@ export const benchmarkData = {
           "numpyTsOps": 114549.6
         },
         {
-          "name": "multiply [100x100] * [100x100] float16",
-          "ratio": 0.1985,
-          "numpyOps": 21942.4,
-          "numpyTsOps": 110531.5
-        },
-        {
           "name": "multiply [100x100] * scalar",
           "ratio": 4.9276,
           "numpyOps": 733318.4,
@@ -2495,6 +2495,12 @@ export const benchmarkData = {
           "ratio": 3.9029,
           "numpyOps": 958568.7,
           "numpyTsOps": 245604.5
+        },
+        {
+          "name": "multiply [100x100] * scalar float16",
+          "ratio": 0.2539,
+          "numpyOps": 29779.2,
+          "numpyTsOps": 117299.7
         },
         {
           "name": "multiply [100x100] * scalar int64",
@@ -2545,12 +2551,6 @@ export const benchmarkData = {
           "numpyTsOps": 542852.3
         },
         {
-          "name": "multiply [100x100] * scalar float16",
-          "ratio": 0.2539,
-          "numpyOps": 29779.2,
-          "numpyTsOps": 117299.7
-        },
-        {
           "name": "nan_to_num [100x100]",
           "ratio": 0.9198,
           "numpyOps": 57165.3,
@@ -2561,6 +2561,12 @@ export const benchmarkData = {
           "ratio": 1.0909,
           "numpyOps": 66440.0,
           "numpyTsOps": 60904.1
+        },
+        {
+          "name": "nan_to_num [100x100] float16",
+          "ratio": 0.3483,
+          "numpyOps": 21271.5,
+          "numpyTsOps": 61066.3
         },
         {
           "name": "nan_to_num [100x100] int64",
@@ -2611,12 +2617,6 @@ export const benchmarkData = {
           "numpyTsOps": 1166936.5
         },
         {
-          "name": "nan_to_num [100x100] float16",
-          "ratio": 0.3483,
-          "numpyOps": 21271.5,
-          "numpyTsOps": 61066.3
-        },
-        {
           "name": "negative [100x100]",
           "ratio": 4.4921,
           "numpyOps": 799324.2,
@@ -2627,6 +2627,12 @@ export const benchmarkData = {
           "ratio": 3.9892,
           "numpyOps": 1169190.8,
           "numpyTsOps": 293090.7
+        },
+        {
+          "name": "negative [100x100] float16",
+          "ratio": 2.5528,
+          "numpyOps": 311994.1,
+          "numpyTsOps": 122217.9
         },
         {
           "name": "negative [100x100] int64",
@@ -2689,12 +2695,6 @@ export const benchmarkData = {
           "numpyTsOps": 174383.2
         },
         {
-          "name": "negative [100x100] float16",
-          "ratio": 2.5528,
-          "numpyOps": 311994.1,
-          "numpyTsOps": 122217.9
-        },
-        {
           "name": "positive [100x100]",
           "ratio": 0.9225,
           "numpyOps": 339890.8,
@@ -2705,6 +2705,12 @@ export const benchmarkData = {
           "ratio": 0.6125,
           "numpyOps": 345730.3,
           "numpyTsOps": 564438.9
+        },
+        {
+          "name": "positive [100x100] float16",
+          "ratio": 0.4,
+          "numpyOps": 348508.4,
+          "numpyTsOps": 871236.0
         },
         {
           "name": "positive [100x100] int64",
@@ -2767,12 +2773,6 @@ export const benchmarkData = {
           "numpyTsOps": 396836.4
         },
         {
-          "name": "positive [100x100] float16",
-          "ratio": 0.4,
-          "numpyOps": 348508.4,
-          "numpyTsOps": 871236.0
-        },
-        {
           "name": "reciprocal [100x100]",
           "ratio": 3.5936,
           "numpyOps": 613618.8,
@@ -2783,6 +2783,12 @@ export const benchmarkData = {
           "ratio": 4.0064,
           "numpyOps": 1002352.4,
           "numpyTsOps": 250189.4
+        },
+        {
+          "name": "reciprocal [100x100] float16",
+          "ratio": 0.2983,
+          "numpyOps": 39940.4,
+          "numpyTsOps": 133912.2
         },
         {
           "name": "reciprocal [100x100] int64",
@@ -2833,12 +2839,6 @@ export const benchmarkData = {
           "numpyTsOps": 132619.4
         },
         {
-          "name": "reciprocal [100x100] float16",
-          "ratio": 0.2983,
-          "numpyOps": 39940.4,
-          "numpyTsOps": 133912.2
-        },
-        {
           "name": "remainder [100x100] % [100x100]",
           "ratio": 1.846,
           "numpyOps": 12252.7,
@@ -2861,6 +2861,12 @@ export const benchmarkData = {
           "ratio": 1.0894,
           "numpyOps": 282416.5,
           "numpyTsOps": 259231.3
+        },
+        {
+          "name": "sign [100x100] float16",
+          "ratio": 1.0653,
+          "numpyOps": 126262.9,
+          "numpyTsOps": 118522.0
         },
         {
           "name": "sign [100x100] int64",
@@ -2887,12 +2893,6 @@ export const benchmarkData = {
           "numpyTsOps": 789919.0
         },
         {
-          "name": "sign [100x100] float16",
-          "ratio": 1.0653,
-          "numpyOps": 126262.9,
-          "numpyTsOps": 118522.0
-        },
-        {
           "name": "square [100x100]",
           "ratio": 4.9381,
           "numpyOps": 854331.8,
@@ -2903,6 +2903,12 @@ export const benchmarkData = {
           "ratio": 4.3572,
           "numpyOps": 1267323.5,
           "numpyTsOps": 290855.9
+        },
+        {
+          "name": "square [100x100] float16",
+          "ratio": 0.1956,
+          "numpyOps": 24775.2,
+          "numpyTsOps": 126668.0
         },
         {
           "name": "square [100x100] int64",
@@ -2953,12 +2959,6 @@ export const benchmarkData = {
           "numpyTsOps": 703659.8
         },
         {
-          "name": "square [100x100] float16",
-          "ratio": 0.1956,
-          "numpyOps": 24775.2,
-          "numpyTsOps": 126668.0
-        },
-        {
           "name": "subtract [100x100] - [100x100]",
           "ratio": 4.1709,
           "numpyOps": 515080.5,
@@ -2969,6 +2969,12 @@ export const benchmarkData = {
           "ratio": 5.6896,
           "numpyOps": 1083907.0,
           "numpyTsOps": 190508.3
+        },
+        {
+          "name": "subtract [100x100] - [100x100] float16",
+          "ratio": 0.2546,
+          "numpyOps": 29812.8,
+          "numpyTsOps": 117113.3
         },
         {
           "name": "subtract [100x100] - [100x100] int64",
@@ -3031,12 +3037,6 @@ export const benchmarkData = {
           "numpyTsOps": 120663.0
         },
         {
-          "name": "subtract [100x100] - [100x100] float16",
-          "ratio": 0.2546,
-          "numpyOps": 29812.8,
-          "numpyTsOps": 117113.3
-        },
-        {
           "name": "subtract [100x100] - scalar",
           "ratio": 4.8953,
           "numpyOps": 734044.9,
@@ -3047,6 +3047,12 @@ export const benchmarkData = {
           "ratio": 4.1574,
           "numpyOps": 1014089.1,
           "numpyTsOps": 243926.7
+        },
+        {
+          "name": "subtract [100x100] - scalar float16",
+          "ratio": 0.2563,
+          "numpyOps": 29745.5,
+          "numpyTsOps": 116064.4
         },
         {
           "name": "subtract [100x100] - scalar int64",
@@ -3095,12 +3101,6 @@ export const benchmarkData = {
           "ratio": 2.0661,
           "numpyOps": 1474875.8,
           "numpyTsOps": 713849.5
-        },
-        {
-          "name": "subtract [100x100] - scalar float16",
-          "ratio": 0.2563,
-          "numpyOps": 29745.5,
-          "numpyTsOps": 116064.4
         }
       ]
     },
@@ -3130,6 +3130,12 @@ export const benchmarkData = {
           "numpyTsOps": 291480.0
         },
         {
+          "name": "absolute [100x100] float16",
+          "ratio": 7.724,
+          "numpyOps": 1497011.0,
+          "numpyTsOps": 193813.1
+        },
+        {
           "name": "absolute [100x100] int64",
           "ratio": 4.4115,
           "numpyOps": 816072.6,
@@ -3152,12 +3158,6 @@ export const benchmarkData = {
           "ratio": 2.0475,
           "numpyOps": 1832089.9,
           "numpyTsOps": 894775.9
-        },
-        {
-          "name": "absolute [100x100] float16",
-          "ratio": 7.724,
-          "numpyOps": 1497011.0,
-          "numpyTsOps": 193813.1
         },
         {
           "name": "angle [100x100] complex128",
@@ -3188,6 +3188,12 @@ export const benchmarkData = {
           "ratio": 4.0642,
           "numpyOps": 77373.3,
           "numpyTsOps": 19037.6
+        },
+        {
+          "name": "exp [100x100] float16",
+          "ratio": 1.9413,
+          "numpyOps": 29103.7,
+          "numpyTsOps": 14992.1
         },
         {
           "name": "exp [100x100] int64",
@@ -3250,12 +3256,6 @@ export const benchmarkData = {
           "numpyTsOps": 6402.6
         },
         {
-          "name": "exp [100x100] float16",
-          "ratio": 1.9413,
-          "numpyOps": 29103.7,
-          "numpyTsOps": 14992.1
-        },
-        {
           "name": "exp2 [100x100]",
           "ratio": 2.7798,
           "numpyOps": 63704.8,
@@ -3266,6 +3266,12 @@ export const benchmarkData = {
           "ratio": 3.376,
           "numpyOps": 77464.0,
           "numpyTsOps": 22945.3
+        },
+        {
+          "name": "exp2 [100x100] float16",
+          "ratio": 1.6446,
+          "numpyOps": 29018.3,
+          "numpyTsOps": 17644.3
         },
         {
           "name": "exp2 [100x100] int64",
@@ -3328,12 +3334,6 @@ export const benchmarkData = {
           "numpyTsOps": 6622.3
         },
         {
-          "name": "exp2 [100x100] float16",
-          "ratio": 1.6446,
-          "numpyOps": 29018.3,
-          "numpyTsOps": 17644.3
-        },
-        {
           "name": "heaviside [100x100] [100x100]",
           "ratio": 0.8591,
           "numpyOps": 97019.8,
@@ -3356,6 +3356,12 @@ export const benchmarkData = {
           "ratio": 0.4275,
           "numpyOps": 6291.0,
           "numpyTsOps": 14716.8
+        },
+        {
+          "name": "i0 [100x100] float16",
+          "ratio": 0.0273,
+          "numpyOps": 390.6,
+          "numpyTsOps": 14310.7
         },
         {
           "name": "i0 [100x100] int64",
@@ -3406,12 +3412,6 @@ export const benchmarkData = {
           "numpyTsOps": 9334.4
         },
         {
-          "name": "i0 [100x100] float16",
-          "ratio": 0.0273,
-          "numpyOps": 390.6,
-          "numpyTsOps": 14310.7
-        },
-        {
           "name": "imag [100x100] complex128",
           "ratio": 6.2792,
           "numpyOps": 747307.4,
@@ -3434,6 +3434,12 @@ export const benchmarkData = {
           "ratio": 5.6085,
           "numpyOps": 65085.2,
           "numpyTsOps": 11604.8
+        },
+        {
+          "name": "log [100x100] float16",
+          "ratio": 2.5833,
+          "numpyOps": 28592.2,
+          "numpyTsOps": 11068.2
         },
         {
           "name": "log [100x100] int64",
@@ -3496,12 +3502,6 @@ export const benchmarkData = {
           "numpyTsOps": 9308.8
         },
         {
-          "name": "log [100x100] float16",
-          "ratio": 2.5833,
-          "numpyOps": 28592.2,
-          "numpyTsOps": 11068.2
-        },
-        {
           "name": "log10 [100x100]",
           "ratio": 3.6749,
           "numpyOps": 43712.1,
@@ -3512,6 +3512,12 @@ export const benchmarkData = {
           "ratio": 5.3437,
           "numpyOps": 65434.2,
           "numpyTsOps": 12245.1
+        },
+        {
+          "name": "log10 [100x100] float16",
+          "ratio": 2.4862,
+          "numpyOps": 28536.7,
+          "numpyTsOps": 11478.2
         },
         {
           "name": "log10 [100x100] int64",
@@ -3574,12 +3580,6 @@ export const benchmarkData = {
           "numpyTsOps": 9104.8
         },
         {
-          "name": "log10 [100x100] float16",
-          "ratio": 2.4862,
-          "numpyOps": 28536.7,
-          "numpyTsOps": 11478.2
-        },
-        {
           "name": "log2 [100x100]",
           "ratio": 3.7187,
           "numpyOps": 43635.1,
@@ -3590,6 +3590,12 @@ export const benchmarkData = {
           "ratio": 5.5841,
           "numpyOps": 65544.8,
           "numpyTsOps": 11737.7
+        },
+        {
+          "name": "log2 [100x100] float16",
+          "ratio": 2.6127,
+          "numpyOps": 29489.8,
+          "numpyTsOps": 11287.2
         },
         {
           "name": "log2 [100x100] int64",
@@ -3652,12 +3658,6 @@ export const benchmarkData = {
           "numpyTsOps": 9141.0
         },
         {
-          "name": "log2 [100x100] float16",
-          "ratio": 2.6127,
-          "numpyOps": 29489.8,
-          "numpyTsOps": 11287.2
-        },
-        {
           "name": "logaddexp [100x100]",
           "ratio": 4.2539,
           "numpyOps": 52319.4,
@@ -3668,6 +3668,12 @@ export const benchmarkData = {
           "ratio": 4.1605,
           "numpyOps": 53245.2,
           "numpyTsOps": 12797.8
+        },
+        {
+          "name": "logaddexp [100x100] float16",
+          "ratio": 2.7449,
+          "numpyOps": 27729.3,
+          "numpyTsOps": 10102.2
         },
         {
           "name": "logaddexp [100x100] int64",
@@ -3718,12 +3724,6 @@ export const benchmarkData = {
           "numpyTsOps": 12726.8
         },
         {
-          "name": "logaddexp [100x100] float16",
-          "ratio": 2.7449,
-          "numpyOps": 27729.3,
-          "numpyTsOps": 10102.2
-        },
-        {
           "name": "negative [100x100]",
           "ratio": 4.4653,
           "numpyOps": 790118.0,
@@ -3734,6 +3734,12 @@ export const benchmarkData = {
           "ratio": 3.7735,
           "numpyOps": 1098664.6,
           "numpyTsOps": 291152.9
+        },
+        {
+          "name": "negative [100x100] float16",
+          "ratio": 2.7024,
+          "numpyOps": 339671.3,
+          "numpyTsOps": 125691.9
         },
         {
           "name": "negative [100x100] int64",
@@ -3796,12 +3802,6 @@ export const benchmarkData = {
           "numpyTsOps": 162161.0
         },
         {
-          "name": "negative [100x100] float16",
-          "ratio": 2.7024,
-          "numpyOps": 339671.3,
-          "numpyTsOps": 125691.9
-        },
-        {
           "name": "power [100x100] ** 2",
           "ratio": 4.2743,
           "numpyOps": 135517.6,
@@ -3812,6 +3812,12 @@ export const benchmarkData = {
           "ratio": 4.0138,
           "numpyOps": 125455.7,
           "numpyTsOps": 31256.4
+        },
+        {
+          "name": "power [100x100] ** 2 float16",
+          "ratio": 0.959,
+          "numpyOps": 21132.4,
+          "numpyTsOps": 22036.7
         },
         {
           "name": "power [100x100] ** 2 int64",
@@ -3862,12 +3868,6 @@ export const benchmarkData = {
           "numpyTsOps": 117005.2
         },
         {
-          "name": "power [100x100] ** 2 float16",
-          "ratio": 0.959,
-          "numpyOps": 21132.4,
-          "numpyTsOps": 22036.7
-        },
-        {
           "name": "real [100x100] complex128",
           "ratio": 5.8975,
           "numpyOps": 759291.4,
@@ -3884,6 +3884,12 @@ export const benchmarkData = {
           "ratio": 0.8148,
           "numpyOps": 214820.9,
           "numpyTsOps": 263659.9
+        },
+        {
+          "name": "sign [100x100] float16",
+          "ratio": 1.2056,
+          "numpyOps": 128707.2,
+          "numpyTsOps": 106759.6
         },
         {
           "name": "sign [100x100] int64",
@@ -3910,12 +3916,6 @@ export const benchmarkData = {
           "numpyTsOps": 799358.7
         },
         {
-          "name": "sign [100x100] float16",
-          "ratio": 1.2056,
-          "numpyOps": 128707.2,
-          "numpyTsOps": 106759.6
-        },
-        {
           "name": "sqrt [100x100]",
           "ratio": 2.312,
           "numpyOps": 356369.5,
@@ -3926,6 +3926,12 @@ export const benchmarkData = {
           "ratio": 2.5786,
           "numpyOps": 652178.5,
           "numpyTsOps": 252918.9
+        },
+        {
+          "name": "sqrt [100x100] float16",
+          "ratio": 0.2747,
+          "numpyOps": 34763.4,
+          "numpyTsOps": 126562.7
         },
         {
           "name": "sqrt [100x100] int64",
@@ -3980,12 +3986,6 @@ export const benchmarkData = {
           "ratio": 0.8296,
           "numpyOps": 42377.9,
           "numpyTsOps": 51079.3
-        },
-        {
-          "name": "sqrt [100x100] float16",
-          "ratio": 0.2747,
-          "numpyOps": 34763.4,
-          "numpyTsOps": 126562.7
         }
       ]
     },
@@ -4007,6 +4007,12 @@ export const benchmarkData = {
           "ratio": 0.7909,
           "numpyOps": 42185.6,
           "numpyTsOps": 53340.0
+        },
+        {
+          "name": "arccos [100x100] float16",
+          "ratio": 0.4708,
+          "numpyOps": 14268.9,
+          "numpyTsOps": 30304.7
         },
         {
           "name": "arccos [100x100] int64",
@@ -4069,12 +4075,6 @@ export const benchmarkData = {
           "numpyTsOps": 5636.9
         },
         {
-          "name": "arccos [100x100] float16",
-          "ratio": 0.4708,
-          "numpyOps": 14268.9,
-          "numpyTsOps": 30304.7
-        },
-        {
           "name": "arccosh [100x100]",
           "ratio": 4.1145,
           "numpyOps": 48617.2,
@@ -4085,6 +4085,12 @@ export const benchmarkData = {
           "ratio": 6.6992,
           "numpyOps": 79738.1,
           "numpyTsOps": 11902.5
+        },
+        {
+          "name": "arccosh [100x100] float16",
+          "ratio": 2.8473,
+          "numpyOps": 32144.8,
+          "numpyTsOps": 11289.6
         },
         {
           "name": "arccosh [100x100] int64",
@@ -4135,12 +4141,6 @@ export const benchmarkData = {
           "numpyTsOps": 13337.0
         },
         {
-          "name": "arccosh [100x100] float16",
-          "ratio": 2.8473,
-          "numpyOps": 32144.8,
-          "numpyTsOps": 11289.6
-        },
-        {
           "name": "arcsin [100x100]",
           "ratio": 0.5887,
           "numpyOps": 32316.3,
@@ -4151,6 +4151,12 @@ export const benchmarkData = {
           "ratio": 0.8503,
           "numpyOps": 46526.9,
           "numpyTsOps": 54720.8
+        },
+        {
+          "name": "arcsin [100x100] float16",
+          "ratio": 0.4946,
+          "numpyOps": 15223.5,
+          "numpyTsOps": 30777.5
         },
         {
           "name": "arcsin [100x100] int64",
@@ -4213,12 +4219,6 @@ export const benchmarkData = {
           "numpyTsOps": 5828.3
         },
         {
-          "name": "arcsin [100x100] float16",
-          "ratio": 0.4946,
-          "numpyOps": 15223.5,
-          "numpyTsOps": 30777.5
-        },
-        {
           "name": "arcsinh [100x100]",
           "ratio": 4.306,
           "numpyOps": 31994.9,
@@ -4229,6 +4229,12 @@ export const benchmarkData = {
           "ratio": 6.5725,
           "numpyOps": 48463.4,
           "numpyTsOps": 7373.7
+        },
+        {
+          "name": "arcsinh [100x100] float16",
+          "ratio": 3.5019,
+          "numpyOps": 24696.2,
+          "numpyTsOps": 7052.3
         },
         {
           "name": "arcsinh [100x100] int64",
@@ -4291,12 +4297,6 @@ export const benchmarkData = {
           "numpyTsOps": 6245.9
         },
         {
-          "name": "arcsinh [100x100] float16",
-          "ratio": 3.5019,
-          "numpyOps": 24696.2,
-          "numpyTsOps": 7052.3
-        },
-        {
           "name": "arctan [100x100]",
           "ratio": 1.6902,
           "numpyOps": 40144.7,
@@ -4307,6 +4307,12 @@ export const benchmarkData = {
           "ratio": 2.0577,
           "numpyOps": 51544.3,
           "numpyTsOps": 25048.9
+        },
+        {
+          "name": "arctan [100x100] float16",
+          "ratio": 1.4502,
+          "numpyOps": 25394.9,
+          "numpyTsOps": 17511.7
         },
         {
           "name": "arctan [100x100] int64",
@@ -4369,12 +4375,6 @@ export const benchmarkData = {
           "numpyTsOps": 7712.8
         },
         {
-          "name": "arctan [100x100] float16",
-          "ratio": 1.4502,
-          "numpyOps": 25394.9,
-          "numpyTsOps": 17511.7
-        },
-        {
           "name": "arctan2 [100x100]",
           "ratio": 3.399,
           "numpyOps": 67204.2,
@@ -4385,6 +4385,12 @@ export const benchmarkData = {
           "ratio": 3.2753,
           "numpyOps": 53858.0,
           "numpyTsOps": 16443.7
+        },
+        {
+          "name": "arctan2 [100x100] float16",
+          "ratio": 1.2177,
+          "numpyOps": 20439.3,
+          "numpyTsOps": 16785.5
         },
         {
           "name": "arctan2 [100x100] int64",
@@ -4435,12 +4441,6 @@ export const benchmarkData = {
           "numpyTsOps": 9030.1
         },
         {
-          "name": "arctan2 [100x100] float16",
-          "ratio": 1.2177,
-          "numpyOps": 20439.3,
-          "numpyTsOps": 16785.5
-        },
-        {
           "name": "arctanh [100x100]",
           "ratio": 2.4821,
           "numpyOps": 30341.8,
@@ -4451,6 +4451,12 @@ export const benchmarkData = {
           "ratio": 3.4728,
           "numpyOps": 40937.8,
           "numpyTsOps": 11788.1
+        },
+        {
+          "name": "arctanh [100x100] float16",
+          "ratio": 1.4153,
+          "numpyOps": 16642.5,
+          "numpyTsOps": 11758.9
         },
         {
           "name": "arctanh [100x100] int64",
@@ -4513,12 +4519,6 @@ export const benchmarkData = {
           "numpyTsOps": 7685.5
         },
         {
-          "name": "arctanh [100x100] float16",
-          "ratio": 1.4153,
-          "numpyOps": 16642.5,
-          "numpyTsOps": 11758.9
-        },
-        {
           "name": "cos [100x100]",
           "ratio": 3.1667,
           "numpyOps": 41700.3,
@@ -4529,6 +4529,12 @@ export const benchmarkData = {
           "ratio": 6.7014,
           "numpyOps": 91764.9,
           "numpyTsOps": 13693.4
+        },
+        {
+          "name": "cos [100x100] float16",
+          "ratio": 1.5954,
+          "numpyOps": 18790.0,
+          "numpyTsOps": 11777.8
         },
         {
           "name": "cos [100x100] int64",
@@ -4591,12 +4597,6 @@ export const benchmarkData = {
           "numpyTsOps": 4262.1
         },
         {
-          "name": "cos [100x100] float16",
-          "ratio": 1.5954,
-          "numpyOps": 18790.0,
-          "numpyTsOps": 11777.8
-        },
-        {
           "name": "cosh [100x100]",
           "ratio": 2.9158,
           "numpyOps": 39306.9,
@@ -4607,6 +4607,12 @@ export const benchmarkData = {
           "ratio": 4.7625,
           "numpyOps": 66826.9,
           "numpyTsOps": 14031.8
+        },
+        {
+          "name": "cosh [100x100] float16",
+          "ratio": 2.4032,
+          "numpyOps": 27737.1,
+          "numpyTsOps": 11541.9
         },
         {
           "name": "cosh [100x100] int64",
@@ -4669,12 +4675,6 @@ export const benchmarkData = {
           "numpyTsOps": 4375.4
         },
         {
-          "name": "cosh [100x100] float16",
-          "ratio": 2.4032,
-          "numpyOps": 27737.1,
-          "numpyTsOps": 11541.9
-        },
-        {
           "name": "deg2rad [1000]",
           "ratio": 5.9306,
           "numpyOps": 790634.5,
@@ -4685,6 +4685,12 @@ export const benchmarkData = {
           "ratio": 6.1706,
           "numpyOps": 797612.2,
           "numpyTsOps": 129260.1
+        },
+        {
+          "name": "deg2rad [1000] float16",
+          "ratio": 2.6531,
+          "numpyOps": 328451.9,
+          "numpyTsOps": 123800.0
         },
         {
           "name": "deg2rad [1000] int64",
@@ -4735,12 +4741,6 @@ export const benchmarkData = {
           "numpyTsOps": 141534.6
         },
         {
-          "name": "deg2rad [1000] float16",
-          "ratio": 2.6531,
-          "numpyOps": 328451.9,
-          "numpyTsOps": 123800.0
-        },
-        {
           "name": "hypot [100x100]",
           "ratio": 0.6241,
           "numpyOps": 67810.6,
@@ -4751,6 +4751,12 @@ export const benchmarkData = {
           "ratio": 0.499,
           "numpyOps": 83484.1,
           "numpyTsOps": 167316.1
+        },
+        {
+          "name": "hypot [100x100] float16",
+          "ratio": 0.675,
+          "numpyOps": 24992.1,
+          "numpyTsOps": 37023.0
         },
         {
           "name": "hypot [100x100] int64",
@@ -4801,12 +4807,6 @@ export const benchmarkData = {
           "numpyTsOps": 127587.6
         },
         {
-          "name": "hypot [100x100] float16",
-          "ratio": 0.675,
-          "numpyOps": 24992.1,
-          "numpyTsOps": 37023.0
-        },
-        {
           "name": "rad2deg [1000]",
           "ratio": 5.8776,
           "numpyOps": 783426.2,
@@ -4817,6 +4817,12 @@ export const benchmarkData = {
           "ratio": 6.3184,
           "numpyOps": 790098.2,
           "numpyTsOps": 125047.4
+        },
+        {
+          "name": "rad2deg [1000] float16",
+          "ratio": 2.6275,
+          "numpyOps": 325498.3,
+          "numpyTsOps": 123882.3
         },
         {
           "name": "rad2deg [1000] int64",
@@ -4867,12 +4873,6 @@ export const benchmarkData = {
           "numpyTsOps": 142916.0
         },
         {
-          "name": "rad2deg [1000] float16",
-          "ratio": 2.6275,
-          "numpyOps": 325498.3,
-          "numpyTsOps": 123882.3
-        },
-        {
           "name": "sin [100x100]",
           "ratio": 5.4106,
           "numpyOps": 40979.1,
@@ -4883,6 +4883,12 @@ export const benchmarkData = {
           "ratio": 12.529,
           "numpyOps": 92318.5,
           "numpyTsOps": 7368.4
+        },
+        {
+          "name": "sin [100x100] float16",
+          "ratio": 3.5243,
+          "numpyOps": 25913.7,
+          "numpyTsOps": 7352.8
         },
         {
           "name": "sin [100x100] int64",
@@ -4945,12 +4951,6 @@ export const benchmarkData = {
           "numpyTsOps": 4335.8
         },
         {
-          "name": "sin [100x100] float16",
-          "ratio": 3.5243,
-          "numpyOps": 25913.7,
-          "numpyTsOps": 7352.8
-        },
-        {
           "name": "sinc [100x100]",
           "ratio": 1.8992,
           "numpyOps": 30293.7,
@@ -4961,6 +4961,12 @@ export const benchmarkData = {
           "ratio": 3.2386,
           "numpyOps": 47631.8,
           "numpyTsOps": 14707.3
+        },
+        {
+          "name": "sinc [100x100] float16",
+          "ratio": 0.5583,
+          "numpyOps": 8069.9,
+          "numpyTsOps": 14454.2
         },
         {
           "name": "sinc [100x100] int64",
@@ -5011,12 +5017,6 @@ export const benchmarkData = {
           "numpyTsOps": 10676.2
         },
         {
-          "name": "sinc [100x100] float16",
-          "ratio": 0.5583,
-          "numpyOps": 8069.9,
-          "numpyTsOps": 14454.2
-        },
-        {
           "name": "sinh [100x100]",
           "ratio": 1.9886,
           "numpyOps": 37926.7,
@@ -5027,6 +5027,12 @@ export const benchmarkData = {
           "ratio": 4.0291,
           "numpyOps": 78072.7,
           "numpyTsOps": 19377.1
+        },
+        {
+          "name": "sinh [100x100] float16",
+          "ratio": 1.9576,
+          "numpyOps": 29418.7,
+          "numpyTsOps": 15028.1
         },
         {
           "name": "sinh [100x100] int64",
@@ -5089,12 +5095,6 @@ export const benchmarkData = {
           "numpyTsOps": 4298.9
         },
         {
-          "name": "sinh [100x100] float16",
-          "ratio": 1.9576,
-          "numpyOps": 29418.7,
-          "numpyTsOps": 15028.1
-        },
-        {
           "name": "tan [100x100]",
           "ratio": 3.212,
           "numpyOps": 35778.9,
@@ -5105,6 +5105,12 @@ export const benchmarkData = {
           "ratio": 4.2673,
           "numpyOps": 47283.1,
           "numpyTsOps": 11080.4
+        },
+        {
+          "name": "tan [100x100] float16",
+          "ratio": 2.0399,
+          "numpyOps": 20306.6,
+          "numpyTsOps": 9954.8
         },
         {
           "name": "tan [100x100] int64",
@@ -5167,12 +5173,6 @@ export const benchmarkData = {
           "numpyTsOps": 4124.7
         },
         {
-          "name": "tan [100x100] float16",
-          "ratio": 2.0399,
-          "numpyOps": 20306.6,
-          "numpyTsOps": 9954.8
-        },
-        {
           "name": "tanh [100x100]",
           "ratio": 1.8437,
           "numpyOps": 45425.8,
@@ -5183,6 +5183,12 @@ export const benchmarkData = {
           "ratio": 1.9801,
           "numpyOps": 138230.4,
           "numpyTsOps": 69811.5
+        },
+        {
+          "name": "tanh [100x100] float16",
+          "ratio": 0.8272,
+          "numpyOps": 28828.5,
+          "numpyTsOps": 34850.3
         },
         {
           "name": "tanh [100x100] int64",
@@ -5245,12 +5251,6 @@ export const benchmarkData = {
           "numpyTsOps": 4200.0
         },
         {
-          "name": "tanh [100x100] float16",
-          "ratio": 0.8272,
-          "numpyOps": 28828.5,
-          "numpyTsOps": 34850.3
-        },
-        {
           "name": "unwrap [1000]",
           "ratio": 0.2726,
           "numpyOps": 68802.3,
@@ -5261,6 +5261,12 @@ export const benchmarkData = {
           "ratio": 0.332,
           "numpyOps": 70881.7,
           "numpyTsOps": 213527.0
+        },
+        {
+          "name": "unwrap [1000] float16",
+          "ratio": 0.1197,
+          "numpyOps": 25352.2,
+          "numpyTsOps": 211871.6
         },
         {
           "name": "unwrap [1000] int64",
@@ -5285,12 +5291,6 @@ export const benchmarkData = {
           "ratio": 0.6267,
           "numpyOps": 61641.4,
           "numpyTsOps": 98358.4
-        },
-        {
-          "name": "unwrap [1000] float16",
-          "ratio": 0.1197,
-          "numpyOps": 25352.2,
-          "numpyTsOps": 211871.6
         }
       ]
     },
@@ -5312,6 +5312,12 @@ export const benchmarkData = {
           "ratio": 1.0942,
           "numpyOps": 256546.7,
           "numpyTsOps": 234458.0
+        },
+        {
+          "name": "diff [100x100] float16",
+          "ratio": 0.5532,
+          "numpyOps": 28431.8,
+          "numpyTsOps": 51393.0
         },
         {
           "name": "diff [100x100] int64",
@@ -5362,12 +5368,6 @@ export const benchmarkData = {
           "numpyTsOps": 665042.6
         },
         {
-          "name": "diff [100x100] float16",
-          "ratio": 0.5532,
-          "numpyOps": 28431.8,
-          "numpyTsOps": 51393.0
-        },
-        {
           "name": "gradient [1000]",
           "ratio": 0.3086,
           "numpyOps": 239363.3,
@@ -5378,6 +5378,12 @@ export const benchmarkData = {
           "ratio": 0.2849,
           "numpyOps": 259297.0,
           "numpyTsOps": 910102.3
+        },
+        {
+          "name": "gradient [1000] float16",
+          "ratio": 0.185,
+          "numpyOps": 102167.1,
+          "numpyTsOps": 552284.3
         },
         {
           "name": "gradient [1000] int64",
@@ -5426,12 +5432,6 @@ export const benchmarkData = {
           "ratio": 0.2941,
           "numpyOps": 210118.8,
           "numpyTsOps": 714534.2
-        },
-        {
-          "name": "gradient [1000] float16",
-          "ratio": 0.185,
-          "numpyOps": 102167.1,
-          "numpyTsOps": 552284.3
         }
       ]
     },
@@ -5453,6 +5453,12 @@ export const benchmarkData = {
           "ratio": 0.2871,
           "numpyOps": 92884.5,
           "numpyTsOps": 323538.2
+        },
+        {
+          "name": "cross [1000x3] float16",
+          "ratio": 0.2871,
+          "numpyOps": 28041.2,
+          "numpyTsOps": 97660.7
         },
         {
           "name": "cross [1000x3] int64",
@@ -5503,12 +5509,6 @@ export const benchmarkData = {
           "numpyTsOps": 462899.5
         },
         {
-          "name": "cross [1000x3] float16",
-          "ratio": 0.2871,
-          "numpyOps": 28041.2,
-          "numpyTsOps": 97660.7
-        },
-        {
           "name": "diagonal [100x100]",
           "ratio": 4.4287,
           "numpyOps": 1491310.7,
@@ -5519,6 +5519,12 @@ export const benchmarkData = {
           "ratio": 4.4597,
           "numpyOps": 1511130.0,
           "numpyTsOps": 338839.9
+        },
+        {
+          "name": "diagonal [100x100] float16",
+          "ratio": 4.5803,
+          "numpyOps": 1480933.0,
+          "numpyTsOps": 323330.1
         },
         {
           "name": "diagonal [100x100] int64",
@@ -5569,12 +5575,6 @@ export const benchmarkData = {
           "numpyTsOps": 196662.7
         },
         {
-          "name": "diagonal [100x100] float16",
-          "ratio": 4.5803,
-          "numpyOps": 1480933.0,
-          "numpyTsOps": 323330.1
-        },
-        {
           "name": "dot 1D \u00b7 1D [1000]",
           "ratio": 1.0605,
           "numpyOps": 994391.5,
@@ -5585,6 +5585,12 @@ export const benchmarkData = {
           "ratio": 1.3192,
           "numpyOps": 1551794.0,
           "numpyTsOps": 1176340.8
+        },
+        {
+          "name": "dot 1D \u00b7 1D [1000] float16",
+          "ratio": 1.5395,
+          "numpyOps": 257025.4,
+          "numpyTsOps": 166957.1
         },
         {
           "name": "dot 1D \u00b7 1D [1000] int64",
@@ -5647,12 +5653,6 @@ export const benchmarkData = {
           "numpyTsOps": 1022936.5
         },
         {
-          "name": "dot 1D \u00b7 1D [1000] float16",
-          "ratio": 1.5395,
-          "numpyOps": 257025.4,
-          "numpyTsOps": 166957.1
-        },
-        {
           "name": "dot 2D \u00b7 1D [100x100] \u00b7 [100]",
           "ratio": 3.1258,
           "numpyOps": 773099.7,
@@ -5663,6 +5663,12 @@ export const benchmarkData = {
           "ratio": 1.5219,
           "numpyOps": 799654.4,
           "numpyTsOps": 525437.2
+        },
+        {
+          "name": "dot 2D \u00b7 1D [100x100] \u00b7 [100] float16",
+          "ratio": 0.4255,
+          "numpyOps": 51062.6,
+          "numpyTsOps": 120014.1
         },
         {
           "name": "dot 2D \u00b7 1D [100x100] \u00b7 [100] int64",
@@ -5713,12 +5719,6 @@ export const benchmarkData = {
           "numpyTsOps": 419222.3
         },
         {
-          "name": "dot 2D \u00b7 1D [100x100] \u00b7 [100] float16",
-          "ratio": 0.4255,
-          "numpyOps": 51062.6,
-          "numpyTsOps": 120014.1
-        },
-        {
           "name": "dot 2D \u00b7 2D [100x100] \u00b7 [100x100]",
           "ratio": 9.9472,
           "numpyOps": 119385.0,
@@ -5729,6 +5729,12 @@ export const benchmarkData = {
           "ratio": 10.323,
           "numpyOps": 239470.5,
           "numpyTsOps": 23197.8
+        },
+        {
+          "name": "dot 2D \u00b7 2D [100x100] \u00b7 [100x100] float16",
+          "ratio": 0.0377,
+          "numpyOps": 607.0,
+          "numpyTsOps": 16109.4
         },
         {
           "name": "dot 2D \u00b7 2D [100x100] \u00b7 [100x100] int64",
@@ -5789,12 +5795,6 @@ export const benchmarkData = {
           "ratio": 10.5403,
           "numpyOps": 81376.2,
           "numpyTsOps": 7720.5
-        },
-        {
-          "name": "dot 2D \u00b7 2D [100x100] \u00b7 [100x100] float16",
-          "ratio": 0.0377,
-          "numpyOps": 607.0,
-          "numpyTsOps": 16109.4
         },
         {
           "name": "einsum matmul [50x50]",
@@ -5869,6 +5869,12 @@ export const benchmarkData = {
           "numpyTsOps": 1193292.4
         },
         {
+          "name": "inner 1D \u00b7 1D [1000] float16",
+          "ratio": 1.6203,
+          "numpyOps": 253054.2,
+          "numpyTsOps": 156179.1
+        },
+        {
           "name": "inner 1D \u00b7 1D [1000] int64",
           "ratio": 1.0598,
           "numpyOps": 987840.3,
@@ -5929,12 +5935,6 @@ export const benchmarkData = {
           "numpyTsOps": 652553.8
         },
         {
-          "name": "inner 1D \u00b7 1D [1000] float16",
-          "ratio": 1.6203,
-          "numpyOps": 253054.2,
-          "numpyTsOps": 156179.1
-        },
-        {
           "name": "inner 2D \u00b7 2D [100x100]",
           "ratio": 8.7563,
           "numpyOps": 109325.2,
@@ -5945,6 +5945,12 @@ export const benchmarkData = {
           "ratio": 9.6028,
           "numpyOps": 208806.0,
           "numpyTsOps": 21744.2
+        },
+        {
+          "name": "inner 2D \u00b7 2D [100x100] float16",
+          "ratio": 0.7956,
+          "numpyOps": 577.2,
+          "numpyTsOps": 725.5
         },
         {
           "name": "inner 2D \u00b7 2D [100x100] int64",
@@ -6007,12 +6013,6 @@ export const benchmarkData = {
           "numpyTsOps": 7224.4
         },
         {
-          "name": "inner 2D \u00b7 2D [100x100] float16",
-          "ratio": 0.7956,
-          "numpyOps": 577.2,
-          "numpyTsOps": 725.5
-        },
-        {
           "name": "kron [10x10] \u2297 [10x10]",
           "ratio": 0.4734,
           "numpyOps": 71307.1,
@@ -6023,6 +6023,12 @@ export const benchmarkData = {
           "ratio": 0.3835,
           "numpyOps": 77749.1,
           "numpyTsOps": 202752.1
+        },
+        {
+          "name": "kron [10x10] \u2297 [10x10] float16",
+          "ratio": 0.3419,
+          "numpyOps": 23785.5,
+          "numpyTsOps": 69561.9
         },
         {
           "name": "kron [10x10] \u2297 [10x10] int64",
@@ -6085,12 +6091,6 @@ export const benchmarkData = {
           "numpyTsOps": 97519.0
         },
         {
-          "name": "kron [10x10] \u2297 [10x10] float16",
-          "ratio": 0.3419,
-          "numpyOps": 23785.5,
-          "numpyTsOps": 69561.9
-        },
-        {
           "name": "linalg.cholesky [50x50]",
           "ratio": 10.6205,
           "numpyOps": 63117.6,
@@ -6125,6 +6125,12 @@ export const benchmarkData = {
           "ratio": 0.0664,
           "numpyOps": 130305.1,
           "numpyTsOps": 1961125.3
+        },
+        {
+          "name": "linalg.cross [3] float16",
+          "ratio": 0.0667,
+          "numpyOps": 129266.4,
+          "numpyTsOps": 1937559.6
         },
         {
           "name": "linalg.cross [3] int64",
@@ -6185,12 +6191,6 @@ export const benchmarkData = {
           "ratio": 0.0678,
           "numpyOps": 129715.7,
           "numpyTsOps": 1914122.3
-        },
-        {
-          "name": "linalg.cross [3] float16",
-          "ratio": 0.0667,
-          "numpyOps": 129266.4,
-          "numpyTsOps": 1937559.6
         },
         {
           "name": "linalg.det [50x50]",
@@ -6463,6 +6463,12 @@ export const benchmarkData = {
           "numpyTsOps": 23250.8
         },
         {
+          "name": "matmul [100x100] @ [100x100] float16",
+          "ratio": 0.0382,
+          "numpyOps": 610.3,
+          "numpyTsOps": 15976.7
+        },
+        {
           "name": "matmul [100x100] @ [100x100] int64",
           "ratio": 0.8977,
           "numpyOps": 3539.4,
@@ -6523,12 +6529,6 @@ export const benchmarkData = {
           "numpyTsOps": 7542.7
         },
         {
-          "name": "matmul [100x100] @ [100x100] float16",
-          "ratio": 0.0382,
-          "numpyOps": 610.3,
-          "numpyTsOps": 15976.7
-        },
-        {
           "name": "matrix_transpose [100x100]",
           "ratio": 0.7407,
           "numpyOps": 1744099.1,
@@ -6539,6 +6539,12 @@ export const benchmarkData = {
           "ratio": 0.7627,
           "numpyOps": 1751565.0,
           "numpyTsOps": 2296667.0
+        },
+        {
+          "name": "matrix_transpose [100x100] float16",
+          "ratio": 0.7371,
+          "numpyOps": 1704838.5,
+          "numpyTsOps": 2312961.9
         },
         {
           "name": "matrix_transpose [100x100] int64",
@@ -6589,12 +6595,6 @@ export const benchmarkData = {
           "numpyTsOps": 2331607.0
         },
         {
-          "name": "matrix_transpose [100x100] float16",
-          "ratio": 0.7371,
-          "numpyOps": 1704838.5,
-          "numpyTsOps": 2312961.9
-        },
-        {
           "name": "matvec [50x50] \u00b7 [50]",
           "ratio": 0.752,
           "numpyOps": 617328.0,
@@ -6605,6 +6605,12 @@ export const benchmarkData = {
           "ratio": 0.9175,
           "numpyOps": 954229.9,
           "numpyTsOps": 1039981.1
+        },
+        {
+          "name": "matvec [50x50] \u00b7 [50] float16",
+          "ratio": 0.3476,
+          "numpyOps": 124610.6,
+          "numpyTsOps": 358468.3
         },
         {
           "name": "matvec [50x50] \u00b7 [50] int64",
@@ -6655,12 +6661,6 @@ export const benchmarkData = {
           "numpyTsOps": 828664.2
         },
         {
-          "name": "matvec [50x50] \u00b7 [50] float16",
-          "ratio": 0.3476,
-          "numpyOps": 124610.6,
-          "numpyTsOps": 358468.3
-        },
-        {
           "name": "outer [1000] x [1000]",
           "ratio": 0.4165,
           "numpyOps": 1416.6,
@@ -6671,6 +6671,12 @@ export const benchmarkData = {
           "ratio": 0.547,
           "numpyOps": 3476.9,
           "numpyTsOps": 6355.9
+        },
+        {
+          "name": "outer [1000] x [1000] float16",
+          "ratio": 0.2351,
+          "numpyOps": 242.7,
+          "numpyTsOps": 1032.1
         },
         {
           "name": "outer [1000] x [1000] int64",
@@ -6733,12 +6739,6 @@ export const benchmarkData = {
           "numpyTsOps": 1038.1
         },
         {
-          "name": "outer [1000] x [1000] float16",
-          "ratio": 0.2351,
-          "numpyOps": 242.7,
-          "numpyTsOps": 1032.1
-        },
-        {
           "name": "trace [100x100]",
           "ratio": 0.8467,
           "numpyOps": 933700.5,
@@ -6749,6 +6749,12 @@ export const benchmarkData = {
           "ratio": 0.8341,
           "numpyOps": 930287.3,
           "numpyTsOps": 1115276.7
+        },
+        {
+          "name": "trace [100x100] float16",
+          "ratio": 0.618,
+          "numpyOps": 676390.2,
+          "numpyTsOps": 1094487.5
         },
         {
           "name": "trace [100x100] int64",
@@ -6799,12 +6805,6 @@ export const benchmarkData = {
           "numpyTsOps": 841526.6
         },
         {
-          "name": "trace [100x100] float16",
-          "ratio": 0.618,
-          "numpyOps": 676390.2,
-          "numpyTsOps": 1094487.5
-        },
-        {
           "name": "transpose [100x100]",
           "ratio": 0.7822,
           "numpyOps": 2361343.9,
@@ -6815,6 +6815,12 @@ export const benchmarkData = {
           "ratio": 0.763,
           "numpyOps": 2283172.8,
           "numpyTsOps": 2992177.7
+        },
+        {
+          "name": "transpose [100x100] float16",
+          "ratio": 0.7832,
+          "numpyOps": 2388526.5,
+          "numpyTsOps": 3049658.4
         },
         {
           "name": "transpose [100x100] int64",
@@ -6865,12 +6871,6 @@ export const benchmarkData = {
           "numpyTsOps": 3021427.2
         },
         {
-          "name": "transpose [100x100] float16",
-          "ratio": 0.7832,
-          "numpyOps": 2388526.5,
-          "numpyTsOps": 3049658.4
-        },
-        {
           "name": "vdot [1000]",
           "ratio": 1.7214,
           "numpyOps": 762403.2,
@@ -6881,6 +6881,12 @@ export const benchmarkData = {
           "ratio": 2.0295,
           "numpyOps": 1124106.7,
           "numpyTsOps": 553889.5
+        },
+        {
+          "name": "vdot [1000] float16",
+          "ratio": 5.3745,
+          "numpyOps": 406087.8,
+          "numpyTsOps": 75558.8
         },
         {
           "name": "vdot [1000] int64",
@@ -6943,12 +6949,6 @@ export const benchmarkData = {
           "numpyTsOps": 358985.3
         },
         {
-          "name": "vdot [1000] float16",
-          "ratio": 5.3745,
-          "numpyOps": 406087.8,
-          "numpyTsOps": 75558.8
-        },
-        {
           "name": "vecdot [100x100]",
           "ratio": 1.4885,
           "numpyOps": 317156.0,
@@ -6959,6 +6959,12 @@ export const benchmarkData = {
           "ratio": 1.7224,
           "numpyOps": 508196.0,
           "numpyTsOps": 295047.0
+        },
+        {
+          "name": "vecdot [100x100] float16",
+          "ratio": 0.7784,
+          "numpyOps": 54298.3,
+          "numpyTsOps": 69759.0
         },
         {
           "name": "vecdot [100x100] int64",
@@ -7021,12 +7027,6 @@ export const benchmarkData = {
           "numpyTsOps": 119586.7
         },
         {
-          "name": "vecdot [100x100] float16",
-          "ratio": 0.7784,
-          "numpyOps": 54298.3,
-          "numpyTsOps": 69759.0
-        },
-        {
           "name": "vecmat [50] \u00b7 [50x50]",
           "ratio": 0.8123,
           "numpyOps": 645251.6,
@@ -7037,6 +7037,12 @@ export const benchmarkData = {
           "ratio": 0.9957,
           "numpyOps": 948517.2,
           "numpyTsOps": 952642.0
+        },
+        {
+          "name": "vecmat [50] \u00b7 [50x50] float16",
+          "ratio": 0.5654,
+          "numpyOps": 194665.1,
+          "numpyTsOps": 344268.6
         },
         {
           "name": "vecmat [50] \u00b7 [50x50] int64",
@@ -7085,12 +7091,6 @@ export const benchmarkData = {
           "ratio": 0.6026,
           "numpyOps": 603043.9,
           "numpyTsOps": 1000714.3
-        },
-        {
-          "name": "vecmat [50] \u00b7 [50x50] float16",
-          "ratio": 0.5654,
-          "numpyOps": 194665.1,
-          "numpyTsOps": 344268.6
         }
       ]
     },
@@ -7112,6 +7112,12 @@ export const benchmarkData = {
           "ratio": 0.8847,
           "numpyOps": 270583.6,
           "numpyTsOps": 305858.1
+        },
+        {
+          "name": "all [100x100] float16",
+          "ratio": 2.4796,
+          "numpyOps": 275654.2,
+          "numpyTsOps": 111170.2
         },
         {
           "name": "all [100x100] int64",
@@ -7162,12 +7168,6 @@ export const benchmarkData = {
           "numpyTsOps": 371594.6
         },
         {
-          "name": "all [100x100] float16",
-          "ratio": 2.4796,
-          "numpyOps": 275654.2,
-          "numpyTsOps": 111170.2
-        },
-        {
           "name": "any [100x100]",
           "ratio": 1.2014,
           "numpyOps": 260829.1,
@@ -7178,6 +7178,12 @@ export const benchmarkData = {
           "ratio": 0.8763,
           "numpyOps": 272533.5,
           "numpyTsOps": 311022.4
+        },
+        {
+          "name": "any [100x100] float16",
+          "ratio": 2.4992,
+          "numpyOps": 277404.5,
+          "numpyTsOps": 110995.3
         },
         {
           "name": "any [100x100] int64",
@@ -7228,12 +7234,6 @@ export const benchmarkData = {
           "numpyTsOps": 358382.9
         },
         {
-          "name": "any [100x100] float16",
-          "ratio": 2.4992,
-          "numpyOps": 277404.5,
-          "numpyTsOps": 110995.3
-        },
-        {
           "name": "argmax [100x100]",
           "ratio": 1.2058,
           "numpyOps": 165178.5,
@@ -7244,6 +7244,12 @@ export const benchmarkData = {
           "ratio": 1.745,
           "numpyOps": 254663.6,
           "numpyTsOps": 145941.6
+        },
+        {
+          "name": "argmax [100x100] float16",
+          "ratio": 0.8805,
+          "numpyOps": 70127.3,
+          "numpyTsOps": 79643.2
         },
         {
           "name": "argmax [100x100] int64",
@@ -7306,6 +7312,12 @@ export const benchmarkData = {
           "numpyTsOps": 76482.3
         },
         {
+          "name": "argmax [100x100] axis=0 float16",
+          "ratio": 0.7119,
+          "numpyOps": 53916.7,
+          "numpyTsOps": 75731.8
+        },
+        {
           "name": "argmax [100x100] axis=0 int64",
           "ratio": 5.4672,
           "numpyOps": 209587.0,
@@ -7354,18 +7366,6 @@ export const benchmarkData = {
           "numpyTsOps": 23148.7
         },
         {
-          "name": "argmax [100x100] axis=0 float16",
-          "ratio": 0.7119,
-          "numpyOps": 53916.7,
-          "numpyTsOps": 75731.8
-        },
-        {
-          "name": "argmax [100x100] float16",
-          "ratio": 0.8805,
-          "numpyOps": 70127.3,
-          "numpyTsOps": 79643.2
-        },
-        {
           "name": "argmin [100x100]",
           "ratio": 0.6586,
           "numpyOps": 173415.8,
@@ -7376,6 +7376,12 @@ export const benchmarkData = {
           "ratio": 1.7817,
           "numpyOps": 257869.9,
           "numpyTsOps": 144731.4
+        },
+        {
+          "name": "argmin [100x100] float16",
+          "ratio": 1.0565,
+          "numpyOps": 84969.2,
+          "numpyTsOps": 80421.7
         },
         {
           "name": "argmin [100x100] int64",
@@ -7438,6 +7444,12 @@ export const benchmarkData = {
           "numpyTsOps": 92122.6
         },
         {
+          "name": "argmin [100x100] axis=0 float16",
+          "ratio": 0.785,
+          "numpyOps": 67013.9,
+          "numpyTsOps": 85372.4
+        },
+        {
           "name": "argmin [100x100] axis=0 int64",
           "ratio": 2.6121,
           "numpyOps": 200304.2,
@@ -7486,18 +7498,6 @@ export const benchmarkData = {
           "numpyTsOps": 23782.8
         },
         {
-          "name": "argmin [100x100] axis=0 float16",
-          "ratio": 0.785,
-          "numpyOps": 67013.9,
-          "numpyTsOps": 85372.4
-        },
-        {
-          "name": "argmin [100x100] float16",
-          "ratio": 1.0565,
-          "numpyOps": 84969.2,
-          "numpyTsOps": 80421.7
-        },
-        {
           "name": "average [100x100]",
           "ratio": 1.3998,
           "numpyOps": 287921.6,
@@ -7508,6 +7508,12 @@ export const benchmarkData = {
           "ratio": 1.4968,
           "numpyOps": 241780.2,
           "numpyTsOps": 161527.7
+        },
+        {
+          "name": "average [100x100] float16",
+          "ratio": 2.4796,
+          "numpyOps": 206769.1,
+          "numpyTsOps": 83388.6
         },
         {
           "name": "average [100x100] int64",
@@ -7570,12 +7576,6 @@ export const benchmarkData = {
           "numpyTsOps": 64614.9
         },
         {
-          "name": "average [100x100] float16",
-          "ratio": 2.4796,
-          "numpyOps": 206769.1,
-          "numpyTsOps": 83388.6
-        },
-        {
           "name": "count_nonzero [100x100]",
           "ratio": 1.3107,
           "numpyOps": 289493.1,
@@ -7586,6 +7586,12 @@ export const benchmarkData = {
           "ratio": 0.6001,
           "numpyOps": 290834.5,
           "numpyTsOps": 484679.3
+        },
+        {
+          "name": "count_nonzero [100x100] float16",
+          "ratio": 0.5159,
+          "numpyOps": 64980.5,
+          "numpyTsOps": 125953.7
         },
         {
           "name": "count_nonzero [100x100] int64",
@@ -7636,12 +7642,6 @@ export const benchmarkData = {
           "numpyTsOps": 619750.9
         },
         {
-          "name": "count_nonzero [100x100] float16",
-          "ratio": 0.5159,
-          "numpyOps": 64980.5,
-          "numpyTsOps": 125953.7
-        },
-        {
           "name": "cumprod [100x100]",
           "ratio": 0.4832,
           "numpyOps": 47077.7,
@@ -7652,6 +7652,12 @@ export const benchmarkData = {
           "ratio": 0.5683,
           "numpyOps": 47890.2,
           "numpyTsOps": 84269.8
+        },
+        {
+          "name": "cumprod [100x100] float16",
+          "ratio": 0.1622,
+          "numpyOps": 13477.6,
+          "numpyTsOps": 83082.7
         },
         {
           "name": "cumprod [100x100] int64",
@@ -7702,12 +7708,6 @@ export const benchmarkData = {
           "numpyTsOps": 23157.2
         },
         {
-          "name": "cumprod [100x100] float16",
-          "ratio": 0.1622,
-          "numpyOps": 13477.6,
-          "numpyTsOps": 83082.7
-        },
-        {
           "name": "cumsum [100x100]",
           "ratio": 0.446,
           "numpyOps": 49640.6,
@@ -7718,6 +7718,12 @@ export const benchmarkData = {
           "ratio": 2.1705,
           "numpyOps": 49445.1,
           "numpyTsOps": 22780.0
+        },
+        {
+          "name": "cumsum [100x100] float16",
+          "ratio": 0.8375,
+          "numpyOps": 14900.5,
+          "numpyTsOps": 17792.3
         },
         {
           "name": "cumsum [100x100] int64",
@@ -7780,12 +7786,6 @@ export const benchmarkData = {
           "numpyTsOps": 38514.6
         },
         {
-          "name": "cumsum [100x100] float16",
-          "ratio": 0.8375,
-          "numpyOps": 14900.5,
-          "numpyTsOps": 17792.3
-        },
-        {
           "name": "max [100x100]",
           "ratio": 4.5884,
           "numpyOps": 617414.8,
@@ -7796,6 +7796,12 @@ export const benchmarkData = {
           "ratio": 2.4087,
           "numpyOps": 772848.1,
           "numpyTsOps": 320862.6
+        },
+        {
+          "name": "max [100x100] float16",
+          "ratio": 0.411,
+          "numpyOps": 46374.6,
+          "numpyTsOps": 112828.6
         },
         {
           "name": "max [100x100] int64",
@@ -7858,6 +7864,12 @@ export const benchmarkData = {
           "numpyTsOps": 293721.3
         },
         {
+          "name": "max [100x100] axis=0 float16",
+          "ratio": 0.5295,
+          "numpyOps": 57795.9,
+          "numpyTsOps": 109153.9
+        },
+        {
           "name": "max [100x100] axis=0 int64",
           "ratio": 1.8627,
           "numpyOps": 350095.0,
@@ -7906,18 +7918,6 @@ export const benchmarkData = {
           "numpyTsOps": 300013.4
         },
         {
-          "name": "max [100x100] axis=0 float16",
-          "ratio": 0.5295,
-          "numpyOps": 57795.9,
-          "numpyTsOps": 109153.9
-        },
-        {
-          "name": "max [100x100] float16",
-          "ratio": 0.411,
-          "numpyOps": 46374.6,
-          "numpyTsOps": 112828.6
-        },
-        {
           "name": "mean [100x100]",
           "ratio": 1.5666,
           "numpyOps": 333133.4,
@@ -7928,6 +7928,12 @@ export const benchmarkData = {
           "ratio": 1.7761,
           "numpyOps": 266107.5,
           "numpyTsOps": 149822.9
+        },
+        {
+          "name": "mean [100x100] float16",
+          "ratio": 3.0251,
+          "numpyOps": 235441.7,
+          "numpyTsOps": 77830.0
         },
         {
           "name": "mean [100x100] int64",
@@ -8008,6 +8014,12 @@ export const benchmarkData = {
           "numpyTsOps": 388890.7
         },
         {
+          "name": "mean [100x100] axis=0 float16",
+          "ratio": 1.8332,
+          "numpyOps": 222746.2,
+          "numpyTsOps": 121508.1
+        },
+        {
           "name": "mean [100x100] axis=0 int64",
           "ratio": 0.7072,
           "numpyOps": 144504.5,
@@ -8068,18 +8080,6 @@ export const benchmarkData = {
           "numpyTsOps": 46592.3
         },
         {
-          "name": "mean [100x100] axis=0 float16",
-          "ratio": 1.8332,
-          "numpyOps": 222746.2,
-          "numpyTsOps": 121508.1
-        },
-        {
-          "name": "mean [100x100] float16",
-          "ratio": 3.0251,
-          "numpyOps": 235441.7,
-          "numpyTsOps": 77830.0
-        },
-        {
           "name": "median [100x100]",
           "ratio": 0.5976,
           "numpyOps": 82608.1,
@@ -8090,6 +8090,12 @@ export const benchmarkData = {
           "ratio": 1.4025,
           "numpyOps": 81808.5,
           "numpyTsOps": 58328.9
+        },
+        {
+          "name": "median [100x100] float16",
+          "ratio": 1.2715,
+          "numpyOps": 55427.2,
+          "numpyTsOps": 43593.3
         },
         {
           "name": "median [100x100] int64",
@@ -8152,6 +8158,12 @@ export const benchmarkData = {
           "numpyTsOps": 22032.4
         },
         {
+          "name": "median [100x100] axis=0 float16",
+          "ratio": 1.3282,
+          "numpyOps": 56000.9,
+          "numpyTsOps": 42164.3
+        },
+        {
           "name": "median [100x100] axis=0 int64",
           "ratio": 8.2635,
           "numpyOps": 99985.5,
@@ -8200,18 +8212,6 @@ export const benchmarkData = {
           "numpyTsOps": 12919.5
         },
         {
-          "name": "median [100x100] axis=0 float16",
-          "ratio": 1.3282,
-          "numpyOps": 56000.9,
-          "numpyTsOps": 42164.3
-        },
-        {
-          "name": "median [100x100] float16",
-          "ratio": 1.2715,
-          "numpyOps": 55427.2,
-          "numpyTsOps": 43593.3
-        },
-        {
           "name": "min [100x100]",
           "ratio": 2.5058,
           "numpyOps": 630120.4,
@@ -8222,6 +8222,12 @@ export const benchmarkData = {
           "ratio": 2.4341,
           "numpyOps": 793239.0,
           "numpyTsOps": 325886.3
+        },
+        {
+          "name": "min [100x100] float16",
+          "ratio": 0.7124,
+          "numpyOps": 74569.7,
+          "numpyTsOps": 104667.3
         },
         {
           "name": "min [100x100] int64",
@@ -8284,6 +8290,12 @@ export const benchmarkData = {
           "numpyTsOps": 276545.8
         },
         {
+          "name": "min [100x100] axis=0 float16",
+          "ratio": 0.7836,
+          "numpyOps": 75795.7,
+          "numpyTsOps": 96724.1
+        },
+        {
           "name": "min [100x100] axis=0 int64",
           "ratio": 1.7867,
           "numpyOps": 350924.4,
@@ -8332,18 +8344,6 @@ export const benchmarkData = {
           "numpyTsOps": 300401.3
         },
         {
-          "name": "min [100x100] axis=0 float16",
-          "ratio": 0.7836,
-          "numpyOps": 75795.7,
-          "numpyTsOps": 96724.1
-        },
-        {
-          "name": "min [100x100] float16",
-          "ratio": 0.7124,
-          "numpyOps": 74569.7,
-          "numpyTsOps": 104667.3
-        },
-        {
           "name": "nanmax [100x100]",
           "ratio": 4.0493,
           "numpyOps": 330315.0,
@@ -8354,6 +8354,12 @@ export const benchmarkData = {
           "ratio": 3.8932,
           "numpyOps": 391531.1,
           "numpyTsOps": 100568.5
+        },
+        {
+          "name": "nanmax [100x100] float16",
+          "ratio": 0.8986,
+          "numpyOps": 56972.9,
+          "numpyTsOps": 63404.9
         },
         {
           "name": "nanmax [100x100] int64",
@@ -8404,12 +8410,6 @@ export const benchmarkData = {
           "numpyTsOps": 1502166.5
         },
         {
-          "name": "nanmax [100x100] float16",
-          "ratio": 0.8986,
-          "numpyOps": 56972.9,
-          "numpyTsOps": 63404.9
-        },
-        {
           "name": "nanmean [100x100]",
           "ratio": 0.9324,
           "numpyOps": 50618.8,
@@ -8420,6 +8420,12 @@ export const benchmarkData = {
           "ratio": 1.4142,
           "numpyOps": 65212.5,
           "numpyTsOps": 46113.1
+        },
+        {
+          "name": "nanmean [100x100] float16",
+          "ratio": 2.1029,
+          "numpyOps": 38764.1,
+          "numpyTsOps": 18433.3
         },
         {
           "name": "nanmean [100x100] int64",
@@ -8482,12 +8488,6 @@ export const benchmarkData = {
           "numpyTsOps": 33790.8
         },
         {
-          "name": "nanmean [100x100] float16",
-          "ratio": 2.1029,
-          "numpyOps": 38764.1,
-          "numpyTsOps": 18433.3
-        },
-        {
           "name": "nanmin [100x100]",
           "ratio": 3.9183,
           "numpyOps": 331618.4,
@@ -8498,6 +8498,12 @@ export const benchmarkData = {
           "ratio": 3.9784,
           "numpyOps": 389423.4,
           "numpyTsOps": 97884.8
+        },
+        {
+          "name": "nanmin [100x100] float16",
+          "ratio": 1.1519,
+          "numpyOps": 73279.5,
+          "numpyTsOps": 63616.4
         },
         {
           "name": "nanmin [100x100] int64",
@@ -8548,12 +8554,6 @@ export const benchmarkData = {
           "numpyTsOps": 1522652.7
         },
         {
-          "name": "nanmin [100x100] float16",
-          "ratio": 1.1519,
-          "numpyOps": 73279.5,
-          "numpyTsOps": 63616.4
-        },
-        {
           "name": "nanpercentile [100x100]",
           "ratio": 3.7222,
           "numpyOps": 34407.8,
@@ -8564,6 +8564,12 @@ export const benchmarkData = {
           "ratio": 3.7495,
           "numpyOps": 35059.2,
           "numpyTsOps": 9350.3
+        },
+        {
+          "name": "nanpercentile [100x100] float16",
+          "ratio": 2.7858,
+          "numpyOps": 21854.5,
+          "numpyTsOps": 7845.0
         },
         {
           "name": "nanpercentile [100x100] int64",
@@ -8614,12 +8620,6 @@ export const benchmarkData = {
           "numpyTsOps": 12134.3
         },
         {
-          "name": "nanpercentile [100x100] float16",
-          "ratio": 2.7858,
-          "numpyOps": 21854.5,
-          "numpyTsOps": 7845.0
-        },
-        {
           "name": "nanquantile [100x100]",
           "ratio": 3.7872,
           "numpyOps": 35088.1,
@@ -8630,6 +8630,12 @@ export const benchmarkData = {
           "ratio": 3.8559,
           "numpyOps": 35750.3,
           "numpyTsOps": 9271.7
+        },
+        {
+          "name": "nanquantile [100x100] float16",
+          "ratio": 2.837,
+          "numpyOps": 22286.1,
+          "numpyTsOps": 7855.4
         },
         {
           "name": "nanquantile [100x100] int64",
@@ -8680,12 +8686,6 @@ export const benchmarkData = {
           "numpyTsOps": 12619.9
         },
         {
-          "name": "nanquantile [100x100] float16",
-          "ratio": 2.837,
-          "numpyOps": 22286.1,
-          "numpyTsOps": 7855.4
-        },
-        {
           "name": "nansum [100x100]",
           "ratio": 1.5734,
           "numpyOps": 116658.7,
@@ -8696,6 +8696,12 @@ export const benchmarkData = {
           "ratio": 1.6286,
           "numpyOps": 135844.2,
           "numpyTsOps": 83412.2
+        },
+        {
+          "name": "nansum [100x100] float16",
+          "ratio": 2.7387,
+          "numpyOps": 49505.4,
+          "numpyTsOps": 18076.5
         },
         {
           "name": "nansum [100x100] int64",
@@ -8758,12 +8764,6 @@ export const benchmarkData = {
           "numpyTsOps": 33151.9
         },
         {
-          "name": "nansum [100x100] float16",
-          "ratio": 2.7387,
-          "numpyOps": 49505.4,
-          "numpyTsOps": 18076.5
-        },
-        {
           "name": "percentile [100x100]",
           "ratio": 0.2577,
           "numpyOps": 37248.3,
@@ -8774,6 +8774,12 @@ export const benchmarkData = {
           "ratio": 1.798,
           "numpyOps": 37277.1,
           "numpyTsOps": 20732.2
+        },
+        {
+          "name": "percentile [100x100] float16",
+          "ratio": 0.6342,
+          "numpyOps": 27085.6,
+          "numpyTsOps": 42708.4
         },
         {
           "name": "percentile [100x100] int64",
@@ -8824,12 +8830,6 @@ export const benchmarkData = {
           "numpyTsOps": 12536.6
         },
         {
-          "name": "percentile [100x100] float16",
-          "ratio": 0.6342,
-          "numpyOps": 27085.6,
-          "numpyTsOps": 42708.4
-        },
-        {
           "name": "prod [100x100]",
           "ratio": 0.6992,
           "numpyOps": 114088.9,
@@ -8840,6 +8840,12 @@ export const benchmarkData = {
           "ratio": 0.2902,
           "numpyOps": 111858.2,
           "numpyTsOps": 385455.4
+        },
+        {
+          "name": "prod [100x100] float16",
+          "ratio": 5.4965,
+          "numpyOps": 97600.6,
+          "numpyTsOps": 17756.9
         },
         {
           "name": "prod [100x100] int64",
@@ -8920,6 +8926,12 @@ export const benchmarkData = {
           "numpyTsOps": 441939.3
         },
         {
+          "name": "prod [100x100] axis=0 float16",
+          "ratio": 1.5977,
+          "numpyOps": 34538.4,
+          "numpyTsOps": 21617.7
+        },
+        {
           "name": "prod [100x100] axis=0 int64",
           "ratio": 1.1175,
           "numpyOps": 226474.3,
@@ -8980,18 +8992,6 @@ export const benchmarkData = {
           "numpyTsOps": 31500.1
         },
         {
-          "name": "prod [100x100] axis=0 float16",
-          "ratio": 1.5977,
-          "numpyOps": 34538.4,
-          "numpyTsOps": 21617.7
-        },
-        {
-          "name": "prod [100x100] float16",
-          "ratio": 5.4965,
-          "numpyOps": 97600.6,
-          "numpyTsOps": 17756.9
-        },
-        {
           "name": "ptp [100x100]",
           "ratio": 3.3465,
           "numpyOps": 306466.7,
@@ -9002,6 +9002,12 @@ export const benchmarkData = {
           "ratio": 2.3428,
           "numpyOps": 398688.9,
           "numpyTsOps": 170174.2
+        },
+        {
+          "name": "ptp [100x100] float16",
+          "ratio": 0.5193,
+          "numpyOps": 29963.5,
+          "numpyTsOps": 57702.0
         },
         {
           "name": "ptp [100x100] int64",
@@ -9052,12 +9058,6 @@ export const benchmarkData = {
           "numpyTsOps": 814223.4
         },
         {
-          "name": "ptp [100x100] float16",
-          "ratio": 0.5193,
-          "numpyOps": 29963.5,
-          "numpyTsOps": 57702.0
-        },
-        {
           "name": "quantile [100x100]",
           "ratio": 0.2608,
           "numpyOps": 38022.4,
@@ -9068,6 +9068,12 @@ export const benchmarkData = {
           "ratio": 1.8542,
           "numpyOps": 39181.3,
           "numpyTsOps": 21131.4
+        },
+        {
+          "name": "quantile [100x100] float16",
+          "ratio": 0.6351,
+          "numpyOps": 27642.5,
+          "numpyTsOps": 43526.1
         },
         {
           "name": "quantile [100x100] int64",
@@ -9118,12 +9124,6 @@ export const benchmarkData = {
           "numpyTsOps": 12400.2
         },
         {
-          "name": "quantile [100x100] float16",
-          "ratio": 0.6351,
-          "numpyOps": 27642.5,
-          "numpyTsOps": 43526.1
-        },
-        {
           "name": "std [100x100]",
           "ratio": 0.7869,
           "numpyOps": 100776.8,
@@ -9134,6 +9134,12 @@ export const benchmarkData = {
           "ratio": 1.2594,
           "numpyOps": 107243.1,
           "numpyTsOps": 85155.7
+        },
+        {
+          "name": "std [100x100] float16",
+          "ratio": 0.8905,
+          "numpyOps": 13055.3,
+          "numpyTsOps": 14660.0
         },
         {
           "name": "std [100x100] int64",
@@ -9208,6 +9214,12 @@ export const benchmarkData = {
           "numpyTsOps": 29486.5
         },
         {
+          "name": "std [100x100] axis=0 float16",
+          "ratio": 0.5179,
+          "numpyOps": 8551.3,
+          "numpyTsOps": 16512.4
+        },
+        {
           "name": "std [100x100] axis=0 int64",
           "ratio": 2.9161,
           "numpyOps": 33535.9,
@@ -9268,18 +9280,6 @@ export const benchmarkData = {
           "numpyTsOps": 26976.9
         },
         {
-          "name": "std [100x100] axis=0 float16",
-          "ratio": 0.5179,
-          "numpyOps": 8551.3,
-          "numpyTsOps": 16512.4
-        },
-        {
-          "name": "std [100x100] float16",
-          "ratio": 0.8905,
-          "numpyOps": 13055.3,
-          "numpyTsOps": 14660.0
-        },
-        {
           "name": "sum [100x100]",
           "ratio": 2.2729,
           "numpyOps": 450711.3,
@@ -9290,6 +9290,12 @@ export const benchmarkData = {
           "ratio": 0.9848,
           "numpyOps": 464350.1,
           "numpyTsOps": 471512.4
+        },
+        {
+          "name": "sum [100x100] float16",
+          "ratio": 6.6281,
+          "numpyOps": 106465.6,
+          "numpyTsOps": 16062.7
         },
         {
           "name": "sum [100x100] int64",
@@ -9370,6 +9376,12 @@ export const benchmarkData = {
           "numpyTsOps": 332057.9
         },
         {
+          "name": "sum [100x100] axis=0 float16",
+          "ratio": 1.4766,
+          "numpyOps": 32645.1,
+          "numpyTsOps": 22107.8
+        },
+        {
           "name": "sum [100x100] axis=0 int64",
           "ratio": 1.4091,
           "numpyOps": 230567.1,
@@ -9430,18 +9442,6 @@ export const benchmarkData = {
           "numpyTsOps": 46607.3
         },
         {
-          "name": "sum [100x100] axis=0 float16",
-          "ratio": 1.4766,
-          "numpyOps": 32645.1,
-          "numpyTsOps": 22107.8
-        },
-        {
-          "name": "sum [100x100] float16",
-          "ratio": 6.6281,
-          "numpyOps": 106465.6,
-          "numpyTsOps": 16062.7
-        },
-        {
           "name": "var [100x100]",
           "ratio": 1.2877,
           "numpyOps": 104890.4,
@@ -9452,6 +9452,12 @@ export const benchmarkData = {
           "ratio": 2.0006,
           "numpyOps": 112535.5,
           "numpyTsOps": 56251.3
+        },
+        {
+          "name": "var [100x100] float16",
+          "ratio": 0.8512,
+          "numpyOps": 12920.4,
+          "numpyTsOps": 15179.8
         },
         {
           "name": "var [100x100] int64",
@@ -9526,6 +9532,12 @@ export const benchmarkData = {
           "numpyTsOps": 42100.5
         },
         {
+          "name": "var [100x100] axis=0 float16",
+          "ratio": 0.5211,
+          "numpyOps": 8460.2,
+          "numpyTsOps": 16235.1
+        },
+        {
           "name": "var [100x100] axis=0 int64",
           "ratio": 2.7568,
           "numpyOps": 30170.7,
@@ -9584,18 +9596,6 @@ export const benchmarkData = {
           "ratio": 1.3205,
           "numpyOps": 35353.6,
           "numpyTsOps": 26771.9
-        },
-        {
-          "name": "var [100x100] axis=0 float16",
-          "ratio": 0.5211,
-          "numpyOps": 8460.2,
-          "numpyTsOps": 16235.1
-        },
-        {
-          "name": "var [100x100] float16",
-          "ratio": 0.8512,
-          "numpyOps": 12920.4,
-          "numpyTsOps": 15179.8
         }
       ]
     },
@@ -9617,6 +9617,12 @@ export const benchmarkData = {
           "ratio": 2.0192,
           "numpyOps": 216018.6,
           "numpyTsOps": 106982.0
+        },
+        {
+          "name": "block [100x100] + [100x100] float16",
+          "ratio": 2.8627,
+          "numpyOps": 273136.6,
+          "numpyTsOps": 95412.5
         },
         {
           "name": "block [100x100] + [100x100] int64",
@@ -9667,12 +9673,6 @@ export const benchmarkData = {
           "numpyTsOps": 133818.2
         },
         {
-          "name": "block [100x100] + [100x100] float16",
-          "ratio": 2.8627,
-          "numpyOps": 273136.6,
-          "numpyTsOps": 95412.5
-        },
-        {
           "name": "broadcast_to [100] -> [100x100]",
           "ratio": 0.1771,
           "numpyOps": 592260.4,
@@ -9683,6 +9683,12 @@ export const benchmarkData = {
           "ratio": 0.18,
           "numpyOps": 593259.9,
           "numpyTsOps": 3295987.1
+        },
+        {
+          "name": "broadcast_to [100] -> [100x100] float16",
+          "ratio": 0.1783,
+          "numpyOps": 594778.8,
+          "numpyTsOps": 3335179.7
         },
         {
           "name": "broadcast_to [100] -> [100x100] int64",
@@ -9733,12 +9739,6 @@ export const benchmarkData = {
           "numpyTsOps": 3395158.2
         },
         {
-          "name": "broadcast_to [100] -> [100x100] float16",
-          "ratio": 0.1783,
-          "numpyOps": 594778.8,
-          "numpyTsOps": 3335179.7
-        },
-        {
           "name": "concat [100x100] + [100x100]",
           "ratio": 1.7536,
           "numpyOps": 320348.4,
@@ -9749,6 +9749,12 @@ export const benchmarkData = {
           "ratio": 1.631,
           "numpyOps": 506001.8,
           "numpyTsOps": 310244.6
+        },
+        {
+          "name": "concat [100x100] + [100x100] float16",
+          "ratio": 1.3365,
+          "numpyOps": 634186.0,
+          "numpyTsOps": 474500.0
         },
         {
           "name": "concat [100x100] + [100x100] int64",
@@ -9799,12 +9805,6 @@ export const benchmarkData = {
           "numpyTsOps": 662351.7
         },
         {
-          "name": "concat [100x100] + [100x100] float16",
-          "ratio": 1.3365,
-          "numpyOps": 634186.0,
-          "numpyTsOps": 474500.0
-        },
-        {
           "name": "concatenate [100x100] + [100x100]",
           "ratio": 1.8695,
           "numpyOps": 335470.4,
@@ -9815,6 +9815,12 @@ export const benchmarkData = {
           "ratio": 1.6677,
           "numpyOps": 536457.7,
           "numpyTsOps": 321680.9
+        },
+        {
+          "name": "concatenate [100x100] + [100x100] float16",
+          "ratio": 1.5345,
+          "numpyOps": 681356.4,
+          "numpyTsOps": 444020.3
         },
         {
           "name": "concatenate [100x100] + [100x100] int64",
@@ -9865,12 +9871,6 @@ export const benchmarkData = {
           "numpyTsOps": 696990.7
         },
         {
-          "name": "concatenate [100x100] + [100x100] float16",
-          "ratio": 1.5345,
-          "numpyOps": 681356.4,
-          "numpyTsOps": 444020.3
-        },
-        {
           "name": "flatten [100x100]",
           "ratio": 1.7774,
           "numpyOps": 632887.9,
@@ -9881,6 +9881,12 @@ export const benchmarkData = {
           "ratio": 1.5127,
           "numpyOps": 818180.9,
           "numpyTsOps": 540859.4
+        },
+        {
+          "name": "flatten [100x100] float16",
+          "ratio": 0.972,
+          "numpyOps": 769626.5,
+          "numpyTsOps": 791799.0
         },
         {
           "name": "flatten [100x100] int64",
@@ -9931,12 +9937,6 @@ export const benchmarkData = {
           "numpyTsOps": 1277692.3
         },
         {
-          "name": "flatten [100x100] float16",
-          "ratio": 0.972,
-          "numpyOps": 769626.5,
-          "numpyTsOps": 791799.0
-        },
-        {
           "name": "flip [100x100]",
           "ratio": 6.289,
           "numpyOps": 972274.5,
@@ -9947,6 +9947,12 @@ export const benchmarkData = {
           "ratio": 4.3724,
           "numpyOps": 970536.5,
           "numpyTsOps": 221971.1
+        },
+        {
+          "name": "flip [100x100] float16",
+          "ratio": 2.4949,
+          "numpyOps": 975408.1,
+          "numpyTsOps": 390961.9
         },
         {
           "name": "flip [100x100] int64",
@@ -9997,12 +10003,6 @@ export const benchmarkData = {
           "numpyTsOps": 576554.5
         },
         {
-          "name": "flip [100x100] float16",
-          "ratio": 2.4949,
-          "numpyOps": 975408.1,
-          "numpyTsOps": 390961.9
-        },
-        {
           "name": "hstack [100x100]",
           "ratio": 2.0992,
           "numpyOps": 188802.3,
@@ -10013,6 +10013,12 @@ export const benchmarkData = {
           "ratio": 2.3945,
           "numpyOps": 272999.5,
           "numpyTsOps": 114011.8
+        },
+        {
+          "name": "hstack [100x100] float16",
+          "ratio": 3.4572,
+          "numpyOps": 345384.9,
+          "numpyTsOps": 99903.3
         },
         {
           "name": "hstack [100x100] int64",
@@ -10063,12 +10069,6 @@ export const benchmarkData = {
           "numpyTsOps": 141888.0
         },
         {
-          "name": "hstack [100x100] float16",
-          "ratio": 3.4572,
-          "numpyOps": 345384.9,
-          "numpyTsOps": 99903.3
-        },
-        {
           "name": "item [100x100]",
           "ratio": 0.3011,
           "numpyOps": 1297032.0,
@@ -10079,6 +10079,12 @@ export const benchmarkData = {
           "ratio": 0.2905,
           "numpyOps": 1308909.4,
           "numpyTsOps": 4505044.0
+        },
+        {
+          "name": "item [100x100] float16",
+          "ratio": 0.2932,
+          "numpyOps": 1317455.2,
+          "numpyTsOps": 4492660.6
         },
         {
           "name": "item [100x100] int64",
@@ -10129,12 +10135,6 @@ export const benchmarkData = {
           "numpyTsOps": 4371094.3
         },
         {
-          "name": "item [100x100] float16",
-          "ratio": 0.2932,
-          "numpyOps": 1317455.2,
-          "numpyTsOps": 4492660.6
-        },
-        {
           "name": "pad [100x100] width=2",
           "ratio": 0.8786,
           "numpyOps": 108708.1,
@@ -10145,6 +10145,12 @@ export const benchmarkData = {
           "ratio": 0.5715,
           "numpyOps": 119135.0,
           "numpyTsOps": 208446.8
+        },
+        {
+          "name": "pad [100x100] width=2 float16",
+          "ratio": 2.5109,
+          "numpyOps": 127181.6,
+          "numpyTsOps": 50651.2
         },
         {
           "name": "pad [100x100] width=2 int64",
@@ -10195,12 +10201,6 @@ export const benchmarkData = {
           "numpyTsOps": 588506.1
         },
         {
-          "name": "pad [100x100] width=2 float16",
-          "ratio": 2.5109,
-          "numpyOps": 127181.6,
-          "numpyTsOps": 50651.2
-        },
-        {
           "name": "ravel [100x100]",
           "ratio": 0.2396,
           "numpyOps": 1452991.0,
@@ -10211,6 +10211,12 @@ export const benchmarkData = {
           "ratio": 0.2391,
           "numpyOps": 1461551.9,
           "numpyTsOps": 6112818.1
+        },
+        {
+          "name": "ravel [100x100] float16",
+          "ratio": 0.2414,
+          "numpyOps": 1448022.3,
+          "numpyTsOps": 5997301.2
         },
         {
           "name": "ravel [100x100] int64",
@@ -10261,12 +10267,6 @@ export const benchmarkData = {
           "numpyTsOps": 6043906.0
         },
         {
-          "name": "ravel [100x100] float16",
-          "ratio": 0.2414,
-          "numpyOps": 1448022.3,
-          "numpyTsOps": 5997301.2
-        },
-        {
           "name": "repeat [100x100] x 2",
           "ratio": 2.1854,
           "numpyOps": 162261.6,
@@ -10277,6 +10277,12 @@ export const benchmarkData = {
           "ratio": 1.7661,
           "numpyOps": 163648.8,
           "numpyTsOps": 92659.0
+        },
+        {
+          "name": "repeat [100x100] x 2 float16",
+          "ratio": 5.6159,
+          "numpyOps": 164361.2,
+          "numpyTsOps": 29267.1
         },
         {
           "name": "repeat [100x100] x 2 int64",
@@ -10327,12 +10333,6 @@ export const benchmarkData = {
           "numpyTsOps": 41676.3
         },
         {
-          "name": "repeat [100x100] x 2 float16",
-          "ratio": 5.6159,
-          "numpyOps": 164361.2,
-          "numpyTsOps": 29267.1
-        },
-        {
           "name": "reshape [100x100] -> [100x100] (contiguous)",
           "ratio": 0.2339,
           "numpyOps": 1398218.3,
@@ -10343,6 +10343,12 @@ export const benchmarkData = {
           "ratio": 0.2377,
           "numpyOps": 1399237.9,
           "numpyTsOps": 5886886.4
+        },
+        {
+          "name": "reshape [100x100] -> [100x100] (contiguous) float16",
+          "ratio": 0.2388,
+          "numpyOps": 1414213.3,
+          "numpyTsOps": 5921788.0
         },
         {
           "name": "reshape [100x100] -> [100x100] (contiguous) int64",
@@ -10393,12 +10399,6 @@ export const benchmarkData = {
           "numpyTsOps": 5981317.4
         },
         {
-          "name": "reshape [100x100] -> [100x100] (contiguous) float16",
-          "ratio": 0.2388,
-          "numpyOps": 1414213.3,
-          "numpyTsOps": 5921788.0
-        },
-        {
           "name": "roll [100x100] shift=10",
           "ratio": 1.4131,
           "numpyOps": 231352.8,
@@ -10409,6 +10409,12 @@ export const benchmarkData = {
           "ratio": 1.0515,
           "numpyOps": 264074.1,
           "numpyTsOps": 251150.4
+        },
+        {
+          "name": "roll [100x100] shift=10 float16",
+          "ratio": 5.1686,
+          "numpyOps": 283100.0,
+          "numpyTsOps": 54773.1
         },
         {
           "name": "roll [100x100] shift=10 int64",
@@ -10459,12 +10465,6 @@ export const benchmarkData = {
           "numpyTsOps": 755336.5
         },
         {
-          "name": "roll [100x100] shift=10 float16",
-          "ratio": 5.1686,
-          "numpyOps": 283100.0,
-          "numpyTsOps": 54773.1
-        },
-        {
           "name": "rot90 [100x100]",
           "ratio": 2.3276,
           "numpyOps": 343002.0,
@@ -10475,6 +10475,12 @@ export const benchmarkData = {
           "ratio": 1.5769,
           "numpyOps": 341422.9,
           "numpyTsOps": 216510.5
+        },
+        {
+          "name": "rot90 [100x100] float16",
+          "ratio": 4.6373,
+          "numpyOps": 353578.4,
+          "numpyTsOps": 76246.5
         },
         {
           "name": "rot90 [100x100] int64",
@@ -10525,12 +10531,6 @@ export const benchmarkData = {
           "numpyTsOps": 387461.2
         },
         {
-          "name": "rot90 [100x100] float16",
-          "ratio": 4.6373,
-          "numpyOps": 353578.4,
-          "numpyTsOps": 76246.5
-        },
-        {
           "name": "stack [100x100] + [100x100]",
           "ratio": 1.5057,
           "numpyOps": 262109.4,
@@ -10541,6 +10541,12 @@ export const benchmarkData = {
           "ratio": 1.3181,
           "numpyOps": 373620.3,
           "numpyTsOps": 283445.0
+        },
+        {
+          "name": "stack [100x100] + [100x100] float16",
+          "ratio": 1.1158,
+          "numpyOps": 456093.1,
+          "numpyTsOps": 408753.0
         },
         {
           "name": "stack [100x100] + [100x100] int64",
@@ -10591,12 +10597,6 @@ export const benchmarkData = {
           "numpyTsOps": 618222.9
         },
         {
-          "name": "stack [100x100] + [100x100] float16",
-          "ratio": 1.1158,
-          "numpyOps": 456093.1,
-          "numpyTsOps": 408753.0
-        },
-        {
           "name": "swapaxes [100x100]",
           "ratio": 0.2857,
           "numpyOps": 1145673.5,
@@ -10607,6 +10607,12 @@ export const benchmarkData = {
           "ratio": 0.2945,
           "numpyOps": 1169957.6,
           "numpyTsOps": 3972566.8
+        },
+        {
+          "name": "swapaxes [100x100] float16",
+          "ratio": 0.2951,
+          "numpyOps": 1185531.0,
+          "numpyTsOps": 4017891.7
         },
         {
           "name": "swapaxes [100x100] int64",
@@ -10657,12 +10663,6 @@ export const benchmarkData = {
           "numpyTsOps": 4075387.9
         },
         {
-          "name": "swapaxes [100x100] float16",
-          "ratio": 0.2951,
-          "numpyOps": 1185531.0,
-          "numpyTsOps": 4017891.7
-        },
-        {
           "name": "take [100x100] 100 indices",
           "ratio": 0.4545,
           "numpyOps": 352717.6,
@@ -10673,6 +10673,12 @@ export const benchmarkData = {
           "ratio": 0.4546,
           "numpyOps": 346424.7,
           "numpyTsOps": 762061.1
+        },
+        {
+          "name": "take [100x100] 100 indices float16",
+          "ratio": 0.5131,
+          "numpyOps": 354891.3,
+          "numpyTsOps": 691709.2
         },
         {
           "name": "take [100x100] 100 indices int64",
@@ -10723,12 +10729,6 @@ export const benchmarkData = {
           "numpyTsOps": 306190.5
         },
         {
-          "name": "take [100x100] 100 indices float16",
-          "ratio": 0.5131,
-          "numpyOps": 354891.3,
-          "numpyTsOps": 691709.2
-        },
-        {
           "name": "tile [100x100] x [2,2]",
           "ratio": 2.0333,
           "numpyOps": 127683.8,
@@ -10739,6 +10739,12 @@ export const benchmarkData = {
           "ratio": 1.4129,
           "numpyOps": 158647.1,
           "numpyTsOps": 112282.7
+        },
+        {
+          "name": "tile [100x100] x [2,2] float16",
+          "ratio": 10.007,
+          "numpyOps": 211140.1,
+          "numpyTsOps": 21099.3
         },
         {
           "name": "tile [100x100] x [2,2] int64",
@@ -10789,12 +10795,6 @@ export const benchmarkData = {
           "numpyTsOps": 352061.4
         },
         {
-          "name": "tile [100x100] x [2,2] float16",
-          "ratio": 10.007,
-          "numpyOps": 211140.1,
-          "numpyTsOps": 21099.3
-        },
-        {
           "name": "tolist [100x100]",
           "ratio": 0.0827,
           "numpyOps": 10622.8,
@@ -10805,6 +10805,12 @@ export const benchmarkData = {
           "ratio": 0.1295,
           "numpyOps": 10622.7,
           "numpyTsOps": 82025.5
+        },
+        {
+          "name": "tolist [100x100] float16",
+          "ratio": 0.1331,
+          "numpyOps": 10179.4,
+          "numpyTsOps": 76450.8
         },
         {
           "name": "tolist [100x100] int64",
@@ -10855,12 +10861,6 @@ export const benchmarkData = {
           "numpyTsOps": 20052.6
         },
         {
-          "name": "tolist [100x100] float16",
-          "ratio": 0.1331,
-          "numpyOps": 10179.4,
-          "numpyTsOps": 76450.8
-        },
-        {
           "name": "unstack [100x100]",
           "ratio": 0.2319,
           "numpyOps": 188415.3,
@@ -10871,6 +10871,12 @@ export const benchmarkData = {
           "ratio": 0.2316,
           "numpyOps": 188669.8,
           "numpyTsOps": 814758.2
+        },
+        {
+          "name": "unstack [100x100] float16",
+          "ratio": 0.2319,
+          "numpyOps": 189584.5,
+          "numpyTsOps": 817609.9
         },
         {
           "name": "unstack [100x100] int64",
@@ -10921,12 +10927,6 @@ export const benchmarkData = {
           "numpyTsOps": 806575.0
         },
         {
-          "name": "unstack [100x100] float16",
-          "ratio": 0.2319,
-          "numpyOps": 189584.5,
-          "numpyTsOps": 817609.9
-        },
-        {
           "name": "vstack [100x100]",
           "ratio": 1.5398,
           "numpyOps": 276540.5,
@@ -10937,6 +10937,12 @@ export const benchmarkData = {
           "ratio": 1.2677,
           "numpyOps": 402440.3,
           "numpyTsOps": 317463.2
+        },
+        {
+          "name": "vstack [100x100] float16",
+          "ratio": 1.0607,
+          "numpyOps": 508584.1,
+          "numpyTsOps": 479473.4
         },
         {
           "name": "vstack [100x100] int64",
@@ -10985,12 +10991,6 @@ export const benchmarkData = {
           "ratio": 0.8042,
           "numpyOps": 550234.0,
           "numpyTsOps": 684179.0
-        },
-        {
-          "name": "vstack [100x100] float16",
-          "ratio": 1.0607,
-          "numpyOps": 508584.1,
-          "numpyTsOps": 479473.4
         }
       ]
     },
@@ -11012,6 +11012,12 @@ export const benchmarkData = {
           "ratio": 0.1253,
           "numpyOps": 48386.8,
           "numpyTsOps": 386017.1
+        },
+        {
+          "name": "parseNpy [100x100] float16",
+          "ratio": 0.1191,
+          "numpyOps": 66341.1,
+          "numpyTsOps": 556931.9
         },
         {
           "name": "parseNpy [100x100] int64",
@@ -11062,12 +11068,6 @@ export const benchmarkData = {
           "numpyTsOps": 666242.3
         },
         {
-          "name": "parseNpy [100x100] float16",
-          "ratio": 0.1191,
-          "numpyOps": 66341.1,
-          "numpyTsOps": 556931.9
-        },
-        {
           "name": "parseNpy [500x500]",
           "ratio": 0.3906,
           "numpyOps": 6942.0,
@@ -11078,6 +11078,12 @@ export const benchmarkData = {
           "ratio": 0.6111,
           "numpyOps": 21216.9,
           "numpyTsOps": 34717.4
+        },
+        {
+          "name": "parseNpy [500x500] float16",
+          "ratio": 0.5174,
+          "numpyOps": 32501.3,
+          "numpyTsOps": 62812.9
         },
         {
           "name": "parseNpy [500x500] int64",
@@ -11128,12 +11134,6 @@ export const benchmarkData = {
           "numpyTsOps": 103375.2
         },
         {
-          "name": "parseNpy [500x500] float16",
-          "ratio": 0.5174,
-          "numpyOps": 32501.3,
-          "numpyTsOps": 62812.9
-        },
-        {
           "name": "parseNpzSync {a, b} [100x100]",
           "ratio": 2.2838,
           "numpyOps": 149932.8,
@@ -11144,6 +11144,12 @@ export const benchmarkData = {
           "ratio": 1.5525,
           "numpyOps": 150852.9,
           "numpyTsOps": 97167.9
+        },
+        {
+          "name": "parseNpzSync {a, b} [100x100] float16",
+          "ratio": 1.0084,
+          "numpyOps": 151698.3,
+          "numpyTsOps": 150431.0
         },
         {
           "name": "parseNpzSync {a, b} [100x100] int64",
@@ -11194,12 +11200,6 @@ export const benchmarkData = {
           "numpyTsOps": 196161.3
         },
         {
-          "name": "parseNpzSync {a, b} [100x100] float16",
-          "ratio": 1.0084,
-          "numpyOps": 151698.3,
-          "numpyTsOps": 150431.0
-        },
-        {
           "name": "serializeNpy [100x100]",
           "ratio": 0.3715,
           "numpyOps": 90447.5,
@@ -11210,6 +11210,12 @@ export const benchmarkData = {
           "ratio": 0.3404,
           "numpyOps": 119828.6,
           "numpyTsOps": 352061.5
+        },
+        {
+          "name": "serializeNpy [100x100] float16",
+          "ratio": 0.441,
+          "numpyOps": 217470.3,
+          "numpyTsOps": 493140.8
         },
         {
           "name": "serializeNpy [100x100] int64",
@@ -11260,12 +11266,6 @@ export const benchmarkData = {
           "numpyTsOps": 585407.0
         },
         {
-          "name": "serializeNpy [100x100] float16",
-          "ratio": 0.441,
-          "numpyOps": 217470.3,
-          "numpyTsOps": 493140.8
-        },
-        {
           "name": "serializeNpy [500x500]",
           "ratio": 0.3201,
           "numpyOps": 5423.3,
@@ -11276,6 +11276,12 @@ export const benchmarkData = {
           "ratio": 0.7156,
           "numpyOps": 22710.6,
           "numpyTsOps": 31734.2
+        },
+        {
+          "name": "serializeNpy [500x500] float16",
+          "ratio": 0.5979,
+          "numpyOps": 36736.6,
+          "numpyTsOps": 61444.6
         },
         {
           "name": "serializeNpy [500x500] int64",
@@ -11326,12 +11332,6 @@ export const benchmarkData = {
           "numpyTsOps": 108463.8
         },
         {
-          "name": "serializeNpy [500x500] float16",
-          "ratio": 0.5979,
-          "numpyOps": 36736.6,
-          "numpyTsOps": 61444.6
-        },
-        {
           "name": "serializeNpzSync {a, b} [100x100]",
           "ratio": 3.1897,
           "numpyOps": 20371.8,
@@ -11342,6 +11342,12 @@ export const benchmarkData = {
           "ratio": 2.2104,
           "numpyOps": 27322.6,
           "numpyTsOps": 12360.7
+        },
+        {
+          "name": "serializeNpzSync {a, b} [100x100] float16",
+          "ratio": 2.1585,
+          "numpyOps": 50280.7,
+          "numpyTsOps": 23294.6
         },
         {
           "name": "serializeNpzSync {a, b} [100x100] int64",
@@ -11390,12 +11396,6 @@ export const benchmarkData = {
           "ratio": 1.2533,
           "numpyOps": 53492.7,
           "numpyTsOps": 42680.1
-        },
-        {
-          "name": "serializeNpzSync {a, b} [100x100] float16",
-          "ratio": 2.1585,
-          "numpyOps": 50280.7,
-          "numpyTsOps": 23294.6
         }
       ]
     },
@@ -11417,6 +11417,12 @@ export const benchmarkData = {
           "ratio": 4.6085,
           "numpyOps": 21498.3,
           "numpyTsOps": 4665.0
+        },
+        {
+          "name": "argwhere [100x100] float16",
+          "ratio": 3.4807,
+          "numpyOps": 15780.4,
+          "numpyTsOps": 4533.7
         },
         {
           "name": "argwhere [100x100] int64",
@@ -11467,16 +11473,16 @@ export const benchmarkData = {
           "numpyTsOps": 3929.4
         },
         {
-          "name": "argwhere [100x100] float16",
-          "ratio": 3.4807,
-          "numpyOps": 15780.4,
-          "numpyTsOps": 4533.7
-        },
-        {
           "name": "compress [100x100] float32",
           "ratio": 2.2802,
           "numpyOps": 451429.1,
           "numpyTsOps": 197978.1
+        },
+        {
+          "name": "compress [100x100] float16",
+          "ratio": 2.6355,
+          "numpyOps": 570758.3,
+          "numpyTsOps": 216568.3
         },
         {
           "name": "compress [100x100] int64",
@@ -11533,12 +11539,6 @@ export const benchmarkData = {
           "numpyTsOps": 237420.1
         },
         {
-          "name": "compress [100x100] float16",
-          "ratio": 2.6355,
-          "numpyOps": 570758.3,
-          "numpyTsOps": 216568.3
-        },
-        {
           "name": "diag_indices n=100",
           "ratio": 0.5751,
           "numpyOps": 1073976.0,
@@ -11549,6 +11549,12 @@ export const benchmarkData = {
           "ratio": 0.5529,
           "numpyOps": 1076781.9,
           "numpyTsOps": 1947584.3
+        },
+        {
+          "name": "diag_indices n=100 float16",
+          "ratio": 0.5482,
+          "numpyOps": 1073156.1,
+          "numpyTsOps": 1957670.9
         },
         {
           "name": "diag_indices n=100 int64",
@@ -11599,12 +11605,6 @@ export const benchmarkData = {
           "numpyTsOps": 1941272.3
         },
         {
-          "name": "diag_indices n=100 float16",
-          "ratio": 0.5482,
-          "numpyOps": 1073156.1,
-          "numpyTsOps": 1957670.9
-        },
-        {
           "name": "extract [100x100]",
           "ratio": 0.4237,
           "numpyOps": 26948.7,
@@ -11615,6 +11615,12 @@ export const benchmarkData = {
           "ratio": 0.3729,
           "numpyOps": 27088.2,
           "numpyTsOps": 72644.5
+        },
+        {
+          "name": "extract [100x100] float16",
+          "ratio": 1.132,
+          "numpyOps": 39357.6,
+          "numpyTsOps": 34769.0
         },
         {
           "name": "extract [100x100] int64",
@@ -11665,12 +11671,6 @@ export const benchmarkData = {
           "numpyTsOps": 82580.6
         },
         {
-          "name": "extract [100x100] float16",
-          "ratio": 1.132,
-          "numpyOps": 39357.6,
-          "numpyTsOps": 34769.0
-        },
-        {
           "name": "flatnonzero [100x100]",
           "ratio": 0.8645,
           "numpyOps": 65733.0,
@@ -11681,6 +11681,12 @@ export const benchmarkData = {
           "ratio": 1.0412,
           "numpyOps": 59691.4,
           "numpyTsOps": 57327.3
+        },
+        {
+          "name": "flatnonzero [100x100] float16",
+          "ratio": 0.569,
+          "numpyOps": 30311.3,
+          "numpyTsOps": 53269.8
         },
         {
           "name": "flatnonzero [100x100] int64",
@@ -11731,12 +11737,6 @@ export const benchmarkData = {
           "numpyTsOps": 25456.2
         },
         {
-          "name": "flatnonzero [100x100] float16",
-          "ratio": 0.569,
-          "numpyOps": 30311.3,
-          "numpyTsOps": 53269.8
-        },
-        {
           "name": "indices [100x100]",
           "ratio": 2.875,
           "numpyOps": 233633.2,
@@ -11747,6 +11747,12 @@ export const benchmarkData = {
           "ratio": 2.922,
           "numpyOps": 233210.1,
           "numpyTsOps": 79810.6
+        },
+        {
+          "name": "indices [100x100] float16",
+          "ratio": 2.9816,
+          "numpyOps": 230152.4,
+          "numpyTsOps": 77191.9
         },
         {
           "name": "indices [100x100] int64",
@@ -11797,12 +11803,6 @@ export const benchmarkData = {
           "numpyTsOps": 80337.8
         },
         {
-          "name": "indices [100x100] float16",
-          "ratio": 2.9816,
-          "numpyOps": 230152.4,
-          "numpyTsOps": 77191.9
-        },
-        {
           "name": "nonzero [100x100]",
           "ratio": 1.5458,
           "numpyOps": 32088.9,
@@ -11813,6 +11813,12 @@ export const benchmarkData = {
           "ratio": 1.5949,
           "numpyOps": 31985.7,
           "numpyTsOps": 20054.8
+        },
+        {
+          "name": "nonzero [100x100] float16",
+          "ratio": 1.0834,
+          "numpyOps": 21252.1,
+          "numpyTsOps": 19616.7
         },
         {
           "name": "nonzero [100x100] int64",
@@ -11863,12 +11869,6 @@ export const benchmarkData = {
           "numpyTsOps": 13720.3
         },
         {
-          "name": "nonzero [100x100] float16",
-          "ratio": 1.0834,
-          "numpyOps": 21252.1,
-          "numpyTsOps": 19616.7
-        },
-        {
           "name": "ravel_multi_index [1000] int32",
           "ratio": 6.4429,
           "numpyOps": 228877.9,
@@ -11879,6 +11879,12 @@ export const benchmarkData = {
           "ratio": 0.4132,
           "numpyOps": 26640.4,
           "numpyTsOps": 64469.0
+        },
+        {
+          "name": "take_along_axis [100x100] float16",
+          "ratio": 0.9081,
+          "numpyOps": 29816.7,
+          "numpyTsOps": 32834.3
         },
         {
           "name": "take_along_axis [100x100] int64",
@@ -11935,12 +11941,6 @@ export const benchmarkData = {
           "numpyTsOps": 70557.9
         },
         {
-          "name": "take_along_axis [100x100] float16",
-          "ratio": 0.9081,
-          "numpyOps": 29816.7,
-          "numpyTsOps": 32834.3
-        },
-        {
           "name": "tril_indices n=100",
           "ratio": 0.7716,
           "numpyOps": 36363.9,
@@ -11951,6 +11951,12 @@ export const benchmarkData = {
           "ratio": 0.9025,
           "numpyOps": 42986.3,
           "numpyTsOps": 47630.3
+        },
+        {
+          "name": "tril_indices n=100 float16",
+          "ratio": 0.841,
+          "numpyOps": 40053.4,
+          "numpyTsOps": 47628.5
         },
         {
           "name": "tril_indices n=100 int64",
@@ -12001,12 +12007,6 @@ export const benchmarkData = {
           "numpyTsOps": 47274.9
         },
         {
-          "name": "tril_indices n=100 float16",
-          "ratio": 0.841,
-          "numpyOps": 40053.4,
-          "numpyTsOps": 47628.5
-        },
-        {
           "name": "triu_indices n=100",
           "ratio": 0.8901,
           "numpyOps": 41453.7,
@@ -12017,6 +12017,12 @@ export const benchmarkData = {
           "ratio": 0.8019,
           "numpyOps": 37457.8,
           "numpyTsOps": 46710.1
+        },
+        {
+          "name": "triu_indices n=100 float16",
+          "ratio": 0.8554,
+          "numpyOps": 38799.9,
+          "numpyTsOps": 45358.7
         },
         {
           "name": "triu_indices n=100 int64",
@@ -12065,12 +12071,6 @@ export const benchmarkData = {
           "ratio": 0.9476,
           "numpyOps": 44721.1,
           "numpyTsOps": 47194.1
-        },
-        {
-          "name": "triu_indices n=100 float16",
-          "ratio": 0.8554,
-          "numpyOps": 38799.9,
-          "numpyTsOps": 45358.7
         },
         {
           "name": "unravel_index [1000] int32",
@@ -12169,6 +12169,12 @@ export const benchmarkData = {
           "numpyTsOps": 44696.5
         },
         {
+          "name": "argpartition [100x100] kth=50 float16",
+          "ratio": 0.9466,
+          "numpyOps": 33257.6,
+          "numpyTsOps": 35132.6
+        },
+        {
           "name": "argpartition [100x100] kth=50 int64",
           "ratio": 1.048,
           "numpyOps": 48402.5,
@@ -12193,12 +12199,6 @@ export const benchmarkData = {
           "numpyTsOps": 46865.7
         },
         {
-          "name": "argpartition [100x100] kth=50 float16",
-          "ratio": 0.9466,
-          "numpyOps": 33257.6,
-          "numpyTsOps": 35132.6
-        },
-        {
           "name": "argsort [100x100]",
           "ratio": 1.5097,
           "numpyOps": 18977.4,
@@ -12209,6 +12209,12 @@ export const benchmarkData = {
           "ratio": 1.2198,
           "numpyOps": 15063.3,
           "numpyTsOps": 12349.4
+        },
+        {
+          "name": "argsort [100x100] float16",
+          "ratio": 1.5226,
+          "numpyOps": 17829.5,
+          "numpyTsOps": 11709.6
         },
         {
           "name": "argsort [100x100] int64",
@@ -12271,12 +12277,6 @@ export const benchmarkData = {
           "numpyTsOps": 10608.5
         },
         {
-          "name": "argsort [100x100] float16",
-          "ratio": 1.5226,
-          "numpyOps": 17829.5,
-          "numpyTsOps": 11709.6
-        },
-        {
           "name": "lexsort [1000] x 2 keys",
           "ratio": 1.8464,
           "numpyOps": 84359.4,
@@ -12287,6 +12287,12 @@ export const benchmarkData = {
           "ratio": 1.7636,
           "numpyOps": 83377.1,
           "numpyTsOps": 47275.8
+        },
+        {
+          "name": "lexsort [1000] x 2 keys float16",
+          "ratio": 1.4442,
+          "numpyOps": 63349.2,
+          "numpyTsOps": 43865.5
         },
         {
           "name": "lexsort [1000] x 2 keys int64",
@@ -12337,12 +12343,6 @@ export const benchmarkData = {
           "numpyTsOps": 66932.2
         },
         {
-          "name": "lexsort [1000] x 2 keys float16",
-          "ratio": 1.4442,
-          "numpyOps": 63349.2,
-          "numpyTsOps": 43865.5
-        },
-        {
           "name": "partition [100x100] kth=50",
           "ratio": 1.056,
           "numpyOps": 45619.5,
@@ -12353,6 +12353,12 @@ export const benchmarkData = {
           "ratio": 0.8818,
           "numpyOps": 45542.6,
           "numpyTsOps": 51644.7
+        },
+        {
+          "name": "partition [100x100] kth=50 float16",
+          "ratio": 1.5019,
+          "numpyOps": 45458.3,
+          "numpyTsOps": 30266.4
         },
         {
           "name": "partition [100x100] kth=50 int64",
@@ -12403,12 +12409,6 @@ export const benchmarkData = {
           "numpyTsOps": 67710.8
         },
         {
-          "name": "partition [100x100] kth=50 float16",
-          "ratio": 1.5019,
-          "numpyOps": 45458.3,
-          "numpyTsOps": 30266.4
-        },
-        {
           "name": "searchsorted [1000]",
           "ratio": 0.7493,
           "numpyOps": 421666.0,
@@ -12419,6 +12419,12 @@ export const benchmarkData = {
           "ratio": 0.7138,
           "numpyOps": 415104.1,
           "numpyTsOps": 581581.1
+        },
+        {
+          "name": "searchsorted [1000] float16",
+          "ratio": 1.0618,
+          "numpyOps": 407694.0,
+          "numpyTsOps": 383957.6
         },
         {
           "name": "searchsorted [1000] int64",
@@ -12445,12 +12451,6 @@ export const benchmarkData = {
           "numpyTsOps": 586343.1
         },
         {
-          "name": "searchsorted [1000] float16",
-          "ratio": 1.0618,
-          "numpyOps": 407694.0,
-          "numpyTsOps": 383957.6
-        },
-        {
           "name": "sort [100x100]",
           "ratio": 0.5737,
           "numpyOps": 11791.0,
@@ -12461,6 +12461,12 @@ export const benchmarkData = {
           "ratio": 1.926,
           "numpyOps": 42145.4,
           "numpyTsOps": 21882.4
+        },
+        {
+          "name": "sort [100x100] float16",
+          "ratio": 5.7733,
+          "numpyOps": 123748.9,
+          "numpyTsOps": 21434.7
         },
         {
           "name": "sort [100x100] int64",
@@ -12523,12 +12529,6 @@ export const benchmarkData = {
           "numpyTsOps": 17126.3
         },
         {
-          "name": "sort [100x100] float16",
-          "ratio": 5.7733,
-          "numpyOps": 123748.9,
-          "numpyTsOps": 21434.7
-        },
-        {
           "name": "sort [100x100] sorted",
           "ratio": 0.31,
           "numpyOps": 13915.0,
@@ -12539,6 +12539,12 @@ export const benchmarkData = {
           "ratio": 0.8037,
           "numpyOps": 41327.5,
           "numpyTsOps": 51418.5
+        },
+        {
+          "name": "sort [100x100] sorted float16",
+          "ratio": 2.0869,
+          "numpyOps": 124057.2,
+          "numpyTsOps": 59444.8
         },
         {
           "name": "sort [100x100] sorted int64",
@@ -12599,12 +12605,6 @@ export const benchmarkData = {
           "ratio": 1.5087,
           "numpyOps": 26478.7,
           "numpyTsOps": 17550.9
-        },
-        {
-          "name": "sort [100x100] sorted float16",
-          "ratio": 2.0869,
-          "numpyOps": 124057.2,
-          "numpyTsOps": 59444.8
         }
       ]
     },
@@ -12626,6 +12626,12 @@ export const benchmarkData = {
           "ratio": 1.1297,
           "numpyOps": 177725.0,
           "numpyTsOps": 157320.2
+        },
+        {
+          "name": "copysign [100x100] scalar float16",
+          "ratio": 1.322,
+          "numpyOps": 173054.3,
+          "numpyTsOps": 130905.7
         },
         {
           "name": "copysign [100x100] scalar int64",
@@ -12676,12 +12682,6 @@ export const benchmarkData = {
           "numpyTsOps": 172080.7
         },
         {
-          "name": "copysign [100x100] scalar float16",
-          "ratio": 1.322,
-          "numpyOps": 173054.3,
-          "numpyTsOps": 130905.7
-        },
-        {
           "name": "isfinite [100x100]",
           "ratio": 3.3813,
           "numpyOps": 518564.7,
@@ -12692,6 +12692,12 @@ export const benchmarkData = {
           "ratio": 5.8695,
           "numpyOps": 617737.8,
           "numpyTsOps": 105246.0
+        },
+        {
+          "name": "isfinite [100x100] float16",
+          "ratio": 1.3259,
+          "numpyOps": 124131.9,
+          "numpyTsOps": 93617.6
         },
         {
           "name": "isfinite [100x100] int64",
@@ -12742,12 +12748,6 @@ export const benchmarkData = {
           "numpyTsOps": 1133989.5
         },
         {
-          "name": "isfinite [100x100] float16",
-          "ratio": 1.3259,
-          "numpyOps": 124131.9,
-          "numpyTsOps": 93617.6
-        },
-        {
           "name": "isnan [100x100]",
           "ratio": 3.725,
           "numpyOps": 519183.4,
@@ -12758,6 +12758,12 @@ export const benchmarkData = {
           "ratio": 6.5137,
           "numpyOps": 628798.3,
           "numpyTsOps": 96535.2
+        },
+        {
+          "name": "isnan [100x100] float16",
+          "ratio": 1.3029,
+          "numpyOps": 116184.9,
+          "numpyTsOps": 89172.9
         },
         {
           "name": "isnan [100x100] int64",
@@ -12808,12 +12814,6 @@ export const benchmarkData = {
           "numpyTsOps": 1199742.8
         },
         {
-          "name": "isnan [100x100] float16",
-          "ratio": 1.3029,
-          "numpyOps": 116184.9,
-          "numpyTsOps": 89172.9
-        },
-        {
           "name": "isneginf [100x100]",
           "ratio": 2.1873,
           "numpyOps": 286195.4,
@@ -12824,6 +12824,12 @@ export const benchmarkData = {
           "ratio": 4.2047,
           "numpyOps": 376502.4,
           "numpyTsOps": 89542.2
+        },
+        {
+          "name": "isneginf [100x100] float16",
+          "ratio": 0.6541,
+          "numpyOps": 55682.8,
+          "numpyTsOps": 85122.7
         },
         {
           "name": "isneginf [100x100] int64",
@@ -12874,12 +12880,6 @@ export const benchmarkData = {
           "numpyTsOps": 1229190.7
         },
         {
-          "name": "isneginf [100x100] float16",
-          "ratio": 0.6541,
-          "numpyOps": 55682.8,
-          "numpyTsOps": 85122.7
-        },
-        {
           "name": "isposinf [100x100]",
           "ratio": 1.9389,
           "numpyOps": 259033.1,
@@ -12890,6 +12890,12 @@ export const benchmarkData = {
           "ratio": 3.6305,
           "numpyOps": 330395.1,
           "numpyTsOps": 91004.7
+        },
+        {
+          "name": "isposinf [100x100] float16",
+          "ratio": 0.7042,
+          "numpyOps": 60208.8,
+          "numpyTsOps": 85495.8
         },
         {
           "name": "isposinf [100x100] int64",
@@ -12940,12 +12946,6 @@ export const benchmarkData = {
           "numpyTsOps": 1260732.5
         },
         {
-          "name": "isposinf [100x100] float16",
-          "ratio": 0.7042,
-          "numpyOps": 60208.8,
-          "numpyTsOps": 85495.8
-        },
-        {
           "name": "isreal [100x100]",
           "ratio": 0.1784,
           "numpyOps": 204014.9,
@@ -12956,6 +12956,12 @@ export const benchmarkData = {
           "ratio": 0.1965,
           "numpyOps": 232497.0,
           "numpyTsOps": 1183258.0
+        },
+        {
+          "name": "isreal [100x100] float16",
+          "ratio": 0.0751,
+          "numpyOps": 88171.5,
+          "numpyTsOps": 1174407.0
         },
         {
           "name": "isreal [100x100] int64",
@@ -13006,12 +13012,6 @@ export const benchmarkData = {
           "numpyTsOps": 1198762.0
         },
         {
-          "name": "isreal [100x100] float16",
-          "ratio": 0.0751,
-          "numpyOps": 88171.5,
-          "numpyTsOps": 1174407.0
-        },
-        {
           "name": "logical_and [100x100] & [100x100]",
           "ratio": 1.7006,
           "numpyOps": 226191.3,
@@ -13022,6 +13022,12 @@ export const benchmarkData = {
           "ratio": 1.6416,
           "numpyOps": 231624.5,
           "numpyTsOps": 141096.5
+        },
+        {
+          "name": "logical_and [100x100] & [100x100] float16",
+          "ratio": 1.0885,
+          "numpyOps": 79514.7,
+          "numpyTsOps": 73050.9
         },
         {
           "name": "logical_and [100x100] & [100x100] int64",
@@ -13072,12 +13078,6 @@ export const benchmarkData = {
           "numpyTsOps": 532070.9
         },
         {
-          "name": "logical_and [100x100] & [100x100] float16",
-          "ratio": 1.0885,
-          "numpyOps": 79514.7,
-          "numpyTsOps": 73050.9
-        },
-        {
           "name": "logical_and [100x100] & scalar",
           "ratio": 1.1556,
           "numpyOps": 225175.2,
@@ -13088,6 +13088,12 @@ export const benchmarkData = {
           "ratio": 0.4588,
           "numpyOps": 148650.6,
           "numpyTsOps": 323978.8
+        },
+        {
+          "name": "logical_and [100x100] & scalar float16",
+          "ratio": 1.1473,
+          "numpyOps": 150256.0,
+          "numpyTsOps": 130963.0
         },
         {
           "name": "logical_and [100x100] & scalar int64",
@@ -13138,12 +13144,6 @@ export const benchmarkData = {
           "numpyTsOps": 683014.6
         },
         {
-          "name": "logical_and [100x100] & scalar float16",
-          "ratio": 1.1473,
-          "numpyOps": 150256.0,
-          "numpyTsOps": 130963.0
-        },
-        {
           "name": "logical_not [100x100]",
           "ratio": 1.3753,
           "numpyOps": 279006.6,
@@ -13154,6 +13154,12 @@ export const benchmarkData = {
           "ratio": 0.8128,
           "numpyOps": 277299.8,
           "numpyTsOps": 341146.1
+        },
+        {
+          "name": "logical_not [100x100] float16",
+          "ratio": 0.8174,
+          "numpyOps": 122640.9,
+          "numpyTsOps": 150034.2
         },
         {
           "name": "logical_not [100x100] int64",
@@ -13204,12 +13210,6 @@ export const benchmarkData = {
           "numpyTsOps": 745885.1
         },
         {
-          "name": "logical_not [100x100] float16",
-          "ratio": 0.8174,
-          "numpyOps": 122640.9,
-          "numpyTsOps": 150034.2
-        },
-        {
           "name": "logical_or [100x100] | scalar",
           "ratio": 1.2897,
           "numpyOps": 251518.0,
@@ -13220,6 +13220,12 @@ export const benchmarkData = {
           "ratio": 0.4589,
           "numpyOps": 148083.8,
           "numpyTsOps": 322675.4
+        },
+        {
+          "name": "logical_or [100x100] | scalar float16",
+          "ratio": 1.0178,
+          "numpyOps": 150987.3,
+          "numpyTsOps": 148343.4
         },
         {
           "name": "logical_or [100x100] | scalar int64",
@@ -13270,12 +13276,6 @@ export const benchmarkData = {
           "numpyTsOps": 667864.2
         },
         {
-          "name": "logical_or [100x100] | scalar float16",
-          "ratio": 1.0178,
-          "numpyOps": 150987.3,
-          "numpyTsOps": 148343.4
-        },
-        {
           "name": "logical_xor [100x100] ^ scalar",
           "ratio": 1.1379,
           "numpyOps": 207912.8,
@@ -13286,6 +13286,12 @@ export const benchmarkData = {
           "ratio": 0.7558,
           "numpyOps": 231788.1,
           "numpyTsOps": 306693.3
+        },
+        {
+          "name": "logical_xor [100x100] ^ scalar float16",
+          "ratio": 1.835,
+          "numpyOps": 224794.2,
+          "numpyTsOps": 122503.8
         },
         {
           "name": "logical_xor [100x100] ^ scalar int64",
@@ -13336,12 +13342,6 @@ export const benchmarkData = {
           "numpyTsOps": 681943.2
         },
         {
-          "name": "logical_xor [100x100] ^ scalar float16",
-          "ratio": 1.835,
-          "numpyOps": 224794.2,
-          "numpyTsOps": 122503.8
-        },
-        {
           "name": "signbit [100x100]",
           "ratio": 8.7048,
           "numpyOps": 507037.2,
@@ -13352,6 +13352,12 @@ export const benchmarkData = {
           "ratio": 11.3307,
           "numpyOps": 651974.2,
           "numpyTsOps": 57540.6
+        },
+        {
+          "name": "signbit [100x100] float16",
+          "ratio": 2.2867,
+          "numpyOps": 120436.7,
+          "numpyTsOps": 52668.9
         },
         {
           "name": "signbit [100x100] int64",
@@ -13378,16 +13384,16 @@ export const benchmarkData = {
           "numpyTsOps": 26315.3
         },
         {
-          "name": "signbit [100x100] float16",
-          "ratio": 2.2867,
-          "numpyOps": 120436.7,
-          "numpyTsOps": 52668.9
-        },
-        {
           "name": "where [100x100] with x,y float32",
           "ratio": 2.9527,
           "numpyOps": 211396.2,
           "numpyTsOps": 71594.7
+        },
+        {
+          "name": "where [100x100] with x,y float16",
+          "ratio": 7.1701,
+          "numpyOps": 212973.1,
+          "numpyTsOps": 29702.8
         },
         {
           "name": "where [100x100] with x,y int64",
@@ -13436,12 +13442,6 @@ export const benchmarkData = {
           "ratio": 2.5633,
           "numpyOps": 204903.7,
           "numpyTsOps": 79936.5
-        },
-        {
-          "name": "where [100x100] with x,y float16",
-          "ratio": 7.1701,
-          "numpyOps": 212973.1,
-          "numpyTsOps": 29702.8
         }
       ]
     },
@@ -13630,6 +13630,12 @@ export const benchmarkData = {
           "numpyTsOps": 1487034.7
         },
         {
+          "name": "trim_zeros [1000] float16",
+          "ratio": 0.0736,
+          "numpyOps": 128531.8,
+          "numpyTsOps": 1746080.6
+        },
+        {
           "name": "trim_zeros [1000] int64",
           "ratio": 0.1386,
           "numpyOps": 166047.0,
@@ -13678,12 +13684,6 @@ export const benchmarkData = {
           "numpyTsOps": 2141694.5
         },
         {
-          "name": "trim_zeros [1000] float16",
-          "ratio": 0.0736,
-          "numpyOps": 128531.8,
-          "numpyTsOps": 1746080.6
-        },
-        {
           "name": "unique_counts [1000]",
           "ratio": 0.6854,
           "numpyOps": 53640.1,
@@ -13694,6 +13694,12 @@ export const benchmarkData = {
           "ratio": 1.0557,
           "numpyOps": 84359.7,
           "numpyTsOps": 79908.9
+        },
+        {
+          "name": "unique_counts [1000] float16",
+          "ratio": 1.2981,
+          "numpyOps": 99345.0,
+          "numpyTsOps": 76529.7
         },
         {
           "name": "unique_counts [1000] int64",
@@ -13744,12 +13750,6 @@ export const benchmarkData = {
           "numpyTsOps": 92889.6
         },
         {
-          "name": "unique_counts [1000] float16",
-          "ratio": 1.2981,
-          "numpyOps": 99345.0,
-          "numpyTsOps": 76529.7
-        },
-        {
           "name": "unique_values [1000]",
           "ratio": 0.481,
           "numpyOps": 62522.6,
@@ -13760,6 +13760,12 @@ export const benchmarkData = {
           "ratio": 0.9224,
           "numpyOps": 108890.2,
           "numpyTsOps": 118051.5
+        },
+        {
+          "name": "unique_values [1000] float16",
+          "ratio": 1.0965,
+          "numpyOps": 133066.2,
+          "numpyTsOps": 121352.6
         },
         {
           "name": "unique_values [1000] int64",
@@ -13808,12 +13814,6 @@ export const benchmarkData = {
           "ratio": 1.0945,
           "numpyOps": 115753.5,
           "numpyTsOps": 105761.6
-        },
-        {
-          "name": "unique_values [1000] float16",
-          "ratio": 1.0965,
-          "numpyOps": 133066.2,
-          "numpyTsOps": 121352.6
         }
       ]
     },
@@ -14326,6 +14326,12 @@ export const benchmarkData = {
           "numpyTsOps": 113507.1
         },
         {
+          "name": "fft [1000] float16",
+          "ratio": 1.0865,
+          "numpyOps": 119395.2,
+          "numpyTsOps": 109885.3
+        },
+        {
           "name": "fft [1000] complex128",
           "ratio": 1.0129,
           "numpyOps": 132899.1,
@@ -14336,12 +14342,6 @@ export const benchmarkData = {
           "ratio": 0.956,
           "numpyOps": 118471.7,
           "numpyTsOps": 123928.7
-        },
-        {
-          "name": "fft [1000] float16",
-          "ratio": 1.0865,
-          "numpyOps": 119395.2,
-          "numpyTsOps": 109885.3
         },
         {
           "name": "fft2 [100x100]",
@@ -14356,6 +14356,12 @@ export const benchmarkData = {
           "numpyTsOps": 12181.2
         },
         {
+          "name": "fft2 [100x100] float16",
+          "ratio": 0.824,
+          "numpyOps": 10237.9,
+          "numpyTsOps": 12425.0
+        },
+        {
           "name": "fft2 [100x100] complex128",
           "ratio": 1.692,
           "numpyOps": 19416.8,
@@ -14366,12 +14372,6 @@ export const benchmarkData = {
           "ratio": 0.9272,
           "numpyOps": 10235.5,
           "numpyTsOps": 11038.6
-        },
-        {
-          "name": "fft2 [100x100] float16",
-          "ratio": 0.824,
-          "numpyOps": 10237.9,
-          "numpyTsOps": 12425.0
         },
         {
           "name": "fftfreq(1000)",
@@ -14404,6 +14404,12 @@ export const benchmarkData = {
           "numpyTsOps": 1348.0
         },
         {
+          "name": "fftn [32x32x32] float16",
+          "ratio": 1.8597,
+          "numpyOps": 2351.0,
+          "numpyTsOps": 1264.2
+        },
+        {
           "name": "fftn [32x32x32] complex128",
           "ratio": 2.6731,
           "numpyOps": 3392.9,
@@ -14414,12 +14420,6 @@ export const benchmarkData = {
           "ratio": 1.7098,
           "numpyOps": 2158.0,
           "numpyTsOps": 1262.1
-        },
-        {
-          "name": "fftn [32x32x32] float16",
-          "ratio": 1.8597,
-          "numpyOps": 2351.0,
-          "numpyTsOps": 1264.2
         },
         {
           "name": "fftshift [1000]",
@@ -14470,6 +14470,12 @@ export const benchmarkData = {
           "numpyTsOps": 128458.9
         },
         {
+          "name": "ifft [1000] float16",
+          "ratio": 0.9324,
+          "numpyOps": 119482.7,
+          "numpyTsOps": 128151.7
+        },
+        {
           "name": "ifft [1000] complex128",
           "ratio": 0.9419,
           "numpyOps": 120467.3,
@@ -14480,12 +14486,6 @@ export const benchmarkData = {
           "ratio": 1.0018,
           "numpyOps": 122202.6,
           "numpyTsOps": 121985.7
-        },
-        {
-          "name": "ifft [1000] float16",
-          "ratio": 0.9324,
-          "numpyOps": 119482.7,
-          "numpyTsOps": 128151.7
         },
         {
           "name": "ifft2 [100x100]",
@@ -14500,6 +14500,12 @@ export const benchmarkData = {
           "numpyTsOps": 10377.2
         },
         {
+          "name": "ifft2 [100x100] float16",
+          "ratio": 1.8557,
+          "numpyOps": 19652.2,
+          "numpyTsOps": 10589.9
+        },
+        {
           "name": "ifft2 [100x100] complex128",
           "ratio": 1.8839,
           "numpyOps": 19388.3,
@@ -14510,12 +14516,6 @@ export const benchmarkData = {
           "ratio": 2.4972,
           "numpyOps": 26032.3,
           "numpyTsOps": 10424.5
-        },
-        {
-          "name": "ifft2 [100x100] float16",
-          "ratio": 1.8557,
-          "numpyOps": 19652.2,
-          "numpyTsOps": 10589.9
         },
         {
           "name": "ifftn [32x32x32]",
@@ -14530,6 +14530,12 @@ export const benchmarkData = {
           "numpyTsOps": 1236.5
         },
         {
+          "name": "ifftn [32x32x32] float16",
+          "ratio": 2.6059,
+          "numpyOps": 3210.4,
+          "numpyTsOps": 1232.0
+        },
+        {
           "name": "ifftn [32x32x32] complex128",
           "ratio": 2.5262,
           "numpyOps": 3158.4,
@@ -14540,12 +14546,6 @@ export const benchmarkData = {
           "ratio": 4.0423,
           "numpyOps": 5021.8,
           "numpyTsOps": 1242.3
-        },
-        {
-          "name": "ifftn [32x32x32] float16",
-          "ratio": 2.6059,
-          "numpyOps": 3210.4,
-          "numpyTsOps": 1232.0
         },
         {
           "name": "ifftshift [1000]",
@@ -14715,15 +14715,21 @@ export const benchmarkData = {
   "dtypeStats": [
     {
       "dtype": "float64",
-      "count": 515,
-      "avgSlowdown": 1.9639,
-      "medianSlowdown": 1.2997
+      "count": 295,
+      "avgSlowdown": 2.2387,
+      "medianSlowdown": 1.5139
     },
     {
       "dtype": "float32",
       "count": 241,
       "avgSlowdown": 2.4796,
       "medianSlowdown": 1.5769
+    },
+    {
+      "dtype": "float16",
+      "count": 220,
+      "avgSlowdown": 1.5954,
+      "medianSlowdown": 1.0635
     },
     {
       "dtype": "int64",

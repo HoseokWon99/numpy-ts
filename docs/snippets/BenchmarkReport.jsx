@@ -51,26 +51,27 @@ export const BenchmarkReport = ({ data }) => {
 
   const DTYPE_COLORS = {
     // floats: blue family
-    float64:    { bg: '#eff6ff', text: '#3b82f6' },
-    float32:    { bg: '#e0f2fe', text: '#0369a1' },
+    float64:    { bg: '#3b6cc9', text: '#ffffff' },
+    float32:    { bg: '#4a80d8', text: '#ffffff' },
+    float16:    { bg: '#6196e2', text: '#ffffff' },
     // complex: purple family
-    complex128: { bg: '#ede9fe', text: '#6d28d9' },
-    complex64:  { bg: '#f3e8ff', text: '#7e22ce' },
-    // signed ints: emerald/teal family (darker = more bits)
-    int64:      { bg: '#a7f3d0', text: '#065f46' },
-    int32:      { bg: '#d1fae5', text: '#065f46' },
-    int16:      { bg: '#dcfce7', text: '#166534' },
-    int8:       { bg: '#f0fdf4', text: '#15803d' },
-    // unsigned ints: lime family (darker = more bits) — related to signed ints
-    uint64:     { bg: '#d9f99d', text: '#365314' },
-    uint32:     { bg: '#ecfccb', text: '#3f6212' },
-    uint16:     { bg: '#f7fee7', text: '#4d7c0f' },
-    uint8:      { bg: '#fefce8', text: '#713f12' },
-    // bool: pink
-    bool:       { bg: '#fce7f3', text: '#9d174d' },
+    complex128: { bg: '#8b5cc6', text: '#ffffff' },
+    complex64:  { bg: '#a478d4', text: '#ffffff' },
+    // signed ints: teal family
+    int64:      { bg: '#2a8a82', text: '#ffffff' },
+    int32:      { bg: '#3ba69d', text: '#ffffff' },
+    int16:      { bg: '#55bfb7', text: '#1a4a46' },
+    int8:       { bg: '#7ad4cd', text: '#1a4a46' },
+    // unsigned ints: amber/orange family
+    uint64:     { bg: '#c98a2e', text: '#ffffff' },
+    uint32:     { bg: '#d9a044', text: '#3a2400' },
+    uint16:     { bg: '#e4b85e', text: '#3a2400' },
+    uint8:      { bg: '#eecb7c', text: '#3a2400' },
+    // bool: rose
+    bool:       { bg: '#cc4466', text: '#ffffff' },
   };
 
-  const DTYPE_RE = /\s+(float64|float32|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
+  const DTYPE_RE = /\s+(float64|float32|float16|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
 
   const [isDarkMode, setIsDarkMode] = useState(() =>
     document.documentElement.classList.contains('dark')
@@ -107,11 +108,10 @@ export const BenchmarkReport = ({ data }) => {
     const dtype = m ? m[1] : 'float64';
     const base = m ? s.slice(0, -m[0].length) : s;
     const dc = DTYPE_COLORS[dtype] || DTYPE_COLORS.float64;
-    const opacity = 0.8;
     return (
       <>
         {base}{' '}
-        <span style={{ display: 'inline-block', fontSize: '0.72em', fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: dc.bg, color: dc.text, opacity, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'inline-block', fontSize: '0.72em', fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: dc.bg, color: dc.text, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
           {dtype}
         </span>
       </>
@@ -233,7 +233,7 @@ export const BenchmarkReport = ({ data }) => {
                 return (
                   <div key={dtype} style={{ display: 'grid', gridTemplateColumns: barGridCols, gap: 10, alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                      <span style={{ display: 'inline-block', fontSize: '0.72em', fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: dc.bg, color: dc.text, opacity: 0.8, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <span style={{ display: 'inline-block', fontSize: '0.72em', fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: dc.bg, color: dc.text, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {dtype}
                       </span>
                       {!isMobile && <span style={{ fontSize: 11, color: colors.mutedText, whiteSpace: 'nowrap' }}>({count})</span>}
