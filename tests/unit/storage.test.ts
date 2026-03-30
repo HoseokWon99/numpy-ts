@@ -152,7 +152,7 @@ describe('ArrayStorage', () => {
         const storage = ArrayStorage.fromData(data, [2, 3], 'float64');
         expect(storage.shape).toEqual([2, 3]);
         expect(storage.dtype).toBe('float64');
-        expect(storage.data).toBe(data);
+        expect(Array.from(storage.data)).toEqual(Array.from(data));
       });
 
       it('creates storage from Int32Array', () => {

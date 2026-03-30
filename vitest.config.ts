@@ -101,6 +101,16 @@ export default defineConfig({
           },
         },
       }),
+      // WASM memory leak tests (validates operations don't leak WASM heap)
+      defineProject({
+        test: {
+          name: 'leaks',
+          include: ['tests/leaks/**/*.test.ts'],
+          exclude: ['**/node_modules/**'],
+          environment: 'node',
+          testTimeout: 300000, // 5 minutes — runs many specs
+        },
+      }),
       // Tree-shaking tests (tests with multiple bundlers)
       // Runs after all other projects (groupOrder: 1) so the beforeAll can
       // rebuild with production (ReleaseFast) WASM without clobbering dist/
