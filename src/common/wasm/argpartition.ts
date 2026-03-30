@@ -27,11 +27,10 @@ import {
   argpartition_slices_u8,
 } from './bins/argpartition.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  scratchCopyIn,
+  scratchAlloc,
   getSharedMemory,
   f16ToF32Input,
 } from './runtime';
@@ -96,6 +95,8 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 /**
  * WASM-accelerated argpartition of contiguous slices.
  * Uses batch kernel when slices are packed contiguously.
+ *
+ * Note: operates on pre-existing JS buffers, uses scratch.
  */
 export function wasmArgpartitionSlices(
   inputData: TypedArray,
@@ -121,19 +122,17 @@ export function wasmArgpartitionSlices(
   ) {
     const Ctor = ctorMap[dtype];
     if (!Ctor) return false;
-    const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    const inputBytes = inputData.length * bpe;
     const outputBytes = resultData.length * 4;
 
-    ensureMemory(inputBytes + outputBytes);
-    resetAllocator();
+    wasmConfig.wasmCallCount++;
+    resetScratchAllocator();
 
-    const inputPtr = copyIn(
+    const inputPtr = scratchCopyIn(
       dtype === 'float16'
         ? f16ToF32Input(inputData as TypedArray, dtype)
         : (inputData as TypedArray)
     );
-    const outputPtr = alloc(outputBytes);
+    const outputPtr = scratchAlloc(outputBytes);
 
     sliceKernel(inputPtr, outputPtr, axisSize, outerSize, kth);
 
@@ -150,16 +149,15 @@ export function wasmArgpartitionSlices(
   if (!kernel || !Ctor) return false;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const inputBytes = inputData.length * bpe;
   const outputBytes = resultData.length * 4;
 
-  ensureMemory(inputBytes + outputBytes);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const inputPtr = copyIn(
+  const inputPtr = scratchCopyIn(
     dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : (inputData as TypedArray)
   );
-  const outputPtr = alloc(outputBytes);
+  const outputPtr = scratchAlloc(outputBytes);
 
   for (let i = 0; i < outerSize; i++) {
     kernel(
@@ -193,31 +191,31 @@ export function wasmArgpartition(a: ArrayStorage, kth: number): ArrayStorage | n
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
 
-  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-  const outBytes = size * 4;
+  const outBytes = size * 4; // i32 indices
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const aOff = a.offset;
   let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
   if (dtype === 'float16') aData = f16ToF32Input(aData, dtype);
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  const aPtr = scratchCopyIn(aData);
 
-  kernel(aPtr, outPtr, size, kth);
+  kernel(aPtr, outRegion.ptr, size, kth);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'int32',
+    outRegion,
     size,
     Int32Array as unknown as new (
       buffer: ArrayBuffer,
       byteOffset: number,
       length: number
-    ) => Int32Array
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'int32');
 }

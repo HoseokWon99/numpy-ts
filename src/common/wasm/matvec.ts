@@ -16,11 +16,11 @@ import {
   matvec_i8,
 } from './bins/matvec.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  getSharedMemory,
   f16ToF32Input,
   f32ToF16Output,
 } from './runtime';
@@ -90,37 +90,64 @@ export function wasmMatvec(A: ArrayStorage, x: ArrayStorage): ArrayStorage | nul
   if (!kernel || !Ctor) return null;
 
   const factor = complexFactor[resultDtype] ?? 1;
-  const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = M * K * factor * bytesPerElement;
-  const xBytes = K * factor * bytesPerElement;
-  const outBytes = M * factor * bytesPerElement;
-
-  ensureMemory(aBytes + xBytes + outBytes);
-  resetAllocator();
-
+  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+  const totalElements = M * factor;
+  const outBytes = totalElements * bpe;
   const isF16 = resultDtype === 'float16';
-  let aData = A.data.subarray(A.offset * factor, A.offset * factor + M * K * factor) as TypedArray;
-  let xData = x.data.subarray(x.offset * factor, x.offset * factor + K * factor) as TypedArray;
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
   if (isF16) {
+    let aData = A.data.subarray(
+      A.offset * factor,
+      A.offset * factor + M * K * factor
+    ) as TypedArray;
+    let xData = x.data.subarray(x.offset * factor, x.offset * factor + K * factor) as TypedArray;
     aData = f16ToF32Input(aData, resultDtype);
     xData = f16ToF32Input(xData, resultDtype);
+    const aPtr = scratchCopyIn(aData);
+    const xPtr = scratchCopyIn(xData);
+    kernel(aPtr, xPtr, outRegion.ptr, M, K);
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, totalElements);
+    const f32Copy = new Float32Array(totalElements);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, resultDtype),
+      [M],
+      resultDtype
+    );
   }
 
-  const aPtr = copyIn(aData);
-  const xPtr = copyIn(xData);
-  const outPtr = alloc(outBytes);
-
-  kernel(aPtr, xPtr, outPtr, M, K);
-
-  const outData = copyOut(
-    outPtr,
-    M * factor,
-    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+  const aPtr = resolveInputPtr(
+    A.data,
+    A.isWasmBacked,
+    A.wasmPtr,
+    A.offset * factor,
+    M * K * factor,
+    bpe
+  );
+  const xPtr = resolveInputPtr(
+    x.data,
+    x.isWasmBacked,
+    x.wasmPtr,
+    x.offset * factor,
+    K * factor,
+    bpe
   );
 
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, resultDtype) : outData,
+  kernel(aPtr, xPtr, outRegion.ptr, M, K);
+
+  return ArrayStorage.fromWasmRegion(
     [M],
-    resultDtype
+    resultDtype,
+    outRegion,
+    totalElements,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 }

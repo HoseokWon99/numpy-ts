@@ -7,7 +7,7 @@
  */
 
 import { sign_f64, sign_f32, sign_i64, sign_i32, sign_i16, sign_i8 } from './bins/sign.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -56,25 +56,23 @@ export function wasmSign(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  kernel(aPtr, outPtr, size);
+  kernel(aPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

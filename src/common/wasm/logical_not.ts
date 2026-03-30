@@ -13,7 +13,7 @@ import {
   logical_not_i16,
   logical_not_i8,
 } from './bins/logical_not.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -65,22 +65,27 @@ export function wasmLogicalNot(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !InCtor) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size; // u8 output
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(aPtr, outPtr, size);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'bool',
+    outRegion,
     size,
-    Uint8Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Uint8Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'bool');
 }

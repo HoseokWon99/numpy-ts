@@ -29,10 +29,9 @@ import {
   partition_slices_u8,
 } from './bins/partition.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  scratchCopyIn,
   getSharedMemory,
   f16ToF32Input,
   f32ToF16Output,
@@ -92,6 +91,8 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 /**
  * WASM-accelerated partition of contiguous slices.
  * Uses batch kernel when slices are packed contiguously.
+ *
+ * Note: operates on pre-existing JS buffers, uses scratch.
  */
 export function wasmPartitionSlices(
   resultData: TypedArray,
@@ -104,22 +105,19 @@ export function wasmPartitionSlices(
   if (axisSize < 2) return true;
 
   const sliceKernel = sliceKernels[dtype];
-
   const isF16 = dtype === 'float16';
 
   if (sliceKernel && sliceOffsets[0] === 0 && outerSize > 1 && sliceOffsets[1] === axisSize) {
     const Ctor = ctorMap[dtype];
     if (!Ctor) return false;
-    const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
     const inputData = isF16
       ? f16ToF32Input(resultData as TypedArray, dtype)
       : (resultData as TypedArray);
-    const totalBytes = inputData.length * bpe;
 
-    ensureMemory(totalBytes);
-    resetAllocator();
+    wasmConfig.wasmCallCount++;
+    resetScratchAllocator();
 
-    const ptr = copyIn(inputData);
+    const ptr = scratchCopyIn(inputData);
     sliceKernel(ptr, axisSize, outerSize, kth);
 
     const mem = getSharedMemory();
@@ -149,12 +147,11 @@ export function wasmPartitionSlices(
   const inputData = isF16
     ? f16ToF32Input(resultData as TypedArray, dtype)
     : (resultData as TypedArray);
-  const totalBytes = inputData.length * bpe;
 
-  ensureMemory(totalBytes);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const ptr = copyIn(inputData);
+  const ptr = scratchCopyIn(inputData);
 
   for (let i = 0; i < outerSize; i++) {
     kernel(ptr + sliceOffsets[i]! * bpe, axisSize, kth);
@@ -195,29 +192,55 @@ export function wasmPartition(a: ArrayStorage, kth: number): ArrayStorage | null
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-
-  ensureMemory(aBytes);
-  resetAllocator();
-
+  const outBytes = size * bpe;
   const isF16 = dtype === 'float16';
+
+  // Partition is in-place: allocate output, copy input, partition in-place
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
   const aOff = a.offset;
   let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  if (isF16) aData = f16ToF32Input(aData, dtype);
 
-  const aPtr = copyIn(aData);
+  if (isF16) {
+    aData = f16ToF32Input(aData, dtype);
+    const scratchPtr = scratchCopyIn(aData);
+    kernel(scratchPtr, size, kth);
+    const mem = getSharedMemory();
+    const f32Out = new Float32Array(size);
+    new Uint8Array(f32Out.buffer, 0, f32Out.byteLength).set(
+      new Uint8Array(mem.buffer, scratchPtr, f32Out.byteLength)
+    );
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Out as unknown as TypedArray, dtype),
+      Array.from(a.shape),
+      dtype
+    );
+  }
 
-  kernel(aPtr, size, kth);
+  // Copy input into output region, then partition in-place
+  const mem = getSharedMemory();
+  if (a.isWasmBacked) {
+    new Uint8Array(mem.buffer, outRegion.ptr, outBytes).set(
+      new Uint8Array(mem.buffer, a.wasmPtr + aOff * bpe, outBytes)
+    );
+  } else {
+    new Uint8Array(mem.buffer, outRegion.ptr, outBytes).set(
+      new Uint8Array(aData.buffer, aData.byteOffset, aData.byteLength)
+    );
+  }
 
-  const outData = copyOut(
-    aPtr,
+  kernel(outRegion.ptr, size, kth);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
-
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
-    Array.from(a.shape),
-    dtype
   );
 }

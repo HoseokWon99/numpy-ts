@@ -30,7 +30,7 @@ import {
   div_c128,
   div_c64,
 } from './bins/divide.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -110,24 +110,40 @@ export function wasmDiv(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
     const complexFactor = isComplexDType(dtype) ? 2 : 1;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
     const dataLen = size * complexFactor;
-    ensureMemory(dataLen * bpe * 3);
-    resetAllocator();
+    const outBytes = dataLen * bpe;
 
-    const aPtr = copyIn(
-      a.data.subarray(a.offset * complexFactor, (a.offset + size) * complexFactor) as TypedArray
-    );
-    const bPtr = copyIn(
-      b.data.subarray(b.offset * complexFactor, (b.offset + size) * complexFactor) as TypedArray
-    );
-    const outPtr = alloc(dataLen * bpe);
-    kernel(aPtr, bPtr, outPtr, size);
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const outData = copyOut(
-      outPtr,
+    wasmConfig.wasmCallCount++;
+
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(
+      a.data,
+      a.isWasmBacked,
+      a.wasmPtr,
+      a.offset * complexFactor,
+      dataLen,
+      bpe
+    );
+    const bPtr = resolveInputPtr(
+      b.data,
+      b.isWasmBacked,
+      b.wasmPtr,
+      b.offset * complexFactor,
+      dataLen,
+      bpe
+    );
+
+    kernel(aPtr, bPtr, outRegion.ptr, size);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
       dataLen,
       Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
   }
 
   // Try integer-to-f64 kernel
@@ -136,20 +152,26 @@ export function wasmDiv(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!intKernel || !InCtor) return null;
 
   const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  ensureMemory(size * inBpe * 2 + size * 8);
-  resetAllocator();
+  const outBytes = size * 8;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const bPtr = copyIn(b.data.subarray(b.offset, b.offset + size) as TypedArray);
-  const outPtr = alloc(size * 8);
-  intKernel(aPtr, bPtr, outPtr, size);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const outData = copyOut(
-    outPtr,
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, inBpe);
+  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, inBpe);
+
+  intKernel(aPtr, bPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'float64',
+    outRegion,
     size,
     Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
 }
 
 export function wasmDivScalar(a: ArrayStorage, scalar: number): ArrayStorage | null {
@@ -164,19 +186,25 @@ export function wasmDivScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   if (kernel) {
     const Ctor = ctorMap[dtype]!;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    ensureMemory(size * bpe * 2);
-    resetAllocator();
+    const outBytes = size * bpe;
 
-    const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-    const outPtr = alloc(size * bpe);
-    kernel(aPtr, outPtr, size, scalar);
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const outData = copyOut(
-      outPtr,
+    wasmConfig.wasmCallCount++;
+
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+
+    kernel(aPtr, outRegion.ptr, size, scalar);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
       size,
       Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
   }
 
   // Try integer-to-f64 scalar kernel
@@ -185,17 +213,23 @@ export function wasmDivScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   if (!intKernel || !InCtor) return null;
 
   const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  ensureMemory(size * inBpe + size * 8);
-  resetAllocator();
+  const outBytes = size * 8;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const outPtr = alloc(size * 8);
-  intKernel(aPtr, outPtr, size, scalar);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const outData = copyOut(
-    outPtr,
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, inBpe);
+
+  intKernel(aPtr, outRegion.ptr, size, scalar);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'float64',
+    outRegion,
     size,
     Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
 }

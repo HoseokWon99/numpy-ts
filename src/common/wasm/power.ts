@@ -21,10 +21,10 @@ import {
   power_scalar_i8,
 } from './bins/power.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
   copyOut,
   f16ToF32Input,
   f32ToF16Output,
@@ -97,33 +97,48 @@ export function wasmPower(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-  const bBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
 
   const originalDtype = dtype;
-  const aOff = a.offset;
-  const bOff = b.offset;
-  const aData = f16ToF32Input(a.data.subarray(aOff, aOff + size) as TypedArray, a.dtype);
-  const bData = f16ToF32Input(b.data.subarray(bOff, bOff + size) as TypedArray, b.dtype);
+  resetScratchAllocator();
 
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
+  let aPtr: number;
+  let bPtr: number;
+  if (dtype === 'float16') {
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype);
+    const bData = f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype);
+    aPtr = scratchCopyIn(aData);
+    bPtr = scratchCopyIn(bData);
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+    bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, bpe);
+  }
 
-  kernel(aPtr, bPtr, outPtr, size);
+  kernel(aPtr, bPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  if (originalDtype === 'float16') {
+    const outData = copyOut(
+      outRegion.ptr,
+      size,
+      Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+    );
+    outRegion.release();
+    const finalOut = f32ToF16Output(outData, originalDtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), originalDtype);
+  }
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  const finalOut = f32ToF16Output(outData, originalDtype);
-  return ArrayStorage.fromData(finalOut, Array.from(a.shape), originalDtype);
 }
 
 /**
@@ -139,14 +154,19 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
   const dtype = a.dtype;
 
   // Integer types with negative or non-integer exponents need float promotion
-  // (matches NumPy behavior: int ** negative → float64).
+  // (matches NumPy behavior: int ** negative -> float64).
   // Convert to float64 and use the f64 kernel.
   const isIntegerType = dtype !== 'float32' && dtype !== 'float64';
   if (isIntegerType && (scalar < 0 || !Number.isInteger(scalar))) {
     const bpe = 8; // f64
-    ensureMemory(size * bpe * 2);
-    resetAllocator();
+    const outBytes = size * bpe;
 
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
+
+    wasmConfig.wasmCallCount++;
+
+    resetScratchAllocator();
     const aOff = a.offset;
     const src = a.data;
     const converted = new Float64Array(size);
@@ -156,13 +176,14 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
       for (let i = 0; i < size; i++) converted[i] = src[aOff + i] as number;
     }
 
-    const aPtr = copyIn(converted as unknown as TypedArray);
-    const outPtr = alloc(size * bpe);
+    const aPtr = scratchCopyIn(converted as unknown as TypedArray);
 
-    power_scalar_f64(aPtr, outPtr, size, scalar);
+    power_scalar_f64(aPtr, outRegion.ptr, size, scalar);
 
-    const outData = copyOut(
-      outPtr,
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      'float64',
+      outRegion,
       size,
       Float64Array as unknown as new (
         buffer: ArrayBuffer,
@@ -170,7 +191,6 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
         length: number
       ) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
   }
 
   const kernel = scalarKernels[dtype];
@@ -178,26 +198,41 @@ export function wasmPowerScalar(a: ArrayStorage, scalar: number): ArrayStorage |
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = f16ToF32Input(a.data.subarray(aOff, aOff + size) as TypedArray, dtype);
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
 
-  kernel(aPtr, outPtr, size, scalar);
+  let aPtr: number;
+  if (dtype === 'float16') {
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
+    aPtr = scratchCopyIn(aData);
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  }
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, outRegion.ptr, size, scalar);
+
+  if (dtype === 'float16') {
+    const outData = copyOut(
+      outRegion.ptr,
+      size,
+      Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+    );
+    outRegion.release();
+    const finalOut = f32ToF16Output(outData, dtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
+  }
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  const finalOut = f32ToF16Output(outData, dtype);
-  return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
 }

@@ -63,7 +63,14 @@ export function slice(storage: ArrayStorage, ...sliceStrs: string[]): ArrayStora
     newStrides.push(storage.strides[i]! * spec.step);
   }
 
-  return ArrayStorage.fromData(storage.data, newShape, storage.dtype, newStrides, newOffset);
+  return ArrayStorage.fromDataShared(
+    storage.data,
+    newShape,
+    storage.dtype,
+    newStrides,
+    newOffset,
+    storage.wasmRegion
+  );
 }
 
 /**
@@ -110,7 +117,14 @@ export function sliceKeepDim(storage: ArrayStorage, ...sliceStrs: string[]): Arr
     newStrides.push(storage.strides[i]! * spec.step);
   }
 
-  return ArrayStorage.fromData(storage.data, newShape, storage.dtype, newStrides, newOffset);
+  return ArrayStorage.fromDataShared(
+    storage.data,
+    newShape,
+    storage.dtype,
+    newStrides,
+    newOffset,
+    storage.wasmRegion
+  );
 }
 
 /**
@@ -152,7 +166,14 @@ export function reshape(storage: ArrayStorage, newShape: number[]): ArrayStorage
   // Fast path: if array is C-contiguous, create a view (no copy)
   if (storage.isCContiguous) {
     const data = storage.data;
-    return ArrayStorage.fromData(data, finalShape, dtype, computeStrides(finalShape), 0);
+    return ArrayStorage.fromDataShared(
+      data,
+      finalShape,
+      dtype,
+      computeStrides(finalShape),
+      0,
+      storage.wasmRegion
+    );
   }
 
   // Slow path: array is not contiguous, must copy data first
@@ -223,7 +244,7 @@ export function ravel(storage: ArrayStorage): ArrayStorage {
   // Fast path: if array is C-contiguous, create a view (no copy needed)
   if (storage.isCContiguous) {
     const data = storage.data;
-    return ArrayStorage.fromData(data, [size], dtype, [1], 0);
+    return ArrayStorage.fromDataShared(data, [size], dtype, [1], 0, storage.wasmRegion);
   }
 
   // Slow path: array is not contiguous, must copy like flatten()
@@ -274,7 +295,14 @@ export function transpose(storage: ArrayStorage, axes?: number[]): ArrayStorage 
   const newStrides = permutation.map((i) => oldStrides[i]!);
 
   // Create transposed view
-  return ArrayStorage.fromData(data, newShape, dtype, newStrides, storage.offset);
+  return ArrayStorage.fromDataShared(
+    data,
+    newShape,
+    dtype,
+    newStrides,
+    storage.offset,
+    storage.wasmRegion
+  );
 }
 
 /**
@@ -300,7 +328,14 @@ export function squeeze(storage: ArrayStorage, axis?: number): ArrayStorage {
       }
     }
 
-    return ArrayStorage.fromData(data, newShape, dtype, newStrides, storage.offset);
+    return ArrayStorage.fromDataShared(
+      data,
+      newShape,
+      dtype,
+      newStrides,
+      storage.offset,
+      storage.wasmRegion
+    );
   } else {
     // Normalize axis
     const normalizedAxis = axis < 0 ? ndim + axis : axis;
@@ -327,7 +362,14 @@ export function squeeze(storage: ArrayStorage, axis?: number): ArrayStorage {
       }
     }
 
-    return ArrayStorage.fromData(data, newShape, dtype, newStrides, storage.offset);
+    return ArrayStorage.fromDataShared(
+      data,
+      newShape,
+      dtype,
+      newStrides,
+      storage.offset,
+      storage.wasmRegion
+    );
   }
 }
 
@@ -364,7 +406,14 @@ export function expandDims(storage: ArrayStorage, axis: number): ArrayStorage {
     normalizedAxis < ndim ? strides[normalizedAxis]! * (shape[normalizedAxis] || 1) : 1;
   newStrides.splice(normalizedAxis, 0, insertedStride);
 
-  return ArrayStorage.fromData(data, newShape, dtype, newStrides, storage.offset);
+  return ArrayStorage.fromDataShared(
+    data,
+    newShape,
+    dtype,
+    newStrides,
+    storage.offset,
+    storage.wasmRegion
+  );
 }
 
 /**
@@ -391,12 +440,13 @@ export function swapaxes(storage: ArrayStorage, axis1: number, axis2: number): A
 
   // If same axis, return a view without change
   if (normalizedAxis1 === normalizedAxis2) {
-    return ArrayStorage.fromData(
+    return ArrayStorage.fromDataShared(
       data,
       Array.from(shape),
       dtype,
       Array.from(strides),
-      storage.offset
+      storage.offset,
+      storage.wasmRegion
     );
   }
 
@@ -413,7 +463,14 @@ export function swapaxes(storage: ArrayStorage, axis1: number, axis2: number): A
     newStrides[normalizedAxis1]!,
   ];
 
-  return ArrayStorage.fromData(data, newShape, dtype, newStrides, storage.offset);
+  return ArrayStorage.fromDataShared(
+    data,
+    newShape,
+    dtype,
+    newStrides,
+    storage.offset,
+    storage.wasmRegion
+  );
 }
 
 /**

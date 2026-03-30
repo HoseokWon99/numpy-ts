@@ -17,7 +17,7 @@ import {
   reduce_argmin_u16,
   reduce_argmin_u8,
 } from './bins/reduce_argmin.wasm';
-import { ensureMemory, resetAllocator, copyIn, f16ToF32Input } from './runtime';
+import { resetScratchAllocator, resolveInputPtr, scratchCopyIn, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -72,13 +72,15 @@ export function wasmReduceArgmin(a: ArrayStorage): number | null {
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(size * bpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aData = f16ToF32Input(aRaw, dtype);
-  const aPtr = copyIn(aData);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  let aPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    aPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  }
 
   return Number(kernel(aPtr, size));
 }

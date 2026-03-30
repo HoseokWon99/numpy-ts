@@ -27,9 +27,9 @@ import {
   reduce_max_strided_u8,
 } from './bins/reduce_max.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
   alloc,
   copyOut,
   f16ToF32Input,
@@ -89,13 +89,15 @@ export function wasmReduceMax(a: ArrayStorage): number | null {
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(size * bpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aData = f16ToF32Input(aRaw, dtype);
-  const aPtr = copyIn(aData);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  let aPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    aPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  }
 
   return Number(kernel(aPtr, size));
 }
@@ -170,13 +172,15 @@ export function wasmReduceMaxStrided(
   const outBpe = inBpe; // output type matches input type for max
   const outSize = outerSize * innerSize;
 
-  ensureMemory(totalSize * inBpe + outSize * outBpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + totalSize) as TypedArray;
-  const aData = f16ToF32Input(aRaw, dtype);
-  const inPtr = copyIn(aData);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  let inPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + totalSize) as TypedArray;
+    inPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    inPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, totalSize, inBpe);
+  }
   const outPtr = alloc(outSize * outBpe);
 
   kernel(inPtr, outPtr, outerSize, axisSize, innerSize);

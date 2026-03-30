@@ -8,7 +8,7 @@
  */
 
 import { sqrt_f64, sqrt_f32, sqrt_i64, sqrt_i32, sqrt_i16, sqrt_i8 } from './bins/sqrt.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -67,22 +67,25 @@ export function wasmSqrt(a: ArrayStorage): ArrayStorage | null {
   if (floatKernel) {
     const Ctor = inputCtorMap[dtype]!;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+    const outBytes = size * bpe;
 
-    ensureMemory(size * bpe * 2);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * bpe);
+    wasmConfig.wasmCallCount++;
 
-    floatKernel(aPtr, outPtr, size);
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-    const outData = copyOut(
-      outPtr,
+    floatKernel(aPtr, outRegion.ptr, size);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
   }
 
   // Integer path: native int input, f64 output
@@ -91,18 +94,22 @@ export function wasmSqrt(a: ArrayStorage): ArrayStorage | null {
     const InputCtor = inputCtorMap[dtype]!;
     const inputBpe = (InputCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
     const outBpe = 8; // f64
+    const outBytes = size * outBpe;
 
-    ensureMemory(size * inputBpe + size * outBpe);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * outBpe);
+    wasmConfig.wasmCallCount++;
 
-    intKernel(aPtr, outPtr, size);
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, inputBpe);
 
-    const outData = copyOut(
-      outPtr,
+    intKernel(aPtr, outRegion.ptr, size);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      'float64',
+      outRegion,
       size,
       Float64Array as unknown as new (
         buffer: ArrayBuffer,
@@ -110,7 +117,6 @@ export function wasmSqrt(a: ArrayStorage): ArrayStorage | null {
         length: number
       ) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
   }
 
   return null;

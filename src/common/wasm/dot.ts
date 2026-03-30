@@ -15,7 +15,7 @@ import {
   dot_i16,
   dot_i8,
 } from './bins/dot.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { resetScratchAllocator, resolveInputPtr, scratchAlloc, getSharedMemory } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { Complex } from '../complex';
@@ -82,35 +82,46 @@ export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | Complex | 
   const factor = complexFactor[resultDtype] ?? 1;
 
   const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = K * factor * bytesPerElement;
-  const bBytes = K * factor * bytesPerElement;
   const outBytes = 1 * factor * bytesPerElement;
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const aData = a.data.subarray(a.offset * factor, a.offset * factor + K * factor) as TypedArray;
-  const bData = b.data.subarray(b.offset * factor, b.offset * factor + K * factor) as TypedArray;
-
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    K * factor,
+    bytesPerElement
+  );
+  const bPtr = resolveInputPtr(
+    b.data,
+    b.isWasmBacked,
+    b.wasmPtr,
+    b.offset * factor,
+    K * factor,
+    bytesPerElement
+  );
+  const outPtr = scratchAlloc(outBytes);
 
   kernel(aPtr, bPtr, outPtr, K);
 
-  const outData = copyOut(
-    outPtr,
-    1 * factor,
-    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
+  // Read scalar result directly from WASM memory
+  const mem = getSharedMemory();
+  const outView = new (Ctor as unknown as new (
+    buffer: ArrayBuffer,
+    byteOffset: number,
+    length: number
+  ) => TypedArray)(mem.buffer, outPtr, 1 * factor);
 
   // Complex scalar: read re + im from the 2-element output buffer
   if (factor === 2) {
     return new Complex(
-      Number((outData as Float64Array | Float32Array)[0]!),
-      Number((outData as Float64Array | Float32Array)[1]!)
+      Number((outView as Float64Array | Float32Array)[0]!),
+      Number((outView as Float64Array | Float32Array)[1]!)
     );
   }
 
-  return Number(outData[0]!);
+  return Number(outView[0]!);
 }

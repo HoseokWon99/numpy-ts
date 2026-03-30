@@ -15,7 +15,7 @@ import {
   neg_c128,
   neg_c64,
 } from './bins/neg.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -78,25 +78,30 @@ export function wasmNeg(a: ArrayStorage): ArrayStorage | null {
   const factor = complexFactor[dtype] ?? 1;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const totalElements = size * factor;
-  const aBytes = totalElements * bpe;
   const outBytes = totalElements * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset * factor;
-  const aData = a.data.subarray(aOff, aOff + totalElements) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    totalElements,
+    bpe
+  );
 
-  kernel(aPtr, outPtr, size);
+  kernel(aPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     totalElements,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

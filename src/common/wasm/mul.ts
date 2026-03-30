@@ -24,7 +24,7 @@ import {
   mul_scalar_c128,
   mul_scalar_c64,
 } from './bins/mul.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -103,31 +103,40 @@ export function wasmMul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   const factor = complexFactor[dtype] ?? 1;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const totalElements = size * factor;
-  const aBytes = totalElements * bpe;
-  const bBytes = totalElements * bpe;
   const outBytes = totalElements * bpe;
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset * factor;
-  const bOff = b.offset * factor;
-  const aData = a.data.subarray(aOff, aOff + totalElements) as TypedArray;
-  const bData = b.data.subarray(bOff, bOff + totalElements) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    totalElements,
+    bpe
+  );
+  const bPtr = resolveInputPtr(
+    b.data,
+    b.isWasmBacked,
+    b.wasmPtr,
+    b.offset * factor,
+    totalElements,
+    bpe
+  );
 
-  kernel(aPtr, bPtr, outPtr, size);
+  kernel(aPtr, bPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     totalElements,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }
 
 /**
@@ -148,25 +157,30 @@ export function wasmMulScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   const factor = complexFactor[dtype] ?? 1;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const totalElements = size * factor;
-  const aBytes = totalElements * bpe;
   const outBytes = totalElements * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset * factor;
-  const aData = a.data.subarray(aOff, aOff + totalElements) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    totalElements,
+    bpe
+  );
 
-  kernel(aPtr, outPtr, size, scalar);
+  kernel(aPtr, outRegion.ptr, size, scalar);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     totalElements,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

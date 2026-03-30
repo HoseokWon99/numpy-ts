@@ -63,11 +63,12 @@ import {
   fill_permutation_pcg,
   fill_bounded_uint64_pcg,
 } from './bins/rng.wasm';
-import { ensureMemory, resetAllocator, alloc, copyOut, copyIn } from './runtime';
+import { resetScratchAllocator, scratchAlloc, scratchCopyIn, getSharedMemory } from './runtime';
 import type { TypedArray } from '../dtype';
+import { wasmConfig } from './config';
 
 // ============================================================================
-// Generic bulk fill helper — eliminates boilerplate across 30+ fill functions
+// Generic bulk fill helper — uses wasmMalloc for persistent output
 // ============================================================================
 
 type TypedArrayCtor<T extends TypedArray> = new (
@@ -83,11 +84,19 @@ function bulkFill<T extends TypedArray>(
 ): T {
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const bytes = n * bpe;
-  ensureMemory(bytes);
-  resetAllocator();
-  const outPtr = alloc(bytes);
+
+  // RNG fills are always used (no JS fallback), so use scratch for simplicity
+  // since the caller expects a plain TypedArray, not a WASM-backed storage.
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const outPtr = scratchAlloc(bytes);
   fn(outPtr, n);
-  return copyOut(outPtr, n, Ctor);
+
+  // Copy out from scratch
+  const mem = getSharedMemory();
+  const result = new Ctor(new ArrayBuffer(bytes), 0, n);
+  new Uint8Array(result.buffer, 0, bytes).set(new Uint8Array(mem.buffer, outPtr, bytes));
+  return result;
 }
 
 // ============================================================================
@@ -107,18 +116,20 @@ export function mt19937Float64(): number {
 }
 
 export function getMT19937State(): { mt: Uint32Array; mti: number } {
-  ensureMemory(624 * 4);
-  resetAllocator();
-  const outPtr = alloc(624 * 4);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const outPtr = scratchAlloc(624 * 4);
   const mti = mt19937_get_state(outPtr);
-  const mt = copyOut(outPtr, 624, Uint32Array);
+  const mem = getSharedMemory();
+  const mt = new Uint32Array(624);
+  new Uint8Array(mt.buffer, 0, 624 * 4).set(new Uint8Array(mem.buffer, outPtr, 624 * 4));
   return { mt, mti };
 }
 
 export function setMT19937State(mt: Uint32Array, mti: number): void {
-  ensureMemory(624 * 4);
-  resetAllocator();
-  const ptr = copyIn(mt);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const ptr = scratchCopyIn(mt as unknown as TypedArray);
   mt19937_set_state(ptr, mti);
 }
 
@@ -127,9 +138,9 @@ export function setMT19937State(mt: Uint32Array, mti: number): void {
 // ============================================================================
 
 export function initPCG64FromSeed(seed: number): void {
-  ensureMemory(8 * 4);
-  resetAllocator();
-  const outPtr = alloc(8 * 4);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const outPtr = scratchAlloc(8 * 4);
   seed_sequence(seed >>> 0, outPtr, 8);
   pcg64_init_from_ss(outPtr);
 }
@@ -147,9 +158,9 @@ export function pcg64SaveState(): BigUint64Array {
 }
 
 export function pcg64RestoreState(state: BigUint64Array): void {
-  ensureMemory(6 * 8);
-  resetAllocator();
-  const ptr = copyIn(state);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const ptr = scratchCopyIn(state as unknown as TypedArray);
   pcg64_set_state_ptr(ptr);
 }
 

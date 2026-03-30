@@ -1587,7 +1587,15 @@ export function apply_over_axes(
  * @returns True if arrays may share memory
  */
 export function may_share_memory(a: ArrayStorage, b: ArrayStorage): boolean {
-  // In JavaScript, we can check if the underlying typed arrays share the same buffer
+  // For WASM-backed arrays, all share the same WebAssembly.Memory buffer,
+  // so we need a byte-range overlap check instead of buffer identity.
+  if (a.isWasmBacked && b.isWasmBacked) {
+    const aStart = a.data.byteOffset;
+    const aEnd = aStart + a.data.byteLength;
+    const bStart = b.data.byteOffset;
+    const bEnd = bStart + b.data.byteLength;
+    return aStart < bEnd && bStart < aEnd;
+  }
   return a.data.buffer === b.data.buffer;
 }
 

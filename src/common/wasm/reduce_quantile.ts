@@ -7,7 +7,7 @@
  */
 
 import { reduce_quantile_f64 } from './bins/reduce_quantile.wasm';
-import { ensureMemory, resetAllocator, copyIn, f16ToF32Input } from './runtime';
+import { resetScratchAllocator, scratchCopyIn, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isBigIntDType, isComplexDType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -46,10 +46,10 @@ export function wasmReduceQuantile(a: ArrayStorage, q: number): number | null {
     for (let i = 0; i < size; i++) f64Buf[i] = Number(data[off + i]!);
   }
 
-  ensureMemory(size * 8);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const ptr = copyIn(f64Buf as unknown as TypedArray);
+  const ptr = scratchCopyIn(f64Buf as unknown as TypedArray);
 
   // Sort in-place in WASM and compute quantile
   return reduce_quantile_f64(ptr, size, q);

@@ -7,7 +7,7 @@
  */
 
 import { reduce_nansum_f64, reduce_nansum_f32 } from './bins/reduce_nansum.wasm';
-import { ensureMemory, resetAllocator, copyIn } from './runtime';
+import { resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -44,12 +44,9 @@ export function wasmReduceNansum(a: ArrayStorage): number | null {
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(size * bpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aPtr = copyIn(aRaw);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
   return Number(kernel(aPtr, size));
 }

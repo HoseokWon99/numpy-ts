@@ -428,13 +428,16 @@ export class NDArray extends NDArrayCore {
     if (this._storage.isCContiguous) {
       const data = this._storage.data;
       const bytesPerElement = data.BYTES_PER_ELEMENT;
-      const offset = this._storage.offset * bytesPerElement;
+      const offset = data.byteOffset + this._storage.offset * bytesPerElement;
       const length = this.size * bytesPerElement;
       return data.buffer.slice(offset, offset + length) as ArrayBuffer;
     }
     const copy = this.copy();
     const data = copy._storage.data;
-    return data.buffer.slice(0, this.size * data.BYTES_PER_ELEMENT) as ArrayBuffer;
+    return data.buffer.slice(
+      data.byteOffset,
+      data.byteOffset + this.size * data.BYTES_PER_ELEMENT
+    ) as ArrayBuffer;
   }
 
   /**
@@ -467,10 +470,11 @@ export class NDArray extends NDArrayCore {
     if (bytesPerElement === 1) return target;
 
     const buffer = data.buffer;
+    const dataByteOff = data.byteOffset;
     const view = new DataView(buffer);
 
     for (let i = 0; i < data.length; i++) {
-      const byteOffset = i * bytesPerElement;
+      const byteOffset = dataByteOff + i * bytesPerElement;
       if (bytesPerElement === 2) {
         const b0 = view.getUint8(byteOffset);
         const b1 = view.getUint8(byteOffset + 1);

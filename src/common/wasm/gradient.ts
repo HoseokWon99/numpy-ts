@@ -17,7 +17,13 @@ import {
   gradient_u16,
   gradient_u8,
 } from './bins/gradient.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
+import {
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -106,26 +112,34 @@ export function wasmGradient1D(a: ArrayStorage, spacing: number): ArrayStorage |
 
   const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const outBpe = (OutCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * inBpe;
   const outBytes = size * outBpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const aOff = a.offset;
-  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  if (dtype === 'float16') aData = f16ToF32Input(aData, dtype);
+  if (dtype === 'float16') {
+    let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+    aData = f16ToF32Input(aData, dtype);
+    const aPtr = scratchCopyIn(aData);
+    kernel(aPtr, outRegion.ptr, size, spacing);
+  } else {
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, aOff, size, inBpe);
+    kernel(aPtr, outRegion.ptr, size, spacing);
+  }
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
-
-  kernel(aPtr, outPtr, size, spacing);
-
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    [size],
+    outDtype,
+    outRegion,
     size,
-    OutCtor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    OutCtor as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, [size], outDtype);
 }

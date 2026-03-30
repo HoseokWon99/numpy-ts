@@ -18,7 +18,13 @@ import {
   inner_i16,
   inner_i8,
 } from './bins/inner.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchAlloc,
+  getSharedMemory,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { Complex } from '../complex';
@@ -125,55 +131,100 @@ export function wasmInner(
   const totalElements = M * K + N * K;
   if (totalElements < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
-  const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = M * K * factor * bytesPerElement;
-  const bBytes = N * K * factor * bytesPerElement;
-  const outBytes = M * N * factor * bytesPerElement;
+  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+  const outElements = M * N * factor;
+  const outBytes = outElements * bpe;
 
-  const scratchElements = complexKernel ? 2 * M * K + 2 * N * K + 3 * M * N : 0;
-  const scratchBytes = scratchElements * bytesPerElement;
-  ensureMemory(aBytes + bBytes + outBytes + scratchBytes);
-  resetAllocator();
+  // For scalar result (1D · 1D), use scratch for output
+  const isScalar = a.ndim === 1 && b.ndim === 1;
 
-  // Get raw data
-  const aData = a.data.subarray(
-    a.offset * factor,
-    a.offset * factor + M * K * factor
-  ) as TypedArray;
-  const bData = b.data.subarray(
-    b.offset * factor,
-    b.offset * factor + N * K * factor
-  ) as TypedArray;
+  if (isScalar) {
+    wasmConfig.wasmCallCount++;
+    resetScratchAllocator();
 
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
+    const aPtr = resolveInputPtr(
+      a.data,
+      a.isWasmBacked,
+      a.wasmPtr,
+      a.offset * factor,
+      M * K * factor,
+      bpe
+    );
+    const bPtr = resolveInputPtr(
+      b.data,
+      b.isWasmBacked,
+      b.wasmPtr,
+      b.offset * factor,
+      N * K * factor,
+      bpe
+    );
+    const outPtr = scratchAlloc(outBytes);
 
-  if (complexKernel) {
-    const scratchPtr = alloc(scratchBytes);
-    complexKernel(aPtr, bPtr, outPtr, M, N, K, scratchPtr);
-  } else {
-    kernel!(aPtr, bPtr, outPtr, M, N, K);
-  }
+    if (complexKernel) {
+      const scratchElements = 2 * M * K + 2 * N * K + 3 * M * N;
+      const scratchBytes = scratchElements * bpe;
+      const scratchPtr = scratchAlloc(scratchBytes);
+      complexKernel(aPtr, bPtr, outPtr, M, N, K, scratchPtr);
+    } else {
+      kernel!(aPtr, bPtr, outPtr, M, N, K);
+    }
 
-  const outData = copyOut(
-    outPtr,
-    M * N * factor,
-    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
+    const mem = getSharedMemory();
+    const outView = new (Ctor as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray)(mem.buffer, outPtr, outElements);
 
-  // 1D · 1D → scalar
-  if (a.ndim === 1 && b.ndim === 1) {
     if (factor === 2) {
       return new Complex(
-        Number((outData as Float64Array | Float32Array)[0]!),
-        Number((outData as Float64Array | Float32Array)[1]!)
+        Number((outView as Float64Array | Float32Array)[0]!),
+        Number((outView as Float64Array | Float32Array)[1]!)
       );
     }
-    return (outData as Float64Array | Float32Array)[0]!;
+    return (outView as Float64Array | Float32Array)[0]!;
+  }
+
+  // Array result
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    M * K * factor,
+    bpe
+  );
+  const bPtr = resolveInputPtr(
+    b.data,
+    b.isWasmBacked,
+    b.wasmPtr,
+    b.offset * factor,
+    N * K * factor,
+    bpe
+  );
+
+  if (complexKernel) {
+    const scratchElements = 2 * M * K + 2 * N * K + 3 * M * N;
+    const scratchBytes = scratchElements * bpe;
+    const scratchPtr = scratchAlloc(scratchBytes);
+    complexKernel(aPtr, bPtr, outRegion.ptr, M, N, K, scratchPtr);
+  } else {
+    kernel!(aPtr, bPtr, outRegion.ptr, M, N, K);
   }
 
   // Build result shape: a.shape[:-1] + b.shape[:-1]
   const resultShape = [...a.shape.slice(0, -1), ...b.shape.slice(0, -1)];
-  return ArrayStorage.fromData(outData, resultShape, resultDtype);
+  return ArrayStorage.fromWasmRegion(
+    resultShape,
+    resultDtype,
+    outRegion,
+    outElements,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+  );
 }

@@ -31,11 +31,10 @@ import {
   argsort_slices_c64,
 } from './bins/argsort.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  scratchCopyIn,
+  scratchAlloc,
   getSharedMemory,
   f16ToF32Input,
 } from './runtime';
@@ -100,6 +99,8 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 /**
  * WASM-accelerated argsort of contiguous slices.
  * Uses batch kernel when slices are packed contiguously.
+ *
+ * Note: operates on pre-existing JS buffers (inputData/resultData), uses scratch.
  */
 export function wasmArgsortSlices(
   inputData: TypedArray,
@@ -126,19 +127,17 @@ export function wasmArgsortSlices(
   ) {
     const Ctor = ctorMap[dtype];
     if (!Ctor) return false;
-    const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    const inputBytes = inputData.length * bpe;
     const outputBytes = resultData.length * 4;
 
-    ensureMemory(inputBytes + outputBytes);
-    resetAllocator();
+    wasmConfig.wasmCallCount++;
+    resetScratchAllocator();
 
-    const inputPtr = copyIn(
+    const inputPtr = scratchCopyIn(
       dtype === 'float16'
         ? f16ToF32Input(inputData as TypedArray, dtype)
         : (inputData as TypedArray)
     );
-    const outputPtr = alloc(outputBytes);
+    const outputPtr = scratchAlloc(outputBytes);
 
     sliceKernel(inputPtr, outputPtr, axisSize, outerSize);
 
@@ -156,16 +155,15 @@ export function wasmArgsortSlices(
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const bytesPerElem = isComplex ? bpe * 2 : bpe;
-  const inputBytes = inputData.length * bpe;
   const outputBytes = resultData.length * 4;
 
-  ensureMemory(inputBytes + outputBytes);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const inputPtr = copyIn(
+  const inputPtr = scratchCopyIn(
     dtype === 'float16' ? f16ToF32Input(inputData as TypedArray, dtype) : (inputData as TypedArray)
   );
-  const outputPtr = alloc(outputBytes);
+  const outputPtr = scratchAlloc(outputBytes);
 
   for (let i = 0; i < outerSize; i++) {
     kernel(
@@ -198,32 +196,32 @@ export function wasmArgsort(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const isComplex = dtype === 'complex128' || dtype === 'complex64';
-  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const bufLen = isComplex ? size * 2 : size;
-  const aBytes = bufLen * bpe;
-  const outBytes = size * 4;
+  const outBytes = size * 4; // i32 indices
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const aOff = a.offset;
   let aData = a.data.subarray(aOff, aOff + bufLen) as TypedArray;
   if (dtype === 'float16') aData = f16ToF32Input(aData, dtype);
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  const aPtr = scratchCopyIn(aData);
 
-  kernel(aPtr, outPtr, size);
+  kernel(aPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'int32',
+    outRegion,
     size,
     Int32Array as unknown as new (
       buffer: ArrayBuffer,
       byteOffset: number,
       length: number
-    ) => Int32Array
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'int32');
 }

@@ -6,7 +6,7 @@
  */
 
 import { flip_f64, flip_f32, flip_i64, flip_i32, flip_i16, flip_i8 } from './bins/flip.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { hasFloat16, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -62,25 +62,22 @@ export function wasmFlip(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  kernel(aPtr, outRegion.ptr, size);
 
-  kernel(aPtr, outPtr, size);
-
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

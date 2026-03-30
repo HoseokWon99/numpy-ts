@@ -17,7 +17,7 @@ import {
   bitwise_count_i8,
   bitwise_count_u8,
 } from './bins/bitwise_count.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -61,22 +61,22 @@ export function wasmBitwiseCount(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size; // output is uint8, 1 byte per element
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  kernel(aPtr, outPtr, size);
+  kernel(aPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'uint8',
+    outRegion,
     size,
     Uint8Array as unknown as new (
       buffer: ArrayBuffer,
@@ -84,6 +84,4 @@ export function wasmBitwiseCount(a: ArrayStorage): ArrayStorage | null {
       length: number
     ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'uint8');
 }

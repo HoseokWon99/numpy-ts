@@ -6,8 +6,9 @@
  */
 
 import { cholesky_f64, cholesky_f32 } from './bins/cholesky.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, scratchCopyIn } from './runtime';
 import { ArrayStorage } from '../storage';
+import type { TypedArray } from '../dtype';
 
 import { wasmConfig } from './config';
 
@@ -26,13 +27,14 @@ export function wasmCholesky(a: ArrayStorage): ArrayStorage | null {
 
   if (n < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
-  // Memory layout: a[n*n] + out[n*n]
   const matSize = n * n;
-  const totalF64 = matSize * 2;
-  const totalBytes = totalF64 * 8; // f64 = 8 bytes
+  const outBytes = matSize * 8;
 
-  ensureMemory(totalBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   // Copy input matrix to WASM memory (converting to float64)
   const aData = new Float64Array(matSize);
@@ -42,17 +44,26 @@ export function wasmCholesky(a: ArrayStorage): ArrayStorage | null {
     }
   }
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(matSize * 8);
+  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
 
-  const rc = cholesky_f64(aPtr, outPtr, n);
+  const rc = cholesky_f64(aPtr, outRegion.ptr, n);
 
   if (rc !== 0) {
+    outRegion.release();
     throw new Error('cholesky: matrix is not positive definite');
   }
 
-  const outData = copyOut(outPtr, matSize, Float64Array);
-  return ArrayStorage.fromData(outData, [n, n], 'float64');
+  return ArrayStorage.fromWasmRegion(
+    [n, n],
+    'float64',
+    outRegion,
+    matSize,
+    Float64Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
+  );
 }
 
 /**
@@ -69,11 +80,13 @@ export function wasmCholeskyF32(a: ArrayStorage): ArrayStorage | null {
   if (n < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const matSize = n * n;
-  const totalF32 = matSize * 2;
-  const totalBytes = totalF32 * 4; // f32 = 4 bytes
+  const outBytes = matSize * 4;
 
-  ensureMemory(totalBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const aData = new Float32Array(matSize);
   for (let i = 0; i < n; i++) {
@@ -82,15 +95,24 @@ export function wasmCholeskyF32(a: ArrayStorage): ArrayStorage | null {
     }
   }
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(matSize * 4);
+  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
 
-  const rc = cholesky_f32(aPtr, outPtr, n);
+  const rc = cholesky_f32(aPtr, outRegion.ptr, n);
 
   if (rc !== 0) {
+    outRegion.release();
     throw new Error('cholesky: matrix is not positive definite');
   }
 
-  const outData = copyOut(outPtr, matSize, Float32Array);
-  return ArrayStorage.fromData(outData, [n, n], 'float32');
+  return ArrayStorage.fromWasmRegion(
+    [n, n],
+    'float32',
+    outRegion,
+    matSize,
+    Float32Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
+  );
 }

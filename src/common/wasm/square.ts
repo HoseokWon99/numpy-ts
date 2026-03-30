@@ -15,7 +15,7 @@ import {
   square_c128,
   square_c64,
 } from './bins/square.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -72,20 +72,31 @@ export function wasmSquare(a: ArrayStorage): ArrayStorage | null {
   // Complex: interleaved re/im pairs, so data length = size * 2
   const complexFactor = isComplexDType(dtype) ? 2 : 1;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const dataLen = size * complexFactor;
-  ensureMemory(dataLen * bpe * 2);
-  resetAllocator();
+  const totalElements = size * complexFactor;
+  const outBytes = totalElements * bpe;
 
-  const aPtr = copyIn(
-    a.data.subarray(a.offset * complexFactor, (a.offset + size) * complexFactor) as TypedArray
-  );
-  const outPtr = alloc(dataLen * bpe);
-  kernel(aPtr, outPtr, size);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const outData = copyOut(
-    outPtr,
-    dataLen,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * complexFactor,
+    totalElements,
+    bpe
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+
+  kernel(aPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
+    totalElements,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+  );
 }

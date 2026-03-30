@@ -26,7 +26,7 @@ import {
   reduce_prod_strided_u16,
   reduce_prod_strided_u8,
 } from './bins/reduce_prod.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { resetScratchAllocator, resolveInputPtr, alloc, copyOut } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -80,12 +80,9 @@ export function wasmReduceProd(a: ArrayStorage): number | null {
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(size * bpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aPtr = copyIn(aRaw);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
   return Number(kernel(aPtr, size));
 }
@@ -197,12 +194,9 @@ export function wasmReduceProdStrided(
   const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const outSize = outerSize * innerSize;
 
-  ensureMemory(totalSize * inBpe + outSize * outBpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + totalSize) as TypedArray;
-  const inPtr = copyIn(aRaw);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const inPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, totalSize, inBpe);
   const outPtr = alloc(outSize * outBpe);
 
   kernel(inPtr, outPtr, outerSize, axisSize, innerSize);

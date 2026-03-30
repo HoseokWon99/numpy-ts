@@ -24,7 +24,7 @@ import {
   right_shift_scalar_u16,
   right_shift_scalar_u8,
 } from './bins/right_shift.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -80,31 +80,26 @@ export function wasmRightShift(a: ArrayStorage, b: ArrayStorage): ArrayStorage |
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-  const bBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const bOff = b.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const bData = b.data.subarray(bOff, bOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, bpe);
 
-  kernel(aPtr, bPtr, outPtr, size);
+  kernel(aPtr, bPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }
 
 export function wasmRightShiftScalar(a: ArrayStorage, scalar: number): ArrayStorage | null {
@@ -119,25 +114,23 @@ export function wasmRightShiftScalar(a: ArrayStorage, scalar: number): ArrayStor
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  kernel(aPtr, outPtr, size, scalar);
+  kernel(aPtr, outRegion.ptr, size, scalar);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

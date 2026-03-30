@@ -237,10 +237,6 @@ export function sum(
     return out;
   }
 
-  // Create result storage with promoted dtype
-  const result = ArrayStorage.zeros(outputShape, outDtype);
-  const resultData = result.data;
-
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
@@ -253,24 +249,50 @@ export function sum(
     if (wasmResult) {
       const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
       if (outDtype === 'float64') {
-        return ArrayStorage.fromData(wasmResult.data, outShape, outDtype);
+        // Share the WASM region directly — no copy needed
+        const strides: number[] = new Array(outShape.length);
+        let s = 1;
+        for (let i = outShape.length - 1; i >= 0; i--) {
+          strides[i] = s;
+          s *= outShape[i]!;
+        }
+        const shared = ArrayStorage.fromDataShared(
+          wasmResult.data,
+          outShape,
+          outDtype,
+          strides,
+          0,
+          wasmResult.wasmRegion
+        );
+        wasmResult.dispose();
+        return shared;
       }
-      if (outDtype === 'float32') {
-        const f32 = new Float32Array(wasmResult.data.length);
-        const f64 = wasmResult.data as Float64Array;
-        for (let i = 0; i < f64.length; i++) f32[i] = f64[i]!;
-        return ArrayStorage.fromData(f32, outShape, outDtype);
+      try {
+        if (outDtype === 'float32') {
+          const f32 = new Float32Array(wasmResult.data.length);
+          const f64 = wasmResult.data as Float64Array;
+          for (let i = 0; i < f64.length; i++) f32[i] = f64[i]!;
+          return ArrayStorage.fromData(f32, outShape, outDtype);
+        }
+        // int64/uint64 output — need a result buffer for conversion
+        const intResult = ArrayStorage.zeros(outputShape, outDtype);
+        const intResultData = intResult.data;
+        const f64Data = wasmResult.data as Float64Array;
+        for (let i = 0; i < f64Data.length; i++)
+          intResultData[i] =
+            intResultData instanceof BigInt64Array || intResultData instanceof BigUint64Array
+              ? (BigInt(Math.round(f64Data[i]!)) as bigint)
+              : f64Data[i]!;
+        return keepdims ? ArrayStorage.fromData(intResultData, outShape, outDtype) : intResult;
+      } finally {
+        wasmResult.dispose();
       }
-      // int64/uint64 output
-      const f64Data = wasmResult.data as Float64Array;
-      for (let i = 0; i < f64Data.length; i++)
-        resultData[i] =
-          resultData instanceof BigInt64Array || resultData instanceof BigUint64Array
-            ? (BigInt(Math.round(f64Data[i]!)) as bigint)
-            : f64Data[i]!;
-      return keepdims ? ArrayStorage.fromData(resultData, outShape, outDtype) : result;
     }
   }
+
+  // Create result storage with promoted dtype
+  const result = ArrayStorage.zeros(outputShape, outDtype);
+  const resultData = result.data;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -433,7 +455,22 @@ export function mean(
     const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
     const wasmResult = wasmReduceMeanStrided(storage, outerSize, axisSize, innerSize);
     if (wasmResult) {
-      return ArrayStorage.fromData(wasmResult.data, outputShape, 'float64');
+      const strides: number[] = new Array(outputShape.length);
+      let s = 1;
+      for (let i = outputShape.length - 1; i >= 0; i--) {
+        strides[i] = s;
+        s *= outputShape[i]!;
+      }
+      const shared = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outputShape,
+        'float64',
+        strides,
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return shared;
     }
   }
 
@@ -447,7 +484,6 @@ export function mean(
     const dstData = f64Storage.data as Float64Array;
     const off2 = storage.offset;
     if (storage.isCContiguous) {
-      // Bulk-convert Float16Array→Float32Array first to avoid per-element f16 overhead
       const src =
         dtype === 'float16' && hasFloat16
           ? new Float32Array((srcData as Float16Array).subarray(off2, off2 + storage.size))
@@ -458,22 +494,27 @@ export function mean(
       for (let i = 0; i < storage.size; i++) dstData[i] = Number(storage.iget(i));
     }
     const f64Sum = sum(f64Storage, normalizedAxis, keepdims);
+    f64Storage.dispose();
     if (typeof f64Sum === 'number') {
       return roundToDtype(f64Sum / shape[normalizedAxis]!, dtype);
     }
     sumStorage = f64Sum as ArrayStorage;
-    const divisor = shape[normalizedAxis]!;
-    const resultData = sumStorage.data as Float64Array;
-    const Ctor = getTypedArrayConstructor(dtype)!;
-    const outData = new Ctor(resultData.length);
-    for (let i = 0; i < resultData.length; i++) {
-      (outData as Float64Array)[i] = resultData[i]! / divisor;
+    try {
+      const divisor = shape[normalizedAxis]!;
+      const resultData = sumStorage.data as Float64Array;
+      const Ctor = getTypedArrayConstructor(dtype)!;
+      const outData = new Ctor(resultData.length);
+      for (let i = 0; i < resultData.length; i++) {
+        (outData as Float64Array)[i] = resultData[i]! / divisor;
+      }
+      return ArrayStorage.fromData(
+        outData as unknown as TypedArray,
+        Array.from(sumStorage.shape),
+        dtype
+      );
+    } finally {
+      sumStorage.dispose();
     }
-    return ArrayStorage.fromData(
-      outData as unknown as TypedArray,
-      Array.from(sumStorage.shape),
-      dtype
-    );
   }
 
   const sumResult = sum(storage, axis, keepdims);
@@ -487,40 +528,44 @@ export function mean(
     );
   }
 
-  // Divide by the size of the reduced axis
-  const divisor = shape[normalizedAxis]!;
+  try {
+    // Divide by the size of the reduced axis
+    const divisor = shape[normalizedAxis]!;
 
-  // For complex dtypes, mean stays complex
-  // For integer dtypes, mean returns float64 (matching NumPy behavior)
-  const resultDtype = floatAccumulationDtype(dtype);
+    // For complex dtypes, mean stays complex
+    // For integer dtypes, mean returns float64 (matching NumPy behavior)
+    const resultDtype = floatAccumulationDtype(dtype);
 
-  const result = ArrayStorage.zeros(Array.from(sumResult.shape), resultDtype);
-  const resultData = result.data;
-  const sumData = sumResult.data;
-  const sumDtype = sumResult.dtype as DType;
+    const result = ArrayStorage.zeros(Array.from(sumResult.shape), resultDtype);
+    const resultData = result.data;
+    const sumData = sumResult.data;
+    const sumDtype = sumResult.dtype as DType;
 
-  if (isComplexDType(dtype)) {
-    // Complex: divide both real and imaginary parts
-    const sumComplex = sumData as Float64Array | Float32Array;
-    const resultComplex = resultData as Float64Array | Float32Array;
-    const size = sumResult.size;
-    for (let i = 0; i < size; i++) {
-      resultComplex[i * 2] = sumComplex[i * 2]! / divisor;
-      resultComplex[i * 2 + 1] = sumComplex[i * 2 + 1]! / divisor;
+    if (isComplexDType(dtype)) {
+      // Complex: divide both real and imaginary parts
+      const sumComplex = sumData as Float64Array | Float32Array;
+      const resultComplex = resultData as Float64Array | Float32Array;
+      const size = sumResult.size;
+      for (let i = 0; i < size; i++) {
+        resultComplex[i * 2] = sumComplex[i * 2]! / divisor;
+        resultComplex[i * 2 + 1] = sumComplex[i * 2 + 1]! / divisor;
+      }
+    } else if (isBigIntDType(sumDtype)) {
+      // Convert BigInt sum results to float for mean
+      const sumTyped = sumData as BigInt64Array | BigUint64Array;
+      for (let i = 0; i < resultData.length; i++) {
+        resultData[i] = Number(sumTyped[i]!) / divisor;
+      }
+    } else {
+      for (let i = 0; i < resultData.length; i++) {
+        resultData[i] = Number(sumData[i]!) / divisor;
+      }
     }
-  } else if (isBigIntDType(sumDtype)) {
-    // Convert BigInt sum results to float for mean
-    const sumTyped = sumData as BigInt64Array | BigUint64Array;
-    for (let i = 0; i < resultData.length; i++) {
-      resultData[i] = Number(sumTyped[i]!) / divisor;
-    }
-  } else {
-    for (let i = 0; i < resultData.length; i++) {
-      resultData[i] = Number(sumData[i]!) / divisor;
-    }
+
+    return result;
+  } finally {
+    sumResult.dispose();
   }
-
-  return result;
 }
 
 /**
@@ -690,10 +735,6 @@ export function max(
     return wrapScalarKeepdims(scalar as number | bigint, ndim, dtype);
   }
 
-  // Create result storage
-  const result = ArrayStorage.zeros(outputShape, dtype);
-  const resultData = result.data;
-
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
@@ -705,9 +746,28 @@ export function max(
     const wasmResult = wasmReduceMaxStrided(storage, wasmOuter, axisSize, innerSize);
     if (wasmResult) {
       const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
-      return ArrayStorage.fromData(wasmResult.data, outShape, dtype);
+      const strides: number[] = new Array(outShape.length);
+      let s = 1;
+      for (let i = outShape.length - 1; i >= 0; i--) {
+        strides[i] = s;
+        s *= outShape[i]!;
+      }
+      const shared = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outShape,
+        dtype,
+        strides,
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return shared;
     }
   }
+
+  // Create result storage
+  const result = ArrayStorage.zeros(outputShape, dtype);
+  const resultData = result.data;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -876,10 +936,6 @@ export function prod(
     return wrapScalarKeepdims(scalar as number | bigint | Complex, ndim, outDtype);
   }
 
-  // Create result storage with promoted dtype
-  const result = ArrayStorage.zeros(outputShape, outDtype);
-  const resultData = result.data;
-
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
@@ -891,10 +947,28 @@ export function prod(
     const wasmResult = wasmReduceProdStrided(storage, wasmOuter, axisSize, innerSize);
     if (wasmResult) {
       const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
-      // WASM output dtype matches outDtype for prod (native or promoted)
-      return ArrayStorage.fromData(wasmResult.data, outShape, outDtype);
+      const strides: number[] = new Array(outShape.length);
+      let s = 1;
+      for (let i = outShape.length - 1; i >= 0; i--) {
+        strides[i] = s;
+        s *= outShape[i]!;
+      }
+      const shared = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outShape,
+        outDtype,
+        strides,
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return shared;
     }
   }
+
+  // Create result storage with promoted dtype
+  const result = ArrayStorage.zeros(outputShape, outDtype);
+  const resultData = result.data;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -1169,10 +1243,6 @@ export function min(
     return wrapScalarKeepdims(scalar as number | bigint, ndim, dtype);
   }
 
-  // Create result storage
-  const result = ArrayStorage.zeros(outputShape, dtype);
-  const resultData = result.data;
-
   // Perform reduction along axis
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
@@ -1184,9 +1254,28 @@ export function min(
     const wasmResult = wasmReduceMinStrided(storage, wasmOuter, axisSize, innerSize);
     if (wasmResult) {
       const outShape = keepdims ? shape.map((s, i) => (i === normalizedAxis ? 1 : s)) : outputShape;
-      return ArrayStorage.fromData(wasmResult.data, outShape, dtype);
+      const strides: number[] = new Array(outShape.length);
+      let s = 1;
+      for (let i = outShape.length - 1; i >= 0; i--) {
+        strides[i] = s;
+        s *= outShape[i]!;
+      }
+      const shared = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outShape,
+        dtype,
+        strides,
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return shared;
     }
   }
+
+  // Create result storage
+  const result = ArrayStorage.zeros(outputShape, dtype);
+  const resultData = result.data;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -1712,91 +1801,97 @@ export function variance(
 
   const axisSize = shape[normalizedAxis]!;
   const meanArray = meanResult as ArrayStorage;
-  const meanData = meanArray.data;
 
-  // Compute output shape (same as mean's output shape)
-  const outputShape = keepdims
-    ? meanArray.shape
-    : Array.from(shape).filter((_, i) => i !== normalizedAxis);
+  try {
+    const meanData = meanArray.data;
 
-  // Result is always float64 for variance (even for complex input)
-  const result = ArrayStorage.zeros(Array.from(outputShape), 'float64');
-  const resultData = result.data;
+    // Compute output shape (same as mean's output shape)
+    const outputShape = keepdims
+      ? meanArray.shape
+      : Array.from(shape).filter((_, i) => i !== normalizedAxis);
 
-  const outerSize = outputShape.reduce((a, b) => a * b, 1);
+    // Result is always float64 for variance (even for complex input)
+    const result = ArrayStorage.zeros(Array.from(outputShape), 'float64');
+    const resultData = result.data;
 
-  const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
-    shape,
-    inputStrides,
-    off,
-    normalizedAxis,
-    outerSize
-  );
+    const outerSize = outputShape.reduce((a, b) => a * b, 1);
 
-  if (isComplexDType(dtype)) {
-    // Complex variance along axis: Var(X) = E[|X - μ|²]
-    const complexData = data as Float64Array | Float32Array;
-    const meanComplex = meanData as Float64Array | Float32Array;
+    const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
+      shape,
+      inputStrides,
+      off,
+      normalizedAxis,
+      outerSize
+    );
 
-    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
-      let sumSqDiff = 0;
-      const meanRe = meanComplex[outerIdx * 2]!;
-      const meanIm = meanComplex[outerIdx * 2 + 1]!;
+    if (isComplexDType(dtype)) {
+      // Complex variance along axis: Var(X) = E[|X - μ|²]
+      const complexData = data as Float64Array | Float32Array;
+      const meanComplex = meanData as Float64Array | Float32Array;
 
-      let bufIdx = baseOffsets[outerIdx]!;
-      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
-        const re = complexData[bufIdx * 2]!;
-        const im = complexData[bufIdx * 2 + 1]!;
-        // |z - μ|² = (re - μ.re)² + (im - μ.im)²
-        const diffRe = re - meanRe;
-        const diffIm = im - meanIm;
-        sumSqDiff += diffRe * diffRe + diffIm * diffIm;
-        bufIdx += axisStr;
-      }
-
-      resultData[outerIdx] = sumSqDiff / (axisSize - ddof);
-    }
-  } else {
-    const acc = getFloatAcc(dtype);
-    if (acc) {
-      // float16/float32: accumulate in native precision, store in input dtype
-      const Ctor = getTypedArrayConstructor(dtype)!;
-      const outData = new Ctor(outerSize);
       for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
-        acc[0] = 0;
+        let sumSqDiff = 0;
+        const meanRe = meanComplex[outerIdx * 2]!;
+        const meanIm = meanComplex[outerIdx * 2 + 1]!;
+
+        let bufIdx = baseOffsets[outerIdx]!;
+        for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+          const re = complexData[bufIdx * 2]!;
+          const im = complexData[bufIdx * 2 + 1]!;
+          // |z - μ|² = (re - μ.re)² + (im - μ.im)²
+          const diffRe = re - meanRe;
+          const diffIm = im - meanIm;
+          sumSqDiff += diffRe * diffRe + diffIm * diffIm;
+          bufIdx += axisStr;
+        }
+
+        resultData[outerIdx] = sumSqDiff / (axisSize - ddof);
+      }
+    } else {
+      const acc = getFloatAcc(dtype);
+      if (acc) {
+        // float16/float32: accumulate in native precision, store in input dtype
+        result.dispose(); // won't use the float64 result buffer
+        const Ctor = getTypedArrayConstructor(dtype)!;
+        const outData = new Ctor(outerSize);
+        for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+          acc[0] = 0;
+          const meanVal = Number(meanData[outerIdx]!);
+          let bufIdx = baseOffsets[outerIdx]!;
+          for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+            const diff = Number(data[bufIdx]!) - meanVal;
+            acc[0] += diff * diff;
+            bufIdx += axisStr;
+          }
+          acc[0] /= axisSize - ddof;
+          (outData as Float16Array)[outerIdx] = acc[0]!;
+        }
+        return ArrayStorage.fromData(
+          outData as unknown as TypedArray,
+          Array.from(outputShape),
+          dtype
+        );
+      }
+      // Real variance for each position (float64)
+      for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+        let sumSqDiff = 0;
         const meanVal = Number(meanData[outerIdx]!);
+
         let bufIdx = baseOffsets[outerIdx]!;
         for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
           const diff = Number(data[bufIdx]!) - meanVal;
-          acc[0] += diff * diff;
+          sumSqDiff += diff * diff;
           bufIdx += axisStr;
         }
-        acc[0] /= axisSize - ddof;
-        (outData as Float16Array)[outerIdx] = acc[0]!;
-      }
-      return ArrayStorage.fromData(
-        outData as unknown as TypedArray,
-        Array.from(outputShape),
-        dtype
-      );
-    }
-    // Real variance for each position (float64)
-    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
-      let sumSqDiff = 0;
-      const meanVal = Number(meanData[outerIdx]!);
 
-      let bufIdx = baseOffsets[outerIdx]!;
-      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
-        const diff = Number(data[bufIdx]!) - meanVal;
-        sumSqDiff += diff * diff;
-        bufIdx += axisStr;
+        resultData[outerIdx] = sumSqDiff / (axisSize - ddof);
       }
-
-      resultData[outerIdx] = sumSqDiff / (axisSize - ddof);
     }
+
+    return result;
+  } finally {
+    meanArray.dispose();
   }
-
-  return result;
 }
 
 /**
@@ -1829,15 +1924,19 @@ export function std(
   }
 
   // Apply sqrt element-wise
-  const result = ArrayStorage.zeros(Array.from(varResult.shape), 'float64');
-  const varData = varResult.data;
-  const resultData = result.data;
+  try {
+    const result = ArrayStorage.zeros(Array.from(varResult.shape), 'float64');
+    const varData = varResult.data;
+    const resultData = result.data;
 
-  for (let i = 0; i < varData.length; i++) {
-    resultData[i] = Math.sqrt(Number(varData[i]!));
+    for (let i = 0; i < varData.length; i++) {
+      resultData[i] = Math.sqrt(Number(varData[i]!));
+    }
+
+    return result;
+  } finally {
+    varResult.dispose();
   }
-
-  return result;
 }
 
 /**
@@ -2431,16 +2530,21 @@ export function ptp(
     // Both are arrays, subtract element-wise
     const maxStorage = maxResult as ArrayStorage;
     const minStorage = minResult as ArrayStorage;
-    const maxData = maxStorage.data as Float64Array | Float32Array;
-    const minData = minStorage.data as Float64Array | Float32Array;
-    const resultData = new Float64Array(maxStorage.size * 2);
+    try {
+      const maxData = maxStorage.data as Float64Array | Float32Array;
+      const minData = minStorage.data as Float64Array | Float32Array;
+      const resultData = new Float64Array(maxStorage.size * 2);
 
-    for (let i = 0; i < maxStorage.size; i++) {
-      resultData[i * 2] = maxData[i * 2]! - minData[i * 2]!;
-      resultData[i * 2 + 1] = maxData[i * 2 + 1]! - minData[i * 2 + 1]!;
+      for (let i = 0; i < maxStorage.size; i++) {
+        resultData[i * 2] = maxData[i * 2]! - minData[i * 2]!;
+        resultData[i * 2 + 1] = maxData[i * 2 + 1]! - minData[i * 2 + 1]!;
+      }
+
+      return ArrayStorage.fromData(resultData, [...maxStorage.shape], dtype);
+    } finally {
+      maxStorage.dispose();
+      minStorage.dispose();
     }
-
-    return ArrayStorage.fromData(resultData, [...maxStorage.shape], dtype);
   }
 
   const maxResult = max(storage, axis, keepdims);
@@ -2458,8 +2562,12 @@ export function ptp(
       dtype === 'uint32'
     ) {
       const wrap = ArrayStorage.zeros([1], dtype);
-      wrap.iset(0, diff);
-      return Number(wrap.iget(0));
+      try {
+        wrap.iset(0, diff);
+        return Number(wrap.iget(0));
+      } finally {
+        wrap.dispose();
+      }
     }
     return diff;
   }
@@ -2467,16 +2575,21 @@ export function ptp(
   // Both are arrays, subtract element-wise — use input dtype for wrapping (matching NumPy)
   const maxStorage = maxResult as ArrayStorage;
   const minStorage = minResult as ArrayStorage;
-  const maxData = maxStorage.data;
-  const minData = minStorage.data;
-  const result = ArrayStorage.zeros([...maxStorage.shape], dtype);
-  const resultData = result.data;
+  try {
+    const maxData = maxStorage.data;
+    const minData = minStorage.data;
+    const result = ArrayStorage.zeros([...maxStorage.shape], dtype);
+    const resultData = result.data;
 
-  for (let i = 0; i < maxStorage.size; i++) {
-    resultData[i] = Number(maxData[i]) - Number(minData[i]);
+    for (let i = 0; i < maxStorage.size; i++) {
+      resultData[i] = Number(maxData[i]) - Number(minData[i]);
+    }
+
+    return result;
+  } finally {
+    maxStorage.dispose();
+    minStorage.dispose();
   }
-
-  return result;
 }
 
 /**

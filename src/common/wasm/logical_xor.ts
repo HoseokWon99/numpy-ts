@@ -20,7 +20,7 @@ import {
   logical_xor_scalar_i16,
   logical_xor_scalar_i8,
 } from './bins/logical_xor.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -87,26 +87,32 @@ export function wasmLogicalXor(a: ArrayStorage, b: ArrayStorage): ArrayStorage |
   if (b.dtype !== dtype) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-  const bBytes = size * bpe;
-  const outBytes = size;
+  const outBytes = size; // u8 output
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  // Allocate output in persistent WASM heap
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const bPtr = copyIn(b.data.subarray(b.offset, b.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(aPtr, bPtr, outPtr, size);
+  // Resolve input pointers (zero-copy if WASM-backed, scratch-copy if JS)
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, bPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'bool',
+    outRegion,
     size,
-    Uint8Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Uint8Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'bool');
 }
 
 /**
@@ -125,22 +131,29 @@ export function wasmLogicalXorScalar(a: ArrayStorage, scalar: number): ArrayStor
   if (!kernel || !InCtor) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-  const outBytes = size;
+  const outBytes = size; // u8 output
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  // Allocate output in persistent WASM heap
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(aPtr, outPtr, size, scalar);
+  // Resolve input pointer
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, outRegion.ptr, size, scalar);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'bool',
+    outRegion,
     size,
-    Uint8Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Uint8Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'bool');
 }

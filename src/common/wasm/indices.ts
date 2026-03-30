@@ -3,8 +3,9 @@
  */
 
 import { indices_2d, indices_3d } from './bins/indices.wasm';
-import { ensureMemory, resetAllocator, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator } from './runtime';
 import { ArrayStorage } from '../storage';
+import type { TypedArray } from '../dtype';
 import { wasmConfig } from './config';
 
 const BASE_THRESHOLD = 64;
@@ -25,22 +26,27 @@ export function wasmIndices(dimensions: number[], dtype: string): ArrayStorage |
   const totalSize = ndim * gridSize;
   const outBytes = totalSize * 4; // i32
 
-  ensureMemory(outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   if (ndim === 2) {
-    indices_2d(outPtr, dimensions[0]!, dimensions[1]!);
+    indices_2d(outRegion.ptr, dimensions[0]!, dimensions[1]!);
   } else {
-    indices_3d(outPtr, dimensions[0]!, dimensions[1]!, dimensions[2]!);
+    indices_3d(outRegion.ptr, dimensions[0]!, dimensions[1]!, dimensions[2]!);
   }
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    [ndim, ...dimensions],
+    'int32',
+    outRegion,
     totalSize,
-    Int32Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => Int32Array
+    Int32Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, [ndim, ...dimensions], 'int32');
 }

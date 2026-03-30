@@ -1224,61 +1224,65 @@ export function corrcoef(x: ArrayStorage, y?: ArrayStorage, rowvar: boolean = tr
   // Compute covariance matrix
   const covMatrix = cov(x, y, rowvar, false);
 
-  const covData = covMatrix.data;
-  const shape = covMatrix.shape;
-  const n = shape[0]!;
+  try {
+    const covData = covMatrix.data;
+    const shape = covMatrix.shape;
+    const n = shape[0]!;
 
-  if (isComplex) {
-    // Complex correlation coefficients
+    if (isComplex) {
+      // Complex correlation coefficients
+      // corr[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
+      // Diagonal elements (variances) are real, so sqrt(var_i * var_j) is real
+      const corrData = new Float64Array(n * n * 2);
+
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          // Get cov[i,j] (complex)
+          const covIJRe = (covData as Float64Array)[(i * n + j) * 2]!;
+          const covIJIm = (covData as Float64Array)[(i * n + j) * 2 + 1]!;
+          // Variances are real (imaginary part is 0 for diagonal elements)
+          const varI = (covData as Float64Array)[(i * n + i) * 2]!;
+          const varJ = (covData as Float64Array)[(j * n + j) * 2]!;
+
+          const outIdx = (i * n + j) * 2;
+          if (varI <= 0 || varJ <= 0) {
+            corrData[outIdx] = NaN;
+            corrData[outIdx + 1] = NaN;
+          } else {
+            const divisor = Math.sqrt(varI * varJ);
+            corrData[outIdx] = covIJRe / divisor;
+            corrData[outIdx + 1] = covIJIm / divisor;
+          }
+        }
+      }
+
+      return ArrayStorage.fromData(corrData, [n, n], 'complex128');
+    }
+
+    // Real correlation coefficients
     // corr[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
-    // Diagonal elements (variances) are real, so sqrt(var_i * var_j) is real
-    const corrData = new Float64Array(n * n * 2);
+    const corrData = new Float64Array(n * n);
+    const cData = covData as Float64Array;
+
+    // Precompute 1/sqrt(variance) for each variable
+    const invStd = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const v = cData[i * n + i]!;
+      invStd[i] = v > 0 ? 1.0 / Math.sqrt(v) : NaN;
+    }
 
     for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        // Get cov[i,j] (complex)
-        const covIJRe = (covData as Float64Array)[(i * n + j) * 2]!;
-        const covIJIm = (covData as Float64Array)[(i * n + j) * 2 + 1]!;
-        // Variances are real (imaginary part is 0 for diagonal elements)
-        const varI = (covData as Float64Array)[(i * n + i) * 2]!;
-        const varJ = (covData as Float64Array)[(j * n + j) * 2]!;
-
-        const outIdx = (i * n + j) * 2;
-        if (varI <= 0 || varJ <= 0) {
-          corrData[outIdx] = NaN;
-          corrData[outIdx + 1] = NaN;
-        } else {
-          const divisor = Math.sqrt(varI * varJ);
-          corrData[outIdx] = covIJRe / divisor;
-          corrData[outIdx + 1] = covIJIm / divisor;
-        }
+      for (let j = i; j < n; j++) {
+        const val = cData[i * n + j]! * invStd[i]! * invStd[j]!;
+        corrData[i * n + j] = val;
+        corrData[j * n + i] = val;
       }
     }
 
-    return ArrayStorage.fromData(corrData, [n, n], 'complex128');
+    return ArrayStorage.fromData(corrData, [n, n], 'float64');
+  } finally {
+    covMatrix.dispose();
   }
-
-  // Real correlation coefficients
-  // corr[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
-  const corrData = new Float64Array(n * n);
-  const cData = covData as Float64Array;
-
-  // Precompute 1/sqrt(variance) for each variable
-  const invStd = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const v = cData[i * n + i]!;
-    invStd[i] = v > 0 ? 1.0 / Math.sqrt(v) : NaN;
-  }
-
-  for (let i = 0; i < n; i++) {
-    for (let j = i; j < n; j++) {
-      const val = cData[i * n + j]! * invStd[i]! * invStd[j]!;
-      corrData[i * n + j] = val;
-      corrData[j * n + i] = val;
-    }
-  }
-
-  return ArrayStorage.fromData(corrData, [n, n], 'float64');
 }
 
 /**

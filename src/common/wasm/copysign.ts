@@ -28,7 +28,7 @@ import {
   copysign_scalar_u16,
   copysign_scalar_u8,
 } from './bins/copysign.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -95,25 +95,26 @@ export function wasmCopysign(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage |
   if (x2.dtype !== dtype) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const inBytes = size * bpe;
   const outBytes = size * 8; // f64 output
 
-  ensureMemory(inBytes * 2 + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const x1Ptr = copyIn(x1.data.subarray(x1.offset, x1.offset + size) as TypedArray);
-  const x2Ptr = copyIn(x2.data.subarray(x2.offset, x2.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(x1Ptr, x2Ptr, outPtr, size);
+  resetScratchAllocator();
+  const x1Ptr = resolveInputPtr(x1.data, x1.isWasmBacked, x1.wasmPtr, x1.offset, size, bpe);
+  const x2Ptr = resolveInputPtr(x2.data, x2.isWasmBacked, x2.wasmPtr, x2.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(x1Ptr, x2Ptr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(x1.shape),
+    'float64',
+    outRegion,
     size,
     Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(x1.shape), 'float64');
 }
 
 /**
@@ -132,22 +133,23 @@ export function wasmCopysignScalar(x1: ArrayStorage, scalar: number): ArrayStora
   if (!kernel || !InCtor) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const inBytes = size * bpe;
   const outBytes = size * 8; // f64 output
 
-  ensureMemory(inBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const x1Ptr = copyIn(x1.data.subarray(x1.offset, x1.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(x1Ptr, outPtr, size, scalar);
+  resetScratchAllocator();
+  const x1Ptr = resolveInputPtr(x1.data, x1.isWasmBacked, x1.wasmPtr, x1.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(x1Ptr, outRegion.ptr, size, scalar);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(x1.shape),
+    'float64',
+    outRegion,
     size,
     Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(x1.shape), 'float64');
 }

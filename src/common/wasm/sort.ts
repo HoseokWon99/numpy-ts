@@ -34,10 +34,9 @@ import {
   sort_slices_c64,
 } from './bins/sort.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  scratchCopyIn,
   getSharedMemory,
   f16ToF32Input,
   f32ToF16Output,
@@ -104,6 +103,9 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
  * WASM-accelerated sort of contiguous slices in a typed array buffer.
  * Uses a single batched WASM call for all slices (eliminates per-slice JS→WASM overhead).
  * Returns true if WASM handled it.
+ *
+ * Note: wasmSortSlices operates on pre-existing JS buffers (resultData), so it uses
+ * scratch copy-in and copy-out rather than wasmMalloc. The caller owns the buffer.
  */
 export function wasmSortSlices(
   resultData: TypedArray,
@@ -114,22 +116,14 @@ export function wasmSortSlices(
 ): boolean {
   if (axisSize < 2) return true;
 
-  // Check if slices are packed contiguously (last-axis sort on C-contiguous array)
-  // If so, use the batch kernel (one WASM call). Otherwise fall back to per-slice calls.
-  // sliceOffsets are in logical element units (complex = 1 element, not 2 floats).
   const sliceKernel = sliceKernels[dtype];
-
-  // For float16, the native f16 WASM kernel sorts raw u16 bits directly
-  // (using IEEE-754 bit-flip trick), so no f16↔f32 conversion needed.
-  // The ctorMap entry is Uint16Array, and copyIn/copyOut handle raw bytes.
-  const totalBytes = resultData.byteLength;
 
   if (sliceKernel && sliceOffsets[0] === 0 && outerSize > 1 && sliceOffsets[1] === axisSize) {
     // Packed contiguous slices — single batch WASM call
-    ensureMemory(totalBytes);
-    resetAllocator();
+    wasmConfig.wasmCallCount++;
+    resetScratchAllocator();
 
-    const ptr = copyIn(resultData);
+    const ptr = scratchCopyIn(resultData);
     sliceKernel(ptr, axisSize, outerSize);
 
     const mem = getSharedMemory();
@@ -146,13 +140,12 @@ export function wasmSortSlices(
 
   const isComplex = dtype === 'complex128' || dtype === 'complex64';
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  // For complex, each logical element is 2 floats, so byte offset = logicalOffset * 2 * bpe
   const bytesPerElem = isComplex ? bpe * 2 : bpe;
 
-  ensureMemory(totalBytes);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const ptr = copyIn(resultData);
+  const ptr = scratchCopyIn(resultData);
 
   for (let i = 0; i < outerSize; i++) {
     kernel(ptr + sliceOffsets[i]! * bytesPerElem, axisSize);
@@ -182,31 +175,62 @@ export function wasmSort(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-
-  ensureMemory(aBytes);
-  resetAllocator();
-
   const isF16 = dtype === 'float16';
-  const aOff = a.offset;
   const isComplex = dtype === 'complex128' || dtype === 'complex64';
   const bufLen = isComplex ? size * 2 : size;
+  const outBytes = bufLen * bpe;
+
+  // Sort is in-place: we allocate output, copy input into it, sort in-place
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  const aOff = a.offset;
   let aData = a.data.subarray(aOff, aOff + bufLen) as TypedArray;
-  if (isF16) aData = f16ToF32Input(aData, dtype);
 
-  const aPtr = copyIn(aData);
+  if (isF16) {
+    aData = f16ToF32Input(aData, dtype);
+    // Copy f32 data into scratch, sort there, copy out
+    const scratchPtr = scratchCopyIn(aData);
+    kernel(scratchPtr, size);
+    // Copy sorted data from scratch to persistent output
+    const mem = getSharedMemory();
+    new Uint8Array(mem.buffer, outRegion.ptr, outBytes).set(
+      new Uint8Array(mem.buffer, scratchPtr, outBytes)
+    );
+    // Read back as f32, convert to f16
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, bufLen);
+    const f32Copy = new Float32Array(bufLen);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+      Array.from(a.shape),
+      dtype
+    );
+  }
 
-  kernel(aPtr, size);
+  // Copy input data into the output region, then sort in-place
+  const mem = getSharedMemory();
+  if (a.isWasmBacked) {
+    new Uint8Array(mem.buffer, outRegion.ptr, outBytes).set(
+      new Uint8Array(mem.buffer, a.wasmPtr + aOff * bpe, outBytes)
+    );
+  } else {
+    new Uint8Array(mem.buffer, outRegion.ptr, outBytes).set(
+      new Uint8Array(aData.buffer, aData.byteOffset, aData.byteLength)
+    );
+  }
 
-  const outData = copyOut(
-    aPtr,
+  kernel(outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     bufLen,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
-
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
-    Array.from(a.shape),
-    dtype
   );
 }

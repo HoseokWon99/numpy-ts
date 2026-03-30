@@ -279,9 +279,14 @@ export function fft(
     norm === 'backward' &&
     a.ndim === 1
   ) {
-    const complexA = isComplexDType(a.dtype) ? a : toComplex(a);
-    const result = wasmFft(complexA);
-    if (result) return result;
+    const isAlreadyComplex = isComplexDType(a.dtype);
+    const complexA = isAlreadyComplex ? a : toComplex(a);
+    try {
+      const result = wasmFft(complexA);
+      if (result) return result;
+    } finally {
+      if (!isAlreadyComplex) complexA.dispose();
+    }
   }
   // Always pass explicit axis for 1D FFT
   return fftnd(a, n !== undefined ? [n] : undefined, [axis], norm, false);
@@ -309,9 +314,14 @@ export function ifft(
     norm === 'backward' &&
     a.ndim === 1
   ) {
-    const complexA = isComplexDType(a.dtype) ? a : toComplex(a);
-    const result = wasmIfft(complexA);
-    if (result) return result;
+    const isAlreadyComplex = isComplexDType(a.dtype);
+    const complexA = isAlreadyComplex ? a : toComplex(a);
+    try {
+      const result = wasmIfft(complexA);
+      if (result) return result;
+    } finally {
+      if (!isAlreadyComplex) complexA.dispose();
+    }
   }
   // Always pass explicit axis for 1D IFFT
   return fftnd(a, n !== undefined ? [n] : undefined, [axis], norm, true);
@@ -451,7 +461,9 @@ function fftnd(
 
   // Pad or truncate if needed
   if (s !== undefined) {
+    const prev = result;
     result = padOrTruncate(result, outShape, axesList);
+    if (result !== prev) prev.dispose();
   }
 
   // WASM fast path for 2D FFT: single call handles both axes (row FFT + transpose + col FFT)
@@ -468,6 +480,7 @@ function fftnd(
       const srcData = result.data as Float64Array;
       const outData = wasmFft2(srcData, rows, cols, inverse);
       if (outData) {
+        result.dispose();
         return ArrayStorage.fromData(outData, [rows, cols], 'complex128');
       }
     }
@@ -475,7 +488,9 @@ function fftnd(
 
   // Apply FFT along each axis
   for (const axis of axesList) {
+    const prev = result;
     result = fft1dAlongAxis(result, axis, inverse, norm);
+    prev.dispose();
   }
 
   return result;
@@ -914,7 +929,9 @@ export function rfft(
 
   // Fallback: full FFT + truncation
   const fullResult = fft(a, inputLen, axis, norm);
-  return truncateAxis(fullResult, ax, outLen);
+  const truncated = truncateAxis(fullResult, ax, outLen);
+  fullResult.dispose();
+  return truncated;
 }
 
 /**
@@ -968,7 +985,8 @@ export function irfft(
 
   const full = ArrayStorage.zeros(fullShape, 'complex128');
   const fullData = full.data as Float64Array;
-  const srcData = toComplex(a).data as Float64Array;
+  const complexA = toComplex(a);
+  const srcData = complexA.data as Float64Array;
 
   const outerSize = shape.slice(0, ax).reduce((acc, s) => acc * s, 1);
   const innerSize = shape.slice(ax + 1).reduce((acc, s) => acc * s, 1);
@@ -995,11 +1013,16 @@ export function irfft(
     }
   }
 
+  complexA.dispose();
+
   // Inverse FFT
   const result = ifft(full, outLen, axis, norm);
+  full.dispose();
 
   // Extract real part
-  return extractReal(result);
+  const realResult = extractReal(result);
+  result.dispose();
+  return realResult;
 }
 
 /**
@@ -1140,7 +1163,9 @@ export function rfftn(
   for (let i = 0; i < axesList.length - 1; i++) {
     const ax = axesList[i]!;
     const n = s ? s[i] : undefined;
+    const prev = result;
     result = fft(result, n, ax, norm);
+    prev.dispose();
   }
 
   return result;
@@ -1167,7 +1192,10 @@ export function irfftn(
   }
 
   if (axesList.length === 0) {
-    return extractReal(toComplex(a));
+    const cplx = toComplex(a);
+    const realResult = extractReal(cplx);
+    cplx.dispose();
+    return realResult;
   }
 
   // Determine output lengths
@@ -1201,6 +1229,7 @@ export function irfftn(
     const d2Out = outLens[2]!;
     const cplx = toComplex(a);
     const outData = wasmIrfftn3d(cplx.data as Float64Array, d0, d1, d2Half, d2Out);
+    cplx.dispose();
     if (outData) return ArrayStorage.fromData(outData, [d0, d1, d2Out], 'float64');
   }
 
@@ -1210,10 +1239,14 @@ export function irfftn(
   // Apply ifft along remaining axes (in reverse order for consistency with NumPy)
   for (let i = axesList.length - 2; i >= 0; i--) {
     const ax = axesList[i]!;
+    const prev = result;
     result = ifft(result, outLens[i], ax, norm);
+    prev.dispose();
   }
 
-  return extractReal(result);
+  const realResult = extractReal(result);
+  result.dispose();
+  return realResult;
 }
 
 /**
@@ -1240,8 +1273,11 @@ export function hfft(
   const outLen = n ?? (inputLen - 1) * 2;
 
   // hfft = irfft(conj(a))
-  const conjA = conjugate(toComplex(a));
+  const complexA = toComplex(a);
+  const conjA = conjugate(complexA);
+  complexA.dispose();
   const result = irfft(conjA, outLen, axis, norm);
+  conjA.dispose();
 
   // Scale by n for correct normalization
   const resultData = result.data as Float64Array;
@@ -1279,6 +1315,7 @@ export function ihfft(
 
   // Conjugate and scale
   const result = conjugate(rfftResult);
+  rfftResult.dispose();
   const resultData = result.data as Float64Array;
   for (let i = 0; i < result.size * 2; i++) {
     resultData[i] = resultData[i]! / inputLen;

@@ -18,10 +18,9 @@ import {
   lexsort_u8,
 } from './bins/lexsort.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  scratchAlloc,
   getSharedMemory,
   f16ToF32Input,
 } from './runtime';
@@ -88,17 +87,18 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
   const numKeys = keys.length;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const keysBytes = numKeys * n * bpe;
-  const outBytes = n * 4; // u32 indices
+  const outBytes = n * 4; // i32 indices
 
-  ensureMemory(keysBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  // Copy all keys into a single flat buffer: keys[0] || keys[1] || ...
-  const flatBuf = alloc(keysBytes);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  // Allocate scratch for all keys concatenated
+  const flatBuf = scratchAlloc(keysBytes);
   const mem = getSharedMemory();
 
-  // Actually, we need to use copyIn but for a flat concatenated buffer.
-  // Let's manually copy each key in sequence.
   for (let k = 0; k < numKeys; k++) {
     const key = keys[k]!;
     const kOff = key.offset;
@@ -110,19 +110,17 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
     );
   }
 
-  const outPtr = alloc(outBytes);
+  kernel(flatBuf, numKeys, n, outRegion.ptr);
 
-  kernel(flatBuf, numKeys, n, outPtr);
-
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    [n],
+    'int32',
+    outRegion,
     n,
     Int32Array as unknown as new (
       buffer: ArrayBuffer,
       byteOffset: number,
       length: number
-    ) => Int32Array
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, [n], 'int32');
 }

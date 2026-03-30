@@ -7,8 +7,9 @@
  */
 
 import { qr_f64 } from './bins/qr.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, scratchCopyIn, scratchAlloc } from './runtime';
 import { ArrayStorage } from '../storage';
+import type { TypedArray } from '../dtype';
 
 import { wasmConfig } from './config';
 
@@ -31,19 +32,23 @@ export function wasmQr(a: ArrayStorage): { q: ArrayStorage; r: ArrayStorage } | 
 
   const k = Math.min(m, n);
 
-  // Memory layout: a_copy[m*n] + q[m*k] + r[k*n] + tau[k] + scratch[k]
-  const aSize = m * n;
   const qSize = m * k;
   const rSize = k * n;
-  const tauSize = k;
-  const scratchSize = k;
-  const totalF64 = aSize + qSize + rSize + tauSize + scratchSize;
-  const totalBytes = totalF64 * 8; // f64 = 8 bytes
 
-  ensureMemory(totalBytes);
-  resetAllocator();
+  // Allocate persistent output for Q and R
+  const qRegion = wasmMalloc(qSize * 8);
+  if (!qRegion) return null;
+  const rRegion = wasmMalloc(rSize * 8);
+  if (!rRegion) {
+    qRegion.release();
+    return null;
+  }
 
-  // Copy input matrix to WASM memory (converting to float64)
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  // Copy input matrix to WASM scratch (converting to float64)
+  const aSize = m * n;
   const aData = new Float64Array(aSize);
   for (let i = 0; i < m; i++) {
     for (let j = 0; j < n; j++) {
@@ -51,19 +56,34 @@ export function wasmQr(a: ArrayStorage): { q: ArrayStorage; r: ArrayStorage } | 
     }
   }
 
-  const aPtr = copyIn(aData);
-  const qPtr = alloc(qSize * 8);
-  const rPtr = alloc(rSize * 8);
-  const tauPtr = alloc(tauSize * 8);
-  const scratchPtr = alloc(scratchSize * 8);
+  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
+  const tauPtr = scratchAlloc(k * 8);
+  const scratchPtr = scratchAlloc(k * 8);
 
-  qr_f64(aPtr, qPtr, rPtr, tauPtr, scratchPtr, m, n);
+  qr_f64(aPtr, qRegion.ptr, rRegion.ptr, tauPtr, scratchPtr, m, n);
 
-  const qData = copyOut(qPtr, qSize, Float64Array);
-  const rData = copyOut(rPtr, rSize, Float64Array);
-
-  const qStorage = ArrayStorage.fromData(qData, [m, k], 'float64');
-  const rStorage = ArrayStorage.fromData(rData, [k, n], 'float64');
+  const qStorage = ArrayStorage.fromWasmRegion(
+    [m, k],
+    'float64',
+    qRegion,
+    qSize,
+    Float64Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
+  );
+  const rStorage = ArrayStorage.fromWasmRegion(
+    [k, n],
+    'float64',
+    rRegion,
+    rSize,
+    Float64Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
+  );
 
   return { q: qStorage, r: rStorage };
 }

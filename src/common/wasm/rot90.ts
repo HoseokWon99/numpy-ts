@@ -6,7 +6,7 @@
  */
 
 import { rot90_f64, rot90_f32, rot90_i64, rot90_i32, rot90_i16, rot90_i8 } from './bins/rot90.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -63,26 +63,23 @@ export function wasmRot90(a: ArrayStorage): ArrayStorage | null {
   const cols = a.shape[1]!;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
-
-  kernel(aPtr, outPtr, rows, cols);
-
-  const outData = copyOut(
-    outPtr,
-    size,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  kernel(aPtr, outRegion.ptr, rows, cols);
 
   // rot90 k=1: output shape is [cols, rows]
-  return ArrayStorage.fromData(outData, [cols, rows], dtype);
+  return ArrayStorage.fromWasmRegion(
+    [cols, rows],
+    dtype,
+    outRegion,
+    size,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+  );
 }
