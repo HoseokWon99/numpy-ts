@@ -11,7 +11,6 @@ import {
   isComplexDType,
   isBigIntDType,
   hasFloat16,
-  getTypedArrayConstructor,
   type TypedArray,
 } from '../dtype';
 import { Complex } from '../complex';
@@ -978,8 +977,8 @@ function extract2DSlice(
   const isComplex = isComplexDType(a.dtype);
   const isBigInt = isBigIntDType(a.dtype);
   const factor = isComplex ? 2 : 1;
-  const Ctor = getTypedArrayConstructor(a.dtype)!;
-  const sliceData = new Ctor(sliceSize * factor);
+  const result = ArrayStorage.empty([rows, cols], a.dtype);
+  const sliceData = result.data;
 
   // Compute offset into the flat contiguous data for this batch
   if (a.isCContiguous) {
@@ -1024,7 +1023,7 @@ function extract2DSlice(
     }
   }
 
-  return ArrayStorage.fromData(sliceData, [rows, cols], a.dtype);
+  return result;
 }
 
 /**
@@ -1134,9 +1133,9 @@ export function matmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const isComplex = isComplexDType(resultDtype);
   const isBigInt = isBigIntDType(resultDtype);
   const factor = isComplex ? 2 : 1;
-  const Ctor = getTypedArrayConstructor(resultDtype)!;
-  const totalElements = batchSize * elementsPerSlice * factor;
-  const resultData = new Ctor(totalElements);
+  const outShape = [...batchShape, M, N];
+  const result = ArrayStorage.empty(outShape, resultDtype);
+  const resultData = result.data;
 
   for (let bi = 0; bi < batchSize; bi++) {
     const slice = slices[bi]!;
@@ -1152,9 +1151,6 @@ export function matmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
       for (let i = 0; i < elementsPerSlice * factor; i++) dst[dstOff + i] = src[i]!;
     }
   }
-
-  const outShape = [...batchShape, M, N];
-  const result = ArrayStorage.fromData(resultData, outShape, resultDtype);
 
   if (aWas1D && bWas1D) return shapeOps.reshape(result, [...batchShape]);
   if (aWas1D) return shapeOps.reshape(result, [...batchShape, N]);
@@ -2859,7 +2855,8 @@ export function matrix_norm(
     const m2 = x.shape[x.ndim - 2]!;
     const n2 = x.shape[x.ndim - 1]!;
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize);
+    const result = ArrayStorage.empty(batchShape, 'float64');
+    const resultData = result.data as Float64Array;
     const xData = toContiguousFloat64(x);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * m2 * n2;
@@ -2868,10 +2865,9 @@ export function matrix_norm(
     }
     if (keepdims) {
       const onesShape = [...batchShape, 1, 1] as number[];
-      const out = ArrayStorage.fromData(resultData, batchShape, 'float64');
-      return shapeOps.reshape(out, onesShape);
+      return shapeOps.reshape(result, onesShape);
     }
-    return ArrayStorage.fromData(resultData, batchShape, 'float64');
+    return result;
   }
 
   const [m, n] = x.shape;
@@ -3265,7 +3261,8 @@ export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage 
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`cholesky: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize * n * n);
+    const result = ArrayStorage.empty([...batchShape, n, n], 'float64');
+    const resultData = result.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -3275,7 +3272,7 @@ export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage 
       slice.dispose();
       r.dispose();
     }
-    return ArrayStorage.fromData(resultData, [...batchShape, n, n], 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -3683,7 +3680,8 @@ export function det(a: ArrayStorage): number | ArrayStorage {
       throw new Error(`det: last 2 dimensions must be square, got ${m2}x${n}`);
     }
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize);
+    const result = ArrayStorage.empty(batchShape, 'float64');
+    const resultData = result.data as Float64Array;
     const aData = toContiguousFloat64(a);
 
     for (let bi = 0; bi < batchSize; bi++) {
@@ -3695,7 +3693,7 @@ export function det(a: ArrayStorage): number | ArrayStorage {
         slice.dispose();
       }
     }
-    return ArrayStorage.fromData(resultData, batchShape, 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -3824,7 +3822,8 @@ export function inv(a: ArrayStorage): ArrayStorage {
     }
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
     const aData = toContiguousFloat64(a);
-    const resultData = new Float64Array(batchSize * n * n);
+    const result = ArrayStorage.empty(Array.from(a.shape), 'float64');
+    const resultData = result.data as Float64Array;
 
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -3837,7 +3836,7 @@ export function inv(a: ArrayStorage): ArrayStorage {
       slice.dispose();
       invSlice.dispose();
     }
-    return ArrayStorage.fromData(resultData, Array.from(a.shape), 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -4046,7 +4045,8 @@ export function lstsq(
 
     // Compute x = V @ S^+ @ U^T @ b using WASM matmul
     // Build (V @ S^+) as n×k matrix, U^T as k×m, then matmul chains
-    const vsInvData = new Float64Array(n! * k);
+    const vsInv = ArrayStorage.zeros([n!, k], 'float64');
+    const vsInvData = vsInv.data as Float64Array;
     for (let l = 0; l < k; l++) {
       const sigma = sData[l]!;
       if (sigma > cutoff) {
@@ -4058,7 +4058,8 @@ export function lstsq(
     }
 
     // U^T truncated: k × m
-    const utData = new Float64Array(k * m!);
+    const ut = ArrayStorage.empty([k, m!], 'float64');
+    const utData = ut.data as Float64Array;
     for (let l = 0; l < k; l++) {
       for (let j = 0; j < m!; j++) {
         utData[l * m! + j] = uData[j * m! + l]!;
@@ -4066,8 +4067,6 @@ export function lstsq(
     }
 
     // x = (V @ S^+) @ (U^T @ b) via two WASM matmuls
-    const vsInv = ArrayStorage.fromData(vsInvData, [n!, k], 'float64');
-    const ut = ArrayStorage.fromData(utData, [k, m!], 'float64');
     const utb = wasmMatmul(ut, b2D) ?? matmul2D(ut, b2D); // k × nrhs
     let x: ArrayStorage = wasmMatmul(vsInv, utb) ?? matmul2D(vsInv, utb); // n × nrhs
     vsInv.dispose();
@@ -4077,7 +4076,8 @@ export function lstsq(
     // Compute residuals if m > n (overdetermined) and full rank
     let residuals: ArrayStorage;
     if (m! > n! && rank === n!) {
-      const resArr = new Float64Array(nrhs);
+      residuals = ArrayStorage.empty([nrhs], 'float64');
+      const resArr = residuals.data as Float64Array;
       const xForMul = b.ndim === 1 ? shapeOps.reshape(x, [n!, 1]) : x;
       const ax = wasmMatmul(a, xForMul) ?? matmul2D(a, xForMul);
       if (xForMul !== x) xForMul.dispose();
@@ -4090,7 +4090,6 @@ export function lstsq(
         }
         resArr[j] = resSum;
       }
-      residuals = ArrayStorage.fromData(resArr, [nrhs], 'float64');
       ax.dispose();
     } else {
       residuals = ArrayStorage.zeros([0], 'float64');
@@ -4307,7 +4306,8 @@ export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
     const m2 = a.shape[a.ndim - 2]!;
     const n2 = a.shape[a.ndim - 1]!;
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize * n2 * m2);
+    const result = ArrayStorage.empty([...batchShape, n2, m2], 'float64');
+    const resultData = result.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * m2 * n2;
@@ -4320,7 +4320,7 @@ export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
         r.dispose();
       }
     }
-    return ArrayStorage.fromData(resultData, [...batchShape, n2, m2], 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -4336,7 +4336,8 @@ export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
     // Compute pinv = V^T^T @ S^+ @ U^T = (V^T transposed with S^+ scaling) @ U^T
     // Step 1: Build S^+ @ V^T → each row l of vt scaled by 1/s[l] (or 0)
     // Result is k × n, but we want V @ S^+ which is n × k (= vt^T with scaling)
-    const vsInvData = new Float64Array(n! * k);
+    const vsInv = ArrayStorage.zeros([n!, k], 'float64');
+    const vsInvData = vsInv.data as Float64Array;
     for (let l = 0; l < k; l++) {
       const sigma = sData[l]!;
       if (sigma > cutoff) {
@@ -4348,17 +4349,16 @@ export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
       }
       // else: column stays 0 (already zero-initialized)
     }
-    const vsInv = ArrayStorage.fromData(vsInvData, [n!, k], 'float64');
 
     // Step 2: Build U^T (k × m) — take first k rows of u^T (= first k columns of u, transposed)
-    const utData = new Float64Array(k * m!);
+    const ut = ArrayStorage.empty([k, m!], 'float64');
+    const utData = ut.data as Float64Array;
     const uData = u.data as Float64Array;
     for (let l = 0; l < k; l++) {
       for (let j = 0; j < m!; j++) {
         utData[l * m! + j] = uData[j * m! + l]!;
       }
     }
-    const ut = ArrayStorage.fromData(utData, [k, m!], 'float64');
 
     // Step 3: pinv = vsInv @ ut via WASM matmul (n × k) @ (k × m) → (n × m)
     const result = wasmMatmul(vsInv, ut) ?? matmul2D(vsInv, ut);
@@ -4397,8 +4397,10 @@ export function eig(a: ArrayStorage): { w: ArrayStorage; v: ArrayStorage } {
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`eig: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const wData = new Float64Array(batchSize * n);
-    const vData = new Float64Array(batchSize * n * n);
+    const wResult = ArrayStorage.empty([...batchShape, n], 'float64');
+    const vResult = ArrayStorage.empty([...batchShape, n, n], 'float64');
+    const wData = wResult.data as Float64Array;
+    const vData = vResult.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -4408,8 +4410,8 @@ export function eig(a: ArrayStorage): { w: ArrayStorage; v: ArrayStorage } {
       vData.set(toContiguousFloat64(v), off);
     }
     return {
-      w: ArrayStorage.fromData(wData, [...batchShape, n], 'float64'),
-      v: ArrayStorage.fromData(vData, [...batchShape, n, n], 'float64'),
+      w: wResult,
+      v: vResult,
     };
   }
 
@@ -4584,8 +4586,10 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`eigh: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const wData = new Float64Array(batchSize * n);
-    const vData = new Float64Array(batchSize * n * n);
+    const wResult = ArrayStorage.empty([...batchShape, n], 'float64');
+    const vResult = ArrayStorage.empty([...batchShape, n, n], 'float64');
+    const wData = wResult.data as Float64Array;
+    const vData = vResult.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -4598,8 +4602,8 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
       v.dispose();
     }
     return {
-      w: ArrayStorage.fromData(wData, [...batchShape, n], 'float64'),
-      v: ArrayStorage.fromData(vData, [...batchShape, n, n], 'float64'),
+      w: wResult,
+      v: vResult,
     };
   }
 
@@ -5270,8 +5274,10 @@ export function slogdet(a: ArrayStorage): {
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`slogdet: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const signData = new Float64Array(batchSize);
-    const logData = new Float64Array(batchSize);
+    const signResult = ArrayStorage.empty(batchShape, 'float64');
+    const logResult = ArrayStorage.empty(batchShape, 'float64');
+    const signData = signResult.data as Float64Array;
+    const logData = logResult.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -5285,8 +5291,8 @@ export function slogdet(a: ArrayStorage): {
       }
     }
     return {
-      sign: ArrayStorage.fromData(signData, batchShape, 'float64'),
-      logabsdet: ArrayStorage.fromData(logData, batchShape, 'float64'),
+      sign: signResult,
+      logabsdet: logResult,
     };
   }
 

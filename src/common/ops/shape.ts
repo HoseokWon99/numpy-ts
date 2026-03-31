@@ -176,11 +176,29 @@ export function reshape(storage: ArrayStorage, newShape: number[]): ArrayStorage
     );
   }
 
-  // Slow path: array is not contiguous, must copy data first
-  // Create contiguous copy, then reshape
-  const contiguousCopy = storage.copy(); // copy() creates C-contiguous array
-  const data = contiguousCopy.data;
-  return ArrayStorage.fromData(data, finalShape, dtype, computeStrides(finalShape), 0);
+  // Slow path: array is not contiguous, must copy data into new shape
+  const isComplex = isComplexDType(dtype);
+  const result = ArrayStorage.empty(finalShape, dtype);
+  const resultData = result.data;
+  const isBigInt = isBigIntDType(dtype);
+  if (isComplex) {
+    for (let i = 0; i < size; i++) {
+      const value = storage.iget(i) as Complex;
+      (resultData as Float64Array | Float32Array)[i * 2] = value.re;
+      (resultData as Float64Array | Float32Array)[i * 2 + 1] = value.im;
+    }
+  } else if (isBigInt) {
+    for (let i = 0; i < size; i++) {
+      (resultData as BigInt64Array | BigUint64Array)[i] = storage.iget(i) as bigint;
+    }
+  } else {
+    for (let i = 0; i < size; i++) {
+      (resultData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = storage.iget(
+        i
+      ) as number;
+    }
+  }
+  return result;
 }
 
 /**
@@ -204,13 +222,17 @@ export function flatten(storage: ArrayStorage): ArrayStorage {
   if (storage.isCContiguous) {
     const data = storage.data;
     const physicalOffset = isComplex ? storage.offset * 2 : storage.offset;
-    const newData = data.slice(physicalOffset, physicalOffset + physicalSize);
-    return ArrayStorage.fromData(newData as TypedArray, [size], dtype, [1], 0);
+    const result = ArrayStorage.empty([size], dtype);
+    (result.data as unknown as { set(src: ArrayLike<number>, offset?: number): void }).set(
+      data.subarray(physicalOffset, physicalOffset + physicalSize) as unknown as ArrayLike<number>
+    );
+    return result;
   }
 
   // Slow path: non-contiguous array, copy using iget (flat index)
   // This is much faster than recursive get(...indices) calls
-  const newData = new Constructor(physicalSize);
+  const result = ArrayStorage.empty([size], dtype);
+  const newData = result.data;
   const isBigInt = isBigIntDType(dtype);
 
   if (isComplex) {
@@ -230,7 +252,7 @@ export function flatten(storage: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(newData, [size], dtype, [1], 0);
+  return result;
 }
 
 /**
@@ -580,13 +602,9 @@ export function concatenate(storages: ArrayStorage[], axis: number = 0): ArraySt
   }
   outputShape[normalizedAxis] = totalAlongAxis;
 
-  // Create output array
-  const outputSize = outputShape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot concatenate arrays with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
+  // Create output array directly in WASM memory
+  const result = ArrayStorage.empty(outputShape, dtype);
+  const outputData = result.data;
   const outputStrides = computeStrides(outputShape);
 
   // Copy data from each input array
@@ -597,7 +615,7 @@ export function concatenate(storages: ArrayStorage[], axis: number = 0): ArraySt
     offset += axisSize;
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return result;
 }
 
 /**
@@ -740,7 +758,9 @@ export function stack(storages: ArrayStorage[], axis: number = 0): ArrayStorage 
 
   // Expand dims on each array, then concatenate
   const expanded = storages.map((s) => expandDims(s, normalizedAxis));
-  return concatenate(expanded, normalizedAxis);
+  const result = concatenate(expanded, normalizedAxis);
+  for (const e of expanded) e.dispose();
+  return result;
 }
 
 /**
@@ -1003,11 +1023,8 @@ export function tile(storage: ArrayStorage, reps: number | number[]): ArrayStora
   const outputShape = paddedShape.map((s, i) => s * paddedReps[i]!);
   const outputSize = outputShape.reduce((a, b) => a * b, 1);
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot tile array with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
+  const result = ArrayStorage.empty(outputShape, dtype);
+  const outputData = result.data;
   const outputStrides = computeStrides(outputShape);
 
   // If we need to expand dimensions of input, reshape it
@@ -1047,7 +1064,7 @@ export function tile(storage: ArrayStorage, reps: number | number[]): ArrayStora
     }
 
     (outputData as Float16Array).set(f32Out);
-    return ArrayStorage.fromData(outputData, outputShape, dtype);
+    return result;
   }
 
   // Fill output by iterating through all output positions
@@ -1087,7 +1104,7 @@ export function tile(storage: ArrayStorage, reps: number | number[]): ArrayStora
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return result;
 }
 
 /**
@@ -1121,11 +1138,8 @@ export function repeat(
     }
 
     const outputSize = repeatsArr.reduce((a, b) => a + b, 0);
-    const Constructor = getTypedArrayConstructor(dtype);
-    if (!Constructor) {
-      throw new Error(`Cannot repeat array with dtype ${dtype}`);
-    }
-    const outputData = new Constructor(outputSize);
+    const flatResult = ArrayStorage.empty([outputSize], dtype);
+    const outputData = flatResult.data;
 
     // Float16Array optimization: bulk-convert for faster per-element access
     if (dtype === 'float16' && hasFloat16 && storage.isCContiguous) {
@@ -1142,7 +1156,7 @@ export function repeat(
         }
       }
       (outputData as Float16Array).set(f32Out);
-      return ArrayStorage.fromData(outputData, [outputSize], dtype);
+      return flatResult;
     }
 
     let outIdx = 0;
@@ -1159,7 +1173,7 @@ export function repeat(
       }
     }
 
-    return ArrayStorage.fromData(outputData, [outputSize], dtype);
+    return flatResult;
   }
 
   // Repeat along specified axis
@@ -1181,12 +1195,9 @@ export function repeat(
   const outputShape = Array.from(shape);
   outputShape[normalizedAxis] = repeatsArr.reduce((a, b) => a + b, 0);
 
+  const axisResult = ArrayStorage.empty(outputShape, dtype);
+  const outputData = axisResult.data;
   const outputSize = outputShape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot repeat array with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
   const outputStrides = computeStrides(outputShape);
 
   // Iterate through source and write repeated values
@@ -1232,7 +1243,7 @@ export function repeat(
     }
 
     (outputData as Float16Array).set(f32Out);
-    return ArrayStorage.fromData(outputData, outputShape, dtype);
+    return axisResult;
   }
 
   for (let i = 0; i < size; i++) {
@@ -1273,7 +1284,7 @@ export function repeat(
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return axisResult;
 }
 
 /**
@@ -1323,7 +1334,8 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
     if (wasm) return wasm;
   }
 
-  const outputData = new Constructor(size);
+  const flipResult = ArrayStorage.empty([...shape], dtype);
+  const outputData = flipResult.data;
 
   // Fast path for 1D arrays
   if (ndim === 1 && storage.isCContiguous) {
@@ -1336,7 +1348,7 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
         f32Out[i] = f32Src[size - 1 - i]!;
       }
       (outputData as Float16Array).set(f32Out);
-      return ArrayStorage.fromData(outputData, [...shape], dtype);
+      return flipResult;
     }
 
     const sourceData = storage.data;
@@ -1352,7 +1364,7 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
         ] as number;
       }
     }
-    return ArrayStorage.fromData(outputData, [...shape], dtype);
+    return flipResult;
   }
 
   // Fast path for 2D arrays
@@ -1376,7 +1388,7 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
           ] as number;
         }
       }
-      return ArrayStorage.fromData(outputData, [...shape], dtype);
+      return flipResult;
     }
 
     if (axesToFlip.size === 1) {
@@ -1397,7 +1409,7 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
             }
           }
         }
-        return ArrayStorage.fromData(outputData, [...shape], dtype);
+        return flipResult;
       } else if (axesToFlip.has(1)) {
         // Flip columns: reverse each row
         for (let r = 0; r < rows; r++) {
@@ -1415,7 +1427,7 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
             }
           }
         }
-        return ArrayStorage.fromData(outputData, [...shape], dtype);
+        return flipResult;
       }
     }
   }
@@ -1454,7 +1466,7 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
     }
   }
 
-  return ArrayStorage.fromData(outputData, [...shape], dtype);
+  return flipResult;
 }
 
 /**
@@ -1515,8 +1527,8 @@ export function rot90(
     [outputShape[axis0], outputShape[axis1]] = [outputShape[axis1]!, outputShape[axis0]!];
   }
 
-  const outputSize = outputShape.reduce((a, b) => a * b, 1);
-  const outputData = new Constructor(outputSize);
+  const rot90Result = ArrayStorage.empty(outputShape, dtype);
+  const outputData = rot90Result.data;
   const isBigInt = isBigIntDType(dtype);
   const srcData = storage.data;
 
@@ -1601,7 +1613,7 @@ export function rot90(
       }
     }
 
-    return ArrayStorage.fromData(outputData, outputShape, dtype);
+    return rot90Result;
   }
 
   // General N-D case (fallback)
@@ -1668,7 +1680,7 @@ export function rot90(
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return rot90Result;
 }
 
 /**
@@ -1696,11 +1708,8 @@ export function roll(
 
     const flatStorage = flatten(storage);
 
-    const Constructor = getTypedArrayConstructor(dtype);
-    if (!Constructor) {
-      throw new Error(`Cannot roll array with dtype ${dtype}`);
-    }
-    const outputData = new Constructor(size);
+    const rollResult = ArrayStorage.empty([...shape], dtype);
+    const outputData = rollResult.data;
     const isBigInt = isBigIntDType(dtype);
 
     // Float16Array optimization: bulk-convert for faster per-element access
@@ -1714,7 +1723,7 @@ export function roll(
         f32Out[i] = f32Src[sourceIdx]!;
       }
       (outputData as Float16Array).set(f32Out);
-      return ArrayStorage.fromData(outputData, [...shape], dtype);
+      return rollResult;
     }
 
     for (let i = 0; i < size; i++) {
@@ -1728,7 +1737,7 @@ export function roll(
     }
 
     // Reshape back to original shape
-    return ArrayStorage.fromData(outputData, [...shape], dtype);
+    return rollResult;
   }
 
   // Handle axis specified case
@@ -1749,11 +1758,8 @@ export function roll(
   });
 
   // Create output array
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot roll array with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(size);
+  const axisRollResult = ArrayStorage.empty([...shape], dtype);
+  const outputData = axisRollResult.data;
   const isBigInt = isBigIntDType(dtype);
 
   // Iterate through all output positions
@@ -1790,7 +1796,7 @@ export function roll(
     }
 
     (outputData as Float16Array).set(f32Out);
-    return ArrayStorage.fromData(outputData, [...shape], dtype);
+    return axisRollResult;
   }
 
   for (let i = 0; i < size; i++) {
@@ -1827,7 +1833,7 @@ export function roll(
     }
   }
 
-  return ArrayStorage.fromData(outputData, [...shape], dtype);
+  return axisRollResult;
 }
 
 /**
@@ -1914,7 +1920,8 @@ export function resize(storage: ArrayStorage, newShape: number[]): ArrayStorage 
   if (!Constructor) {
     throw new Error(`Cannot resize array with dtype ${dtype}`);
   }
-  const outputData = new Constructor(newSize);
+  const resizeResult = ArrayStorage.empty(newShape, dtype);
+  const outputData = resizeResult.data;
   const isBigInt = isBigIntDType(dtype);
 
   // Fill output by cycling through source data
@@ -1928,7 +1935,7 @@ export function resize(storage: ArrayStorage, newShape: number[]): ArrayStorage 
     }
   }
 
-  return ArrayStorage.fromData(outputData, newShape, dtype);
+  return resizeResult;
 }
 
 /**

@@ -35,7 +35,7 @@ export function sin(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -83,7 +83,7 @@ export function cos(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -134,7 +134,7 @@ export function tan(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -187,7 +187,7 @@ export function arcsin(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -283,7 +283,7 @@ export function arccos(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -379,7 +379,7 @@ export function arctan(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -477,7 +477,7 @@ function arctan2Array(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
   // Only preserve float32 if both inputs are float32
   const resultDtype = dtype1 === 'float32' && dtype2 === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const x1Contiguous = x1.isCContiguous;
   const x2Contiguous = x2.isCContiguous;
@@ -527,7 +527,7 @@ function arctan2Scalar(storage: ArrayStorage, x2: number): ArrayStorage {
   // Always promote to float64 for trig operations
   const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const contiguous = storage.isCContiguous;
 
@@ -589,7 +589,7 @@ function hypotArray(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
   // Only preserve float32 if both inputs are float32
   const resultDtype = dtype1 === 'float32' && dtype2 === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const x1Contiguous = x1.isCContiguous;
   const x2Contiguous = x2.isCContiguous;
@@ -642,7 +642,7 @@ function hypotScalar(storage: ArrayStorage, x2: number): ArrayStorage {
   // Always promote to float64 for trig operations
   const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const contiguous = storage.isCContiguous;
 

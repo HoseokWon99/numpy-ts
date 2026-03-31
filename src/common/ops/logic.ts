@@ -101,7 +101,8 @@ export function logical_and(a: ArrayStorage, b: ArrayStorage | number): ArraySto
  * @private
  */
 function logicalAndArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const aData = a.data;
   const bData = b.data;
   const aOff = a.offset;
@@ -139,7 +140,7 @@ function logicalAndArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -147,7 +148,8 @@ function logicalAndArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
  * @private
  */
 function logicalAndScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
-  const data = new Uint8Array(storage.size);
+  const result = ArrayStorage.empty(Array.from(storage.shape), 'bool');
+  const data = result.data as Uint8Array;
   const scalarBool = scalar !== 0;
   const size = storage.size;
 
@@ -192,7 +194,7 @@ function logicalAndScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(storage.shape), 'bool');
+  return result;
 }
 
 /**
@@ -236,7 +238,8 @@ export function logical_or(a: ArrayStorage, b: ArrayStorage | number): ArrayStor
  * @private
  */
 function logicalOrArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const aData = a.data;
   const bData = b.data;
   const aOff = a.offset;
@@ -274,7 +277,7 @@ function logicalOrArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -282,7 +285,8 @@ function logicalOrArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
  * @private
  */
 function logicalOrScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
-  const data = new Uint8Array(storage.size);
+  const result = ArrayStorage.empty(Array.from(storage.shape), 'bool');
+  const data = result.data as Uint8Array;
   const scalarBool = scalar !== 0;
   const size = storage.size;
 
@@ -327,7 +331,7 @@ function logicalOrScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(storage.shape), 'bool');
+  return result;
 }
 
 /**
@@ -343,7 +347,8 @@ export function logical_not(a: ArrayStorage): ArrayStorage {
   const wasm = wasmLogicalNot(a);
   if (wasm) return wasm;
 
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (a.isCContiguous) {
@@ -388,7 +393,7 @@ export function logical_not(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -432,7 +437,8 @@ export function logical_xor(a: ArrayStorage, b: ArrayStorage | number): ArraySto
  * @private
  */
 function logicalXorArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const aData = a.data;
   const bData = b.data;
   const aOff = a.offset;
@@ -472,7 +478,7 @@ function logicalXorArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -480,7 +486,8 @@ function logicalXorArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
  * @private
  */
 function logicalXorScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
-  const data = new Uint8Array(storage.size);
+  const result = ArrayStorage.empty(Array.from(storage.shape), 'bool');
+  const data = result.data as Uint8Array;
   const scalarBool = scalar !== 0;
   const size = storage.size;
 
@@ -532,7 +539,7 @@ function logicalXorScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(storage.shape), 'bool');
+  return result;
 }
 
 // ============================================================
@@ -548,7 +555,8 @@ function logicalXorScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  * @returns Boolean result storage
  */
 export function isfinite(a: ArrayStorage): ArrayStorage {
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (a.isCContiguous) {
@@ -592,7 +600,7 @@ export function isfinite(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -604,7 +612,8 @@ export function isfinite(a: ArrayStorage): ArrayStorage {
  * @returns Boolean result storage
  */
 export function isinf(a: ArrayStorage): ArrayStorage {
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (a.isCContiguous) {
@@ -653,7 +662,7 @@ export function isinf(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -665,7 +674,8 @@ export function isinf(a: ArrayStorage): ArrayStorage {
  * @returns Boolean result storage
  */
 export function isnan(a: ArrayStorage): ArrayStorage {
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (a.isCContiguous) {
@@ -701,7 +711,7 @@ export function isnan(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -715,9 +725,9 @@ export function isnan(a: ArrayStorage): ArrayStorage {
  */
 export function isnat(a: ArrayStorage): ArrayStorage {
   // Without datetime support, nothing is NaT
-  const data = new Uint8Array(a.size);
-  // All zeros (false) by default
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  // All zeros (false) by default — Uint8Array is zero-initialized
+  return result;
 }
 
 // ============================================================
@@ -849,7 +859,8 @@ function copysignScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
  */
 export function signbit(a: ArrayStorage): ArrayStorage {
   throwIfComplex(a.dtype, 'signbit', 'signbit is only defined for real numbers.');
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (a.isCContiguous) {
@@ -881,7 +892,7 @@ export function signbit(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -1135,7 +1146,8 @@ function broadcastToStorage(storage: ArrayStorage, targetShape: readonly number[
 export function iscomplex(a: ArrayStorage): ArrayStorage {
   const dtype = a.dtype as DType;
   const size = a.size;
-  const data = new Uint8Array(size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
 
   if (isComplexDType(dtype)) {
     if (a.isCContiguous) {
@@ -1154,7 +1166,7 @@ export function iscomplex(a: ArrayStorage): ArrayStorage {
   }
   // For real arrays, all elements are false (initialized to 0)
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -1179,7 +1191,8 @@ export function iscomplexobj(a: ArrayStorage): boolean {
 export function isreal(a: ArrayStorage): ArrayStorage {
   const dtype = a.dtype as DType;
   const size = a.size;
-  const data = new Uint8Array(size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
 
   if (isComplexDType(dtype)) {
     if (a.isCContiguous) {
@@ -1200,7 +1213,7 @@ export function isreal(a: ArrayStorage): ArrayStorage {
     data.fill(1);
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -1227,7 +1240,8 @@ export function isneginf(a: ArrayStorage): ArrayStorage {
     'isneginf',
     'This operation is not supported for complex values because it would be ambiguous.'
   );
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
@@ -1245,7 +1259,7 @@ export function isneginf(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**
@@ -1262,7 +1276,8 @@ export function isposinf(a: ArrayStorage): ArrayStorage {
     'isposinf',
     'This operation is not supported for complex values because it would be ambiguous.'
   );
-  const data = new Uint8Array(a.size);
+  const result = ArrayStorage.empty(Array.from(a.shape), 'bool');
+  const data = result.data as Uint8Array;
   const size = a.size;
 
   if (isBigIntDType(a.dtype) || isIntegerDType(a.dtype)) {
@@ -1280,7 +1295,7 @@ export function isposinf(a: ArrayStorage): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(data, Array.from(a.shape), 'bool');
+  return result;
 }
 
 /**

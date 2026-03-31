@@ -6,7 +6,7 @@
  */
 
 import { ArrayStorage, computeStrides } from '../storage';
-import { getTypedArrayConstructor, isBigIntDType, type TypedArray } from '../dtype';
+import { isBigIntDType, type TypedArray } from '../dtype';
 import { computeBroadcastShape, broadcastTo, broadcastShapes } from '../broadcasting';
 import { Complex } from '../complex';
 import { wasmIndices } from '../wasm/indices';
@@ -100,11 +100,8 @@ export function take(storage: ArrayStorage, indices: number[], axis?: number): A
 
     // Create output array
     const outputSize = indices.length;
-    const Constructor = getTypedArrayConstructor(dtype);
-    if (!Constructor) {
-      throw new Error(`Cannot take from array with dtype ${dtype}`);
-    }
-    const outputData = new Constructor(outputSize);
+    const result = ArrayStorage.empty([outputSize], dtype);
+    const outputData = result.data;
 
     for (let i = 0; i < outputSize; i++) {
       let idx = indices[i]!;
@@ -118,7 +115,7 @@ export function take(storage: ArrayStorage, indices: number[], axis?: number): A
       }
     }
 
-    return ArrayStorage.fromData(outputData, [outputSize], dtype);
+    return result;
   }
 
   // Take along specified axis
@@ -144,11 +141,8 @@ export function take(storage: ArrayStorage, indices: number[], axis?: number): A
   outputShape[normalizedAxis] = indices.length;
 
   const outputSize = outputShape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot take from array with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
+  const result = ArrayStorage.empty(outputShape, dtype);
+  const outputData = result.data;
   const outputStrides = computeStrides(outputShape);
 
   // Iterate through output positions
@@ -185,7 +179,7 @@ export function take(storage: ArrayStorage, indices: number[], axis?: number): A
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return result;
 }
 
 /**
@@ -277,11 +271,8 @@ export function choose(indexStorage: ArrayStorage, choices: ArrayStorage[]): Arr
 
   // Create output array
   const outputSize = broadcastedShape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot choose with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
+  const result = ArrayStorage.empty(broadcastedShape, dtype);
+  const outputData = result.data;
 
   // Fill output
   for (let i = 0; i < outputSize; i++) {
@@ -300,7 +291,7 @@ export function choose(indexStorage: ArrayStorage, choices: ArrayStorage[]): Arr
     }
   }
 
-  return ArrayStorage.fromData(outputData, broadcastedShape, dtype);
+  return result;
 }
 
 /**
@@ -385,11 +376,8 @@ export function take_along_axis(
   // Output shape matches indices shape
   const outputShape = Array.from(indicesShape);
   const outputSize = outputShape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot take_along_axis with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
+  const result = ArrayStorage.empty(outputShape, dtype);
+  const outputData = result.data;
   const inputStrides = computeStrides(shape);
   const indicesStrides = computeStrides(indicesShape);
 
@@ -457,7 +445,7 @@ export function take_along_axis(
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return result;
 }
 
 /**
@@ -627,11 +615,8 @@ export function compress(
       }
     }
 
-    const Constructor = getTypedArrayConstructor(dtype);
-    if (!Constructor) {
-      throw new Error(`Cannot compress with dtype ${dtype}`);
-    }
-    const outputData = new Constructor(trueCount);
+    const compressResult = ArrayStorage.empty([trueCount], dtype);
+    const outputData = compressResult.data;
 
     // Second pass: copy values
     let outIdx = 0;
@@ -667,7 +652,7 @@ export function compress(
       }
     }
 
-    return ArrayStorage.fromData(outputData, [trueCount], dtype);
+    return compressResult;
   }
 
   // Compress along axis - optimized version
@@ -695,13 +680,9 @@ export function compress(
   // Output shape
   const outputShape = [...shape];
   outputShape[normalizedAxis] = trueCount;
-  const outputSize = outputShape.reduce((a, b) => a * b, 1);
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot compress with dtype ${dtype}`);
-  }
-  const outputData = new Constructor(outputSize);
+  const compressAxisResult = ArrayStorage.empty(outputShape, dtype);
+  const outputData = compressAxisResult.data;
 
   const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
   const outerSize = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
@@ -740,7 +721,7 @@ export function compress(
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return compressAxisResult;
 }
 
 /**
@@ -771,10 +752,6 @@ export function select(
 
   const dtype = choicelist[0]!.dtype;
   const outputSize = outputShape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot select with dtype ${dtype}`);
-  }
 
   // Initialize with default value
   const defaultVal: number | bigint = isBigIntDType(dtype)
@@ -785,7 +762,8 @@ export function select(
       ? Number(defaultValue)
       : defaultValue;
 
-  const outputData = new Constructor(outputSize);
+  const selectResult = ArrayStorage.empty(outputShape, dtype);
+  const outputData = selectResult.data;
   for (let i = 0; i < outputSize; i++) {
     if (isBigIntDType(dtype)) {
       (outputData as BigInt64Array | BigUint64Array)[i] = defaultVal as bigint;
@@ -813,7 +791,7 @@ export function select(
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return selectResult;
 }
 
 /**
@@ -874,7 +852,9 @@ export function diag_indices(n: number, ndim: number = 2): ArrayStorage[] {
 
   const result: ArrayStorage[] = [];
   for (let d = 0; d < ndim; d++) {
-    result.push(ArrayStorage.fromData(new Int32Array(indices), [n], 'int32'));
+    const dimResult = ArrayStorage.empty([n], 'int32');
+    (dimResult.data as Int32Array).set(indices);
+    result.push(dimResult);
   }
 
   return result;
@@ -920,10 +900,11 @@ export function tril_indices(n: number, k: number = 0, m?: number): ArrayStorage
     }
   }
 
-  return [
-    ArrayStorage.fromData(new Int32Array(rows), [rows.length], 'int32'),
-    ArrayStorage.fromData(new Int32Array(colIndices), [colIndices.length], 'int32'),
-  ];
+  const rowResult = ArrayStorage.empty([rows.length], 'int32');
+  (rowResult.data as Int32Array).set(rows);
+  const colResult = ArrayStorage.empty([colIndices.length], 'int32');
+  (colResult.data as Int32Array).set(colIndices);
+  return [rowResult, colResult];
 }
 
 /**
@@ -955,10 +936,11 @@ export function triu_indices(n: number, k: number = 0, m?: number): ArrayStorage
     }
   }
 
-  return [
-    ArrayStorage.fromData(new Int32Array(rows), [rows.length], 'int32'),
-    ArrayStorage.fromData(new Int32Array(colIndices), [colIndices.length], 'int32'),
-  ];
+  const rowResult = ArrayStorage.empty([rows.length], 'int32');
+  (rowResult.data as Int32Array).set(rows);
+  const colResult = ArrayStorage.empty([colIndices.length], 'int32');
+  (colResult.data as Int32Array).set(colIndices);
+  return [rowResult, colResult];
 }
 
 /**
@@ -1002,10 +984,11 @@ export function mask_indices(
     }
   }
 
-  return [
-    ArrayStorage.fromData(new Int32Array(rows), [rows.length], 'int32'),
-    ArrayStorage.fromData(new Int32Array(cols), [cols.length], 'int32'),
-  ];
+  const rowResult = ArrayStorage.empty([rows.length], 'int32');
+  (rowResult.data as Int32Array).set(rows);
+  const colResult = ArrayStorage.empty([cols.length], 'int32');
+  (colResult.data as Int32Array).set(cols);
+  return [rowResult, colResult];
 }
 
 /**
@@ -1021,14 +1004,9 @@ export function indices(
 
   const ndim = dimensions.length;
   const outputShape = [ndim, ...dimensions];
-  const outputSize = outputShape.reduce((a, b) => a * b, 1);
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create indices with dtype ${dtype}`);
-  }
-
-  const outputData = new Constructor(outputSize);
+  const indicesResult = ArrayStorage.empty(outputShape, dtype);
+  const outputData = indicesResult.data;
   const gridSize = dimensions.reduce((a, b) => a * b, 1);
 
   // Precompute strides for converting flat index → per-dimension index
@@ -1058,7 +1036,7 @@ export function indices(
     }
   }
 
-  return ArrayStorage.fromData(outputData, outputShape, dtype);
+  return indicesResult;
 }
 
 /**
@@ -1077,12 +1055,8 @@ export function ix_(...args: ArrayStorage[]): ArrayStorage[] {
     const shape = new Array(ndim).fill(1);
     shape[i] = arrSize;
 
-    const Constructor = getTypedArrayConstructor(dtype);
-    if (!Constructor) {
-      throw new Error(`Cannot create ix_ with dtype ${dtype}`);
-    }
-
-    const data = new Constructor(arrSize);
+    const ixResult = ArrayStorage.empty(shape, dtype);
+    const data = ixResult.data;
     for (let j = 0; j < arrSize; j++) {
       const value = arr.iget(j);
       if (isBigIntDType(dtype)) {
@@ -1092,7 +1066,7 @@ export function ix_(...args: ArrayStorage[]): ArrayStorage[] {
       }
     }
 
-    result.push(ArrayStorage.fromData(data, shape, dtype));
+    result.push(ixResult);
   }
 
   return result;
@@ -1116,7 +1090,8 @@ export function ravel_multi_index(
 
   const size = multi_index[0]!.size;
   const ndim = dims.length;
-  const outputData = new Int32Array(size);
+  const ravelResult = ArrayStorage.empty([size], 'int32');
+  const outputData = ravelResult.data as Int32Array;
 
   // Compute strides for row-major (C) order
   const strides = new Array(ndim);
@@ -1146,7 +1121,7 @@ export function ravel_multi_index(
     outputData[i] = flatIdx;
   }
 
-  return ArrayStorage.fromData(outputData, [size], 'int32');
+  return ravelResult;
 }
 
 /**
@@ -1195,8 +1170,8 @@ export function unravel_index(
   // Create output arrays
   const result: ArrayStorage[] = [];
   for (let d = 0; d < ndim; d++) {
-    const data = new Int32Array(size);
-    result.push(ArrayStorage.fromData(data, outputShape.length ? outputShape : [1], 'int32'));
+    const unravelResult = ArrayStorage.empty(outputShape.length ? outputShape : [1], 'int32');
+    result.push(unravelResult);
   }
 
   // Convert each flat index
@@ -1225,7 +1200,9 @@ export function unravel_index(
   if (typeof indices === 'number') {
     return result.map((arr) => {
       const value = arr.iget(0);
-      return ArrayStorage.fromData(new Int32Array([Number(value)]), [], 'int32');
+      const scalarResult = ArrayStorage.empty([], 'int32');
+      (scalarResult.data as Int32Array)[0] = Number(value);
+      return scalarResult;
     });
   }
 
@@ -1389,11 +1366,11 @@ export function apply_along_axis(
       const results: (ArrayStorage | number)[] = [];
       for (let c = 0; c < cols!; c++) {
         // Extract column as 1D array
-        const colData = new Float64Array(rows!);
+        const colArr = ArrayStorage.empty([rows!], 'float64');
+        const colData = colArr.data as Float64Array;
         for (let r = 0; r < rows!; r++) {
           colData[r] = Number(arr.get(r, c));
         }
-        const colArr = ArrayStorage.fromData(colData, [rows!], 'float64');
         results.push(func1d(colArr));
       }
 
@@ -1426,11 +1403,11 @@ export function apply_along_axis(
       const results: (ArrayStorage | number)[] = [];
       for (let r = 0; r < rows!; r++) {
         // Extract row as 1D array
-        const rowData = new Float64Array(cols!);
+        const rowArr = ArrayStorage.empty([cols!], 'float64');
+        const rowData = rowArr.data as Float64Array;
         for (let c = 0; c < cols!; c++) {
           rowData[c] = Number(arr.get(r, c));
         }
-        const rowArr = ArrayStorage.fromData(rowData, [cols!], 'float64');
         results.push(func1d(rowArr));
       }
 
@@ -1501,11 +1478,11 @@ export function apply_along_axis(
   const results: (ArrayStorage | number)[] = [];
   for (let fi = 0; fi < iterSize; fi++) {
     const iterIdx = flatToMultiIter(fi);
-    const sliceData = new Float64Array(axisSize);
+    const sliceArr = ArrayStorage.empty([axisSize], 'float64');
+    const sliceData = sliceArr.data as Float64Array;
     for (let ai = 0; ai < axisSize; ai++) {
       sliceData[ai] = getElem(iterIdx, ai);
     }
-    const sliceArr = ArrayStorage.fromData(sliceData, [axisSize], 'float64');
     results.push(func1d(sliceArr));
   }
 

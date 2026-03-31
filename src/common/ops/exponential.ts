@@ -35,7 +35,7 @@ export function sqrt(a: ArrayStorage): ArrayStorage {
     const contiguous = a.isCContiguous;
 
     // Result is same complex type
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -120,7 +120,7 @@ function complexPowerArray(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
 
   const shape = Array.from(a.shape);
   const size = a.size;
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const dstData = result.data as Float64Array | Float32Array;
   const aContiguous = a.isCContiguous;
   const bContiguous = b.isCContiguous;
@@ -203,7 +203,7 @@ function powerScalar(storage: ArrayStorage, exponent: number): ArrayStorage {
   // Handle complex types
   if (isComplexDType(dtype)) {
     // z^n = |z|^n * (cos(n*θ) + i*sin(n*θ))
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -248,7 +248,7 @@ function powerScalar(storage: ArrayStorage, exponent: number): ArrayStorage {
   const resultDtype = needsFloatPromotion ? 'float64' : dtype;
 
   // Create result with appropriate dtype
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -311,7 +311,7 @@ export function exp(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -363,7 +363,7 @@ export function exp2(a: ArrayStorage): ArrayStorage {
     const contiguous = a.isCContiguous;
     const ln2 = Math.LN2;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -417,7 +417,7 @@ export function expm1(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -465,7 +465,7 @@ export function log(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -516,7 +516,7 @@ export function log2(a: ArrayStorage): ArrayStorage {
     const contiguous = a.isCContiguous;
     const invLn2 = 1 / Math.LN2;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -567,7 +567,7 @@ export function log10(a: ArrayStorage): ArrayStorage {
     const contiguous = a.isCContiguous;
     const invLn10 = 1 / Math.LN10;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -618,7 +618,7 @@ export function log1p(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const contiguous = a.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -693,7 +693,7 @@ function logaddexpArray(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
     d === 'float32' || d === 'int8' || d === 'uint8' || d === 'int16' || d === 'uint16';
   const resultDtype = promosToF32(dtype1) && promosToF32(dtype2) ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(outputShape, resultDtype);
+  const result = ArrayStorage.empty(outputShape, resultDtype);
   const resultData = result.data;
 
   // Use broadcast iteration
@@ -733,7 +733,7 @@ function logaddexpScalar(storage: ArrayStorage, x2: number): ArrayStorage {
       ? 'float32'
       : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
 
   if (contiguous) {
@@ -792,7 +792,7 @@ function logaddexp2Array(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
   // Only preserve float32 if both inputs are float32
   const resultDtype = dtype1 === 'float32' && dtype2 === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(outputShape, resultDtype);
+  const result = ArrayStorage.empty(outputShape, resultDtype);
   const resultData = result.data;
 
   const LOG2_E = Math.LOG2E; // log2(e)
@@ -825,7 +825,7 @@ function logaddexp2Scalar(storage: ArrayStorage, x2: number): ArrayStorage {
   // Always promote to float64 for logaddexp2
   const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
 
   const LOG2_E = Math.LOG2E;

@@ -554,6 +554,31 @@ export class ArrayStorage {
   }
 
   /**
+   * Allocate uninitialized storage for output buffers.
+   * Like zeros() but skips zero-fill — use only when the caller will fully overwrite the data.
+   * @internal
+   */
+  static empty(shape: number[], dtype: DType = DEFAULT_DTYPE): ArrayStorage {
+    const size = shape.reduce((a, b) => a * b, 1);
+    const isComplex = isComplexDType(dtype);
+    const Constructor = getTypedArrayConstructor(dtype);
+    if (!Constructor) {
+      throw new Error(`Cannot create array with dtype ${dtype}`);
+    }
+    const physicalSize = isComplex ? size * 2 : size;
+    const byteLength =
+      physicalSize * (Constructor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+    const region = wasmMalloc(byteLength);
+    if (region) {
+      const mem = getSharedMemory();
+      const data = new Constructor(mem.buffer, region.ptr, physicalSize);
+      return new ArrayStorage(data, shape, ArrayStorage._computeStrides(shape), 0, dtype, region);
+    }
+    const data = new Constructor(physicalSize);
+    return new ArrayStorage(data, shape, ArrayStorage._computeStrides(shape), 0, dtype);
+  }
+
+  /**
    * Create storage with ones
    */
   static ones(shape: number[], dtype: DType = DEFAULT_DTYPE): ArrayStorage {

@@ -524,7 +524,7 @@ export function ones(shape: number[], dtype: DType = DEFAULT_DTYPE): NDArray {
 }
 
 /**
- * Create an uninitialized array (zeros in JS)
+ * Create an uninitialized array
  */
 export function empty(shape: number[], dtype: DType = DEFAULT_DTYPE): NDArray {
   return up(core.empty(shape, dtype));

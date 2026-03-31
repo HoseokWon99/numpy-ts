@@ -99,6 +99,18 @@ function bulkFill<T extends TypedArray>(
   return result;
 }
 
+/**
+ * Fill directly into a WASM pointer — zero-copy path for callers that already
+ * have a persistent WASM allocation (e.g., ArrayStorage.empty()).
+ * @param ptr - byte offset into WASM memory to write to
+ * @param n - number of elements
+ * @param fn - the raw WASM fill kernel
+ */
+export function directFill(ptr: number, n: number, fn: (outPtr: number, n: number) => void): void {
+  wasmConfig.wasmCallCount++;
+  fn(ptr, n);
+}
+
 // ============================================================================
 // MT19937
 // ============================================================================
@@ -174,6 +186,52 @@ export const legacyGauss: () => number = legacy_gauss;
 export const legacyStandardExponential: () => number = legacy_standard_exponential;
 export const legacyGaussReset: () => void = legacy_gauss_reset;
 export const wasmLegacyStandardGamma: (shape: number) => number = legacy_standard_gamma;
+
+// ============================================================================
+// Raw WASM kernel re-exports (for directFill zero-copy path)
+// ============================================================================
+
+export {
+  fill_uniform_f64_mt as rawFillUniformF64MT,
+  fill_uniform_f64_pcg as rawFillUniformF64PCG,
+  fill_standard_normal_pcg as rawFillStandardNormalPCG,
+  fill_standard_exponential_pcg as rawFillStandardExponentialPCG,
+  fill_legacy_gauss as rawFillLegacyGauss,
+  fill_legacy_standard_exponential as rawFillLegacyStandardExponential,
+  fill_standard_cauchy as rawFillStandardCauchy,
+  fill_permutation as rawFillPermutation,
+  fill_permutation_pcg as rawFillPermutationPCG,
+  fill_legacy_standard_gamma as rawFillLegacyStandardGamma,
+  fill_legacy_chisquare as rawFillLegacyChisquare,
+  fill_pareto as rawFillPareto,
+  fill_power as rawFillPower,
+  fill_weibull as rawFillWeibull,
+  fill_logistic as rawFillLogistic,
+  fill_gumbel as rawFillGumbel,
+  fill_laplace as rawFillLaplace,
+  fill_rayleigh as rawFillRayleigh,
+  fill_triangular as rawFillTriangular,
+  fill_lognormal as rawFillLognormal,
+  fill_wald as rawFillWald,
+  fill_standard_t as rawFillStandardT,
+  fill_beta as rawFillBeta,
+  fill_f as rawFillF,
+  fill_noncentral_chisquare as rawFillNoncentralChisquare,
+  fill_noncentral_f as rawFillNoncentralF,
+  fill_vonmises as rawFillVonmises,
+  fill_geometric as rawFillGeometric,
+  fill_poisson as rawFillPoisson,
+  fill_binomial as rawFillBinomial,
+  fill_negative_binomial as rawFillNegativeBinomial,
+  fill_hypergeometric as rawFillHypergeometric,
+  fill_logseries as rawFillLogseries,
+  fill_zipf as rawFillZipf,
+  fill_rk_interval as rawFillRkInterval,
+  fill_randint_i64 as rawFillRandintI64,
+  fill_randint_u8 as rawFillRandintU8,
+  fill_randint_u16 as rawFillRandintU16,
+  fill_bounded_uint64_pcg as rawFillBoundedUint64PCG,
+};
 
 // ============================================================================
 // Bulk fills — float64

@@ -31,7 +31,7 @@ export function sinh(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const srcData = a.data as Float64Array | Float32Array;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {
@@ -68,7 +68,7 @@ export function cosh(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const srcData = a.data as Float64Array | Float32Array;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {
@@ -105,7 +105,7 @@ export function tanh(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const srcData = a.data as Float64Array | Float32Array;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {
@@ -143,7 +143,7 @@ export function arcsinh(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const srcData = a.data as Float64Array | Float32Array;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {
@@ -196,7 +196,7 @@ export function arccosh(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const srcData = a.data as Float64Array | Float32Array;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {
@@ -258,7 +258,7 @@ export function arctanh(a: ArrayStorage): ArrayStorage {
     const size = a.size;
     const srcData = a.data as Float64Array | Float32Array;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {

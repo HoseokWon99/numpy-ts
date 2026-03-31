@@ -70,6 +70,43 @@ import {
   fillPermutationPCG,
   fillBoundedUint64PCG,
 } from '../wasm/rng';
+import {
+  directFill,
+  rawFillUniformF64PCG,
+  rawFillStandardNormalPCG,
+  rawFillLegacyGauss,
+  rawFillStandardCauchy,
+  rawFillPermutation,
+  rawFillPermutationPCG,
+  rawFillLegacyStandardGamma,
+  rawFillLegacyChisquare,
+  rawFillPareto,
+  rawFillPower,
+  rawFillWeibull,
+  rawFillLogistic,
+  rawFillGumbel,
+  rawFillLaplace,
+  rawFillRayleigh,
+  rawFillTriangular,
+  rawFillLognormal,
+  rawFillWald,
+  rawFillStandardT,
+  rawFillBeta,
+  rawFillF,
+  rawFillNoncentralChisquare,
+  rawFillNoncentralF,
+  rawFillVonmises,
+  rawFillGeometric,
+  rawFillPoisson,
+  rawFillBinomial,
+  rawFillNegativeBinomial,
+  rawFillHypergeometric,
+  rawFillLogseries,
+  rawFillZipf,
+  rawFillRandintI64,
+  rawFillUniformF64MT,
+  rawFillBoundedUint64PCG,
+} from '../wasm/rng';
 
 // ============================================================================
 // Generator Class - Modern API using PCG64 + Ziggurat (via WASM)
@@ -103,8 +140,13 @@ export class Generator {
       }
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
-      const data = fillUniformF64PCG(totalSize);
-      return ArrayStorage.fromData(new Float64Array(data), shape, 'float64');
+      const result = ArrayStorage.empty(shape, 'float64');
+      if (result.isWasmBacked) {
+        directFill(result.wasmPtr, totalSize, rawFillUniformF64PCG);
+      } else {
+        (result.data as Float64Array).set(fillUniformF64PCG(totalSize));
+      }
+      return result;
     });
   }
 
@@ -120,8 +162,13 @@ export class Generator {
       }
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
-      const data = fillBoundedUint64PCG(totalSize, low, rng);
-      return ArrayStorage.fromData(new BigInt64Array(data), shape, 'int64');
+      const result = ArrayStorage.empty(shape, 'int64');
+      if (result.isWasmBacked) {
+        directFill(result.wasmPtr, totalSize, (p, n) => rawFillBoundedUint64PCG(p, n, low, rng));
+      } else {
+        (result.data as BigInt64Array).set(fillBoundedUint64PCG(totalSize, low, rng));
+      }
+      return result;
     });
   }
 
@@ -132,8 +179,13 @@ export class Generator {
       }
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
-      const data = fillStandardNormalPCG(totalSize);
-      return ArrayStorage.fromData(new Float64Array(data), shape, 'float64');
+      const result = ArrayStorage.empty(shape, 'float64');
+      if (result.isWasmBacked) {
+        directFill(result.wasmPtr, totalSize, rawFillStandardNormalPCG);
+      } else {
+        (result.data as Float64Array).set(fillStandardNormalPCG(totalSize));
+      }
+      return result;
     });
   }
 
@@ -145,11 +197,12 @@ export class Generator {
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
       const rawData = fillStandardNormalPCG(totalSize);
-      const data = new Float64Array(totalSize);
+      const result = ArrayStorage.empty(shape, 'float64');
+      const data = result.data as Float64Array;
       for (let i = 0; i < totalSize; i++) {
         data[i] = rawData[i]! * scale + loc;
       }
-      return ArrayStorage.fromData(data, shape, 'float64');
+      return result;
     });
   }
 
@@ -161,12 +214,13 @@ export class Generator {
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
       const rawData = fillUniformF64PCG(totalSize);
-      const data = new Float64Array(totalSize);
+      const result = ArrayStorage.empty(shape, 'float64');
+      const data = result.data as Float64Array;
       const range = high - low;
       for (let i = 0; i < totalSize; i++) {
         data[i] = rawData[i]! * range + low;
       }
-      return ArrayStorage.fromData(data, shape, 'float64');
+      return result;
     });
   }
 
@@ -197,11 +251,12 @@ export class Generator {
       const shape = Array.isArray(size) ? size : [size];
       const totalSize = shape.reduce((a, b) => a * b, 1);
       const rawData = fillStandardExponentialPCG(totalSize);
-      const data = new Float64Array(totalSize);
+      const result = ArrayStorage.empty(shape, 'float64');
+      const data = result.data as Float64Array;
       for (let i = 0; i < totalSize; i++) {
         data[i] = rawData[i]! * scale;
       }
-      return ArrayStorage.fromData(data, shape, 'float64');
+      return result;
     });
   }
 
@@ -806,8 +861,13 @@ export function random(size?: number | number[]): ArrayStorage | number {
   }
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
-  const data = fillUniformF64MT(totalSize);
-  return ArrayStorage.fromData(new Float64Array(data), shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, rawFillUniformF64MT);
+  } else {
+    (result.data as Float64Array).set(fillUniformF64MT(totalSize));
+  }
+  return result;
 }
 
 /**
@@ -819,8 +879,13 @@ export function rand(...shape: number[]): ArrayStorage | number {
     return mt19937Float64();
   }
   const totalSize = shape.reduce((a, b) => a * b, 1);
-  const data = fillUniformF64MT(totalSize);
-  return ArrayStorage.fromData(new Float64Array(data), shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, rawFillUniformF64MT);
+  } else {
+    (result.data as Float64Array).set(fillUniformF64MT(totalSize));
+  }
+  return result;
 }
 
 /**
@@ -832,8 +897,13 @@ export function randn(...shape: number[]): ArrayStorage | number {
     return legacyGauss();
   }
   const totalSize = shape.reduce((a, b) => a * b, 1);
-  const data = fillLegacyGauss(totalSize);
-  return ArrayStorage.fromData(new Float64Array(data), shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, rawFillLegacyGauss);
+  } else {
+    (result.data as Float64Array).set(fillLegacyGauss(totalSize));
+  }
+  return result;
 }
 
 /**
@@ -882,8 +952,13 @@ export function randint(
     data.set(dtype === 'int16' ? new Int16Array(raw.buffer) : raw);
     return result;
   } else if (isBigIntDType(dtype)) {
-    const data = fillRandintI64(totalSize, rng, low);
-    return ArrayStorage.fromData(new BigInt64Array(data), shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
+    if (result.isWasmBacked) {
+      directFill(result.wasmPtr, totalSize, (p, n) => rawFillRandintI64(p, n, rng, low));
+    } else {
+      (result.data as BigInt64Array).set(fillRandintI64(totalSize, rng, low));
+    }
+    return result;
   } else {
     const rawData = fillRkInterval(totalSize, rng);
     const result = ArrayStorage.zeros(shape, dtype);
@@ -912,12 +987,13 @@ export function uniform(
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
   const rawData = fillUniformF64MT(totalSize);
-  const data = new Float64Array(totalSize);
+  const result = ArrayStorage.empty(shape, 'float64');
+  const data = result.data as Float64Array;
   const range = high - low;
   for (let i = 0; i < totalSize; i++) {
     data[i] = rawData[i]! * range + low;
   }
-  return ArrayStorage.fromData(data, shape, 'float64');
+  return result;
 }
 
 /**
@@ -937,11 +1013,12 @@ export function normal(
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
   const rawData = fillLegacyGauss(totalSize);
-  const data = new Float64Array(totalSize);
+  const result = ArrayStorage.empty(shape, 'float64');
+  const data = result.data as Float64Array;
   for (let i = 0; i < totalSize; i++) {
     data[i] = rawData[i]! * scale + loc;
   }
-  return ArrayStorage.fromData(data, shape, 'float64');
+  return result;
 }
 
 /**
@@ -954,8 +1031,13 @@ export function standard_normal(size?: number | number[]): ArrayStorage | number
   }
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
-  const data = fillLegacyGauss(totalSize);
-  return ArrayStorage.fromData(new Float64Array(data), shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, rawFillLegacyGauss);
+  } else {
+    (result.data as Float64Array).set(fillLegacyGauss(totalSize));
+  }
+  return result;
 }
 
 /**
@@ -970,11 +1052,12 @@ export function exponential(scale: number = 1, size?: number | number[]): ArrayS
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
   const rawData = fillLegacyStandardExponential(totalSize);
-  const data = new Float64Array(totalSize);
+  const result = ArrayStorage.empty(shape, 'float64');
+  const data = result.data as Float64Array;
   for (let i = 0; i < totalSize; i++) {
     data[i] = rawData[i]! * scale;
   }
-  return ArrayStorage.fromData(data, shape, 'float64');
+  return result;
 }
 
 /**
@@ -988,8 +1071,13 @@ export function poisson(lam: number = 1, size?: number | number[]): ArrayStorage
   }
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
-  const data = fillPoisson(totalSize, lam);
-  return ArrayStorage.fromData(new BigInt64Array(data), shape, 'int64');
+  const result = ArrayStorage.empty(shape, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillPoisson(p, n, lam));
+  } else {
+    (result.data as BigInt64Array).set(fillPoisson(totalSize, lam));
+  }
+  return result;
 }
 
 /**
@@ -1004,8 +1092,13 @@ export function binomial(n: number, p: number, size?: number | number[]): ArrayS
   }
   const shape = Array.isArray(size) ? size : [size];
   const totalSize = shape.reduce((a, b) => a * b, 1);
-  const data = fillBinomial(totalSize, n, p);
-  return ArrayStorage.fromData(new BigInt64Array(data), shape, 'int64');
+  const result = ArrayStorage.empty(shape, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (ptr, nn) => rawFillBinomial(ptr, nn, n, p));
+  } else {
+    (result.data as BigInt64Array).set(fillBinomial(totalSize, n, p));
+  }
+  return result;
 }
 
 /**
@@ -1239,22 +1332,32 @@ function permutationImpl(
   // Fast path: integer n — do entire shuffle in WASM
   if (typeof x === 'number') {
     if (usePCG) {
-      const data = fillPermutationPCG(x);
-      return ArrayStorage.fromData(new BigInt64Array(data), [x], 'int64');
+      const result = ArrayStorage.empty([x], 'int64');
+      if (result.isWasmBacked) {
+        directFill(result.wasmPtr, x, (p, n) => rawFillPermutationPCG(p, n));
+      } else {
+        (result.data as BigInt64Array).set(fillPermutationPCG(x));
+      }
+      return result;
     }
     if (rng === mt19937Float64) {
-      const data = fillPermutation(x);
-      return ArrayStorage.fromData(new Float64Array(data), [x], 'float64');
+      const result = ArrayStorage.empty([x], 'float64');
+      if (result.isWasmBacked) {
+        directFill(result.wasmPtr, x, (p, n) => rawFillPermutation(p, n));
+      } else {
+        (result.data as Float64Array).set(fillPermutation(x));
+      }
+      return result;
     }
   }
 
   let arr: ArrayStorage;
   if (typeof x === 'number') {
-    const data = new Float64Array(x);
+    arr = ArrayStorage.empty([x], 'float64');
+    const data = arr.data as Float64Array;
     for (let i = 0; i < x; i++) {
       data[i] = i;
     }
-    arr = ArrayStorage.fromData(data, [x], 'float64');
   } else {
     arr = x.copy();
   }
@@ -1448,8 +1551,13 @@ export function standard_gamma(shape: number, size?: number | number[]): ArraySt
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillLegacyStandardGamma(totalSize, shape);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillLegacyStandardGamma(p, n, shape));
+  } else {
+    (result.data as Float64Array).set(fillLegacyStandardGamma(totalSize, shape));
+  }
+  return result;
 }
 
 /**
@@ -1463,8 +1571,13 @@ export function standard_cauchy(size?: number | number[]): ArrayStorage | number
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillStandardCauchy(totalSize);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, rawFillStandardCauchy);
+  } else {
+    (result.data as Float64Array).set(fillStandardCauchy(totalSize));
+  }
+  return result;
 }
 
 /**
@@ -1490,8 +1603,13 @@ export function standard_t(df: number, size?: number | number[]): ArrayStorage |
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillStandardT(totalSize, df);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillStandardT(p, n, df));
+  } else {
+    (result.data as Float64Array).set(fillStandardT(totalSize, df));
+  }
+  return result;
 }
 
 // ============================================================================
@@ -1523,11 +1641,12 @@ export function gamma(
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
   const rawData = fillLegacyStandardGamma(totalSize, shape);
-  const data = new Float64Array(totalSize);
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  const data = result.data as Float64Array;
   for (let i = 0; i < totalSize; i++) {
     data[i] = rawData[i]! * scale;
   }
-  return ArrayStorage.fromData(data, shapeArr, 'float64');
+  return result;
 }
 
 // ============================================================================
@@ -1580,8 +1699,13 @@ export function beta(a: number, b: number, size?: number | number[]): ArrayStora
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((aa, bb) => aa * bb, 1);
-  const data = fillBeta(totalSize, a, b);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillBeta(p, n, a, b));
+  } else {
+    (result.data as Float64Array).set(fillBeta(totalSize, a, b));
+  }
+  return result;
 }
 
 /**
@@ -1617,8 +1741,13 @@ export function laplace(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillLaplace(totalSize, loc, scale);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillLaplace(p, n, loc, scale));
+  } else {
+    (result.data as Float64Array).set(fillLaplace(totalSize, loc, scale));
+  }
+  return result;
 }
 
 /**
@@ -1651,8 +1780,13 @@ export function logistic(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillLogistic(totalSize, loc, scale);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillLogistic(p, n, loc, scale));
+  } else {
+    (result.data as Float64Array).set(fillLogistic(totalSize, loc, scale));
+  }
+  return result;
 }
 
 /**
@@ -1676,8 +1810,13 @@ export function lognormal(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillLognormal(totalSize, mean, sigma);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillLognormal(p, n, mean, sigma));
+  } else {
+    (result.data as Float64Array).set(fillLognormal(totalSize, mean, sigma));
+  }
+  return result;
 }
 
 /**
@@ -1708,8 +1847,13 @@ export function gumbel(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillGumbel(totalSize, loc, scale);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillGumbel(p, n, loc, scale));
+  } else {
+    (result.data as Float64Array).set(fillGumbel(totalSize, loc, scale));
+  }
+  return result;
 }
 
 /**
@@ -1732,8 +1876,13 @@ export function pareto(a: number, size?: number | number[]): ArrayStorage | numb
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((aa, bb) => aa * bb, 1);
-  const data = fillPareto(totalSize, a);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillPareto(p, n, a));
+  } else {
+    (result.data as Float64Array).set(fillPareto(totalSize, a));
+  }
+  return result;
 }
 
 /**
@@ -1756,8 +1905,13 @@ export function power(a: number, size?: number | number[]): ArrayStorage | numbe
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((aa, bb) => aa * bb, 1);
-  const data = fillPower(totalSize, a);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillPower(p, n, a));
+  } else {
+    (result.data as Float64Array).set(fillPower(totalSize, a));
+  }
+  return result;
 }
 
 /**
@@ -1777,8 +1931,13 @@ export function rayleigh(scale: number = 1, size?: number | number[]): ArrayStor
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillRayleigh(totalSize, scale);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillRayleigh(p, n, scale));
+  } else {
+    (result.data as Float64Array).set(fillRayleigh(totalSize, scale));
+  }
+  return result;
 }
 
 /**
@@ -1819,8 +1978,13 @@ export function triangular(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillTriangular(totalSize, left, mode, right);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillTriangular(p, n, left, mode, right));
+  } else {
+    (result.data as Float64Array).set(fillTriangular(totalSize, left, mode, right));
+  }
+  return result;
 }
 
 /**
@@ -1856,8 +2020,13 @@ export function wald(mean: number, scale: number, size?: number | number[]): Arr
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillWald(totalSize, mean, scale);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillWald(p, n, mean, scale));
+  } else {
+    (result.data as Float64Array).set(fillWald(totalSize, mean, scale));
+  }
+  return result;
 }
 
 /**
@@ -1881,8 +2050,13 @@ export function weibull(a: number, size?: number | number[]): ArrayStorage | num
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((aa, bb) => aa * bb, 1);
-  const data = fillWeibull(totalSize, a);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillWeibull(p, n, a));
+  } else {
+    (result.data as Float64Array).set(fillWeibull(totalSize, a));
+  }
+  return result;
 }
 
 // ============================================================================
@@ -1904,8 +2078,13 @@ export function chisquare(df: number, size?: number | number[]): ArrayStorage | 
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillLegacyChisquare(totalSize, df);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillLegacyChisquare(p, n, df));
+  } else {
+    (result.data as Float64Array).set(fillLegacyChisquare(totalSize, df));
+  }
+  return result;
 }
 
 /**
@@ -1946,8 +2125,13 @@ export function noncentral_chisquare(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillNoncentralChisquare(totalSize, df, nonc);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillNoncentralChisquare(p, n, df, nonc));
+  } else {
+    (result.data as Float64Array).set(fillNoncentralChisquare(totalSize, df, nonc));
+  }
+  return result;
 }
 
 /**
@@ -1976,8 +2160,13 @@ export function f(dfnum: number, dfden: number, size?: number | number[]): Array
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillF(totalSize, dfnum, dfden);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillF(p, n, dfnum, dfden));
+  } else {
+    (result.data as Float64Array).set(fillF(totalSize, dfnum, dfden));
+  }
+  return result;
 }
 
 /**
@@ -2026,8 +2215,13 @@ export function noncentral_f(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillNoncentralF(totalSize, dfnum, dfden, nonc);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillNoncentralF(p, n, dfnum, dfden, nonc));
+  } else {
+    (result.data as Float64Array).set(fillNoncentralF(totalSize, dfnum, dfden, nonc));
+  }
+  return result;
 }
 
 // ============================================================================
@@ -2072,8 +2266,13 @@ export function geometric(p: number, size?: number | number[]): ArrayStorage | n
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillGeometric(totalSize, p);
-  return ArrayStorage.fromData(new BigInt64Array(data), shapeArr, 'int64');
+  const result = ArrayStorage.empty(shapeArr, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (ptr, n) => rawFillGeometric(ptr, n, p));
+  } else {
+    (result.data as BigInt64Array).set(fillGeometric(totalSize, p));
+  }
+  return result;
 }
 
 /**
@@ -2110,8 +2309,15 @@ export function hypergeometric(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillHypergeometric(totalSize, ngood, nbad, nsample);
-  return ArrayStorage.fromData(new BigInt64Array(data), shapeArr, 'int64');
+  const result = ArrayStorage.empty(shapeArr, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) =>
+      rawFillHypergeometric(p, n, ngood, nbad, nsample)
+    );
+  } else {
+    (result.data as BigInt64Array).set(fillHypergeometric(totalSize, ngood, nbad, nsample));
+  }
+  return result;
 }
 
 /**
@@ -2148,8 +2354,13 @@ export function logseries(p: number, size?: number | number[]): ArrayStorage | n
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillLogseries(totalSize, p);
-  return ArrayStorage.fromData(new BigInt64Array(data), shapeArr, 'int64');
+  const result = ArrayStorage.empty(shapeArr, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (ptr, n) => rawFillLogseries(ptr, n, p));
+  } else {
+    (result.data as BigInt64Array).set(fillLogseries(totalSize, p));
+  }
+  return result;
 }
 
 /**
@@ -2182,8 +2393,13 @@ export function negative_binomial(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillNegativeBinomial(totalSize, n, p);
-  return ArrayStorage.fromData(new BigInt64Array(data), shapeArr, 'int64');
+  const result = ArrayStorage.empty(shapeArr, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (ptr, nn) => rawFillNegativeBinomial(ptr, nn, n, p));
+  } else {
+    (result.data as BigInt64Array).set(fillNegativeBinomial(totalSize, n, p));
+  }
+  return result;
 }
 
 /**
@@ -2219,8 +2435,13 @@ export function zipf(a: number, size?: number | number[]): ArrayStorage | number
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((aa, bb) => aa * bb, 1);
-  const data = fillZipf(totalSize, a);
-  return ArrayStorage.fromData(new BigInt64Array(data), shapeArr, 'int64');
+  const result = ArrayStorage.empty(shapeArr, 'int64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillZipf(p, n, a));
+  } else {
+    (result.data as BigInt64Array).set(fillZipf(totalSize, a));
+  }
+  return result;
 }
 
 // ============================================================================
@@ -2332,7 +2553,8 @@ export function multivariate_normal(
   }
 
   // SVD decomposition of covariance matrix (matches NumPy's approach)
-  const covStorage = ArrayStorage.fromData(new Float64Array(covArr.flat()), [n, n], 'float64');
+  const covStorage = ArrayStorage.empty([n, n], 'float64');
+  (covStorage.data as Float64Array).set(covArr.flat());
 
   const { s: singVals, vt } = svd(covStorage, true, true) as {
     u: ArrayStorage;
@@ -2381,7 +2603,8 @@ export function multivariate_normal(
   const numSamples = shapeArr.reduce((a, b) => a * b, 1);
   const outShape = [...shapeArr, n];
   const allX = fillLegacyGauss(numSamples * n);
-  const data = new Float64Array(numSamples * n);
+  const resultStorage = ArrayStorage.empty(outShape, 'float64');
+  const data = resultStorage.data as Float64Array;
 
   for (let s = 0; s < numSamples; s++) {
     const base = s * n;
@@ -2394,7 +2617,7 @@ export function multivariate_normal(
     }
   }
 
-  return ArrayStorage.fromData(data, outShape, 'float64');
+  return resultStorage;
 }
 
 /**
@@ -2433,21 +2656,22 @@ export function dirichlet(alpha: number[] | ArrayStorage, size?: number | number
   };
 
   if (size === undefined) {
-    const data = new Float64Array(k);
-    generateSample(data, 0);
-    return ArrayStorage.fromData(data, [k], 'float64');
+    const result = ArrayStorage.empty([k], 'float64');
+    generateSample(result.data as Float64Array, 0);
+    return result;
   }
 
   const shapeArr = Array.isArray(size) ? size : [size];
   const numSamples = shapeArr.reduce((a, b) => a * b, 1);
   const outShape = [...shapeArr, k];
-  const data = new Float64Array(numSamples * k);
+  const result = ArrayStorage.empty(outShape, 'float64');
+  const data = result.data as Float64Array;
 
   for (let i = 0; i < numSamples; i++) {
     generateSample(data, i * k);
   }
 
-  return ArrayStorage.fromData(data, outShape, 'float64');
+  return result;
 }
 
 /**
@@ -2507,6 +2731,11 @@ export function vonmises(
   }
   const shapeArr = Array.isArray(size) ? size : [size];
   const totalSize = shapeArr.reduce((a, b) => a * b, 1);
-  const data = fillVonmises(totalSize, mu, kappa);
-  return ArrayStorage.fromData(new Float64Array(data), shapeArr, 'float64');
+  const result = ArrayStorage.empty(shapeArr, 'float64');
+  if (result.isWasmBacked) {
+    directFill(result.wasmPtr, totalSize, (p, n) => rawFillVonmises(p, n, mu, kappa));
+  } else {
+    (result.data as Float64Array).set(fillVonmises(totalSize, mu, kappa));
+  }
+  return result;
 }

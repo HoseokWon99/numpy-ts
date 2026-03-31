@@ -7,14 +7,12 @@
 
 import { ArrayStorage } from '../storage';
 import {
-  getTypedArrayConstructor,
   hasFloat16,
   isBigIntDType,
   isComplexDType,
   isFloatDType,
   throwIfComplex,
   type DType,
-  type TypedArray,
 } from '../dtype';
 import { computeStrides, precomputeAxisOffsets } from '../internal/indexing';
 import { Complex } from '../complex';
@@ -269,10 +267,11 @@ export function sum(
       }
       try {
         if (outDtype === 'float32') {
-          const f32 = new Float32Array(wasmResult.data.length);
+          const f32Result = ArrayStorage.empty(outShape, outDtype);
+          const f32 = f32Result.data as Float32Array;
           const f64 = wasmResult.data as Float64Array;
           for (let i = 0; i < f64.length; i++) f32[i] = f64[i]!;
-          return ArrayStorage.fromData(f32, outShape, outDtype);
+          return f32Result;
         }
         // int64/uint64 output — need a result buffer for conversion
         const intResult = ArrayStorage.zeros(outputShape, outDtype);
@@ -502,16 +501,12 @@ export function mean(
     try {
       const divisor = shape[normalizedAxis]!;
       const resultData = sumStorage.data as Float64Array;
-      const Ctor = getTypedArrayConstructor(dtype)!;
-      const outData = new Ctor(resultData.length);
+      const outResult = ArrayStorage.empty(Array.from(sumStorage.shape), dtype);
+      const outData = outResult.data;
       for (let i = 0; i < resultData.length; i++) {
         (outData as Float64Array)[i] = resultData[i]! / divisor;
       }
-      return ArrayStorage.fromData(
-        outData as unknown as TypedArray,
-        Array.from(sumStorage.shape),
-        dtype
-      );
+      return outResult;
     } finally {
       sumStorage.dispose();
     }
@@ -1852,8 +1847,8 @@ export function variance(
       if (acc) {
         // float16/float32: accumulate in native precision, store in input dtype
         result.dispose(); // won't use the float64 result buffer
-        const Ctor = getTypedArrayConstructor(dtype)!;
-        const outData = new Ctor(outerSize);
+        const outResult = ArrayStorage.empty(Array.from(outputShape), dtype);
+        const outData = outResult.data;
         for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
           acc[0] = 0;
           const meanVal = Number(meanData[outerIdx]!);
@@ -1866,11 +1861,7 @@ export function variance(
           acc[0] /= axisSize - ddof;
           (outData as Float16Array)[outerIdx] = acc[0]!;
         }
-        return ArrayStorage.fromData(
-          outData as unknown as TypedArray,
-          Array.from(outputShape),
-          dtype
-        );
+        return outResult;
       }
       // Real variance for each position (float64)
       for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
@@ -2233,8 +2224,8 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
     const acc = getFloatAcc(dtype);
     if (acc) {
       // float16/float32: accumulate and store in the input dtype to match NumPy
-      const Ctor = getTypedArrayConstructor(dtype)!;
-      const resultData = new Ctor(size);
+      const result = ArrayStorage.empty([size], dtype);
+      const resultData = result.data;
       acc[0] = 0;
       if (contiguous) {
         for (let i = 0; i < size; i++) {
@@ -2247,9 +2238,10 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
           resultData[i] = acc[0]!;
         }
       }
-      return ArrayStorage.fromData(resultData as unknown as TypedArray, [size], dtype);
+      return result;
     }
-    const resultData = new Float64Array(size);
+    const result = ArrayStorage.empty([size], 'float64');
+    const resultData = result.data as Float64Array;
     let sum = 0;
     if (contiguous) {
       for (let i = 0; i < size; i++) {
@@ -2262,7 +2254,7 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
         resultData[i] = sum;
       }
     }
-    return ArrayStorage.fromData(resultData, [size], 'float64');
+    return result;
   }
 
   // Normalize axis
@@ -2276,10 +2268,9 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
 
   // Create result with same shape
   const axisAcc = getFloatAcc(dtype);
-  const axisCtor = axisAcc ? getTypedArrayConstructor(dtype)! : null;
-  const resultData = axisCtor
-    ? (new axisCtor(storage.size) as unknown as TypedArray)
-    : new Float64Array(storage.size);
+  const outDtype2 = axisAcc ? dtype : 'float64';
+  const result = ArrayStorage.empty([...shape], outDtype2);
+  const resultData = result.data;
   const axisSize = shape[normalizedAxis]!;
 
   // Precompute offsets for outer iteration
@@ -2328,7 +2319,7 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(resultData, [...shape], axisAcc ? dtype : 'float64');
+  return result;
 }
 
 /**
@@ -2444,7 +2435,8 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   if (axis === undefined) {
     // Flatten and cumprod
     const size = storage.size;
-    const resultData = new Float64Array(size);
+    const result = ArrayStorage.empty([size], 'float64');
+    const resultData = result.data as Float64Array;
     let prod = 1;
     if (contiguous) {
       for (let i = 0; i < size; i++) {
@@ -2457,7 +2449,7 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
         resultData[i] = prod;
       }
     }
-    return ArrayStorage.fromData(resultData, [size], 'float64');
+    return result;
   }
 
   // Normalize axis
@@ -2470,7 +2462,8 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   }
 
   // Create result with same shape
-  const resultData = new Float64Array(storage.size);
+  const result = ArrayStorage.empty([...shape], 'float64');
+  const resultData = result.data as Float64Array;
   const axisSize = shape[normalizedAxis]!;
 
   // Precompute offsets for outer iteration
@@ -2505,7 +2498,7 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(resultData, [...shape], 'float64');
+  return result;
 }
 
 /**
@@ -2533,14 +2526,15 @@ export function ptp(
     try {
       const maxData = maxStorage.data as Float64Array | Float32Array;
       const minData = minStorage.data as Float64Array | Float32Array;
-      const resultData = new Float64Array(maxStorage.size * 2);
+      const result = ArrayStorage.empty([...maxStorage.shape], dtype);
+      const resultData = result.data as Float64Array;
 
       for (let i = 0; i < maxStorage.size; i++) {
         resultData[i * 2] = maxData[i * 2]! - minData[i * 2]!;
         resultData[i * 2 + 1] = maxData[i * 2 + 1]! - minData[i * 2 + 1]!;
       }
 
-      return ArrayStorage.fromData(resultData, [...maxStorage.shape], dtype);
+      return result;
     } finally {
       maxStorage.dispose();
       minStorage.dispose();
@@ -2689,7 +2683,8 @@ export function quantile(
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -2722,8 +2717,6 @@ export function quantile(
       resultData[outerIdx] = values[lower]! * (1 - frac) + values[upper]! * frac;
     }
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -2903,7 +2896,8 @@ export function average(
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
   const weightData = weights.data;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -2927,8 +2921,6 @@ export function average(
 
     resultData[outerIdx] = sumWeights === 0 ? NaN : sumWeightedValues / sumWeights;
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -3075,7 +3067,8 @@ export function nansum(
 
   if (isComplex) {
     const complexData = data as Float64Array | Float32Array;
-    const resultData = new Float64Array(outerSize * 2);
+    const result = ArrayStorage.empty(outputShape, dtype);
+    const resultData = result.data as Float64Array;
 
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
       let totalRe = 0;
@@ -3099,10 +3092,11 @@ export function nansum(
       keepdimsShape[normalizedAxis] = 1;
       return ArrayStorage.fromData(resultData, keepdimsShape, dtype);
     }
-    return ArrayStorage.fromData(resultData, outputShape, dtype);
+    return result;
   }
 
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
     let total = 0;
@@ -3116,8 +3110,6 @@ export function nansum(
     }
     resultData[outerIdx] = total;
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -3232,7 +3224,8 @@ export function nanprod(
 
   if (isComplex) {
     const complexData = data as Float64Array | Float32Array;
-    const resultData = new Float64Array(outerSize * 2);
+    const result = ArrayStorage.empty(outputShape, dtype);
+    const resultData = result.data as Float64Array;
 
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
       let totalRe = 1;
@@ -3258,10 +3251,11 @@ export function nanprod(
       keepdimsShape[normalizedAxis] = 1;
       return ArrayStorage.fromData(resultData, keepdimsShape, dtype);
     }
-    return ArrayStorage.fromData(resultData, outputShape, dtype);
+    return result;
   }
 
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
     let total = 1;
@@ -3275,8 +3269,6 @@ export function nanprod(
     }
     resultData[outerIdx] = total;
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -3418,7 +3410,8 @@ export function nanmean(
 
   if (isComplex) {
     const complexData = data as Float64Array | Float32Array;
-    const resultData = new Float64Array(outerSize * 2);
+    const result = ArrayStorage.empty(outputShape, dtype);
+    const resultData = result.data as Float64Array;
 
     for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
       let totalRe = 0;
@@ -3449,10 +3442,11 @@ export function nanmean(
       keepdimsShape[normalizedAxis] = 1;
       return ArrayStorage.fromData(resultData, keepdimsShape, dtype);
     }
-    return ArrayStorage.fromData(resultData, outputShape, dtype);
+    return result;
   }
 
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
     let total = 0;
@@ -3468,8 +3462,6 @@ export function nanmean(
     }
     resultData[outerIdx] = count === 0 ? NaN : total / count;
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -3584,7 +3576,8 @@ export function nanvar(
 
     const outerSize = outputShape.reduce((a, b) => a * b, 1);
     const axisSize = shape[normalizedAxis]!;
-    const resultData = new Float64Array(outerSize);
+    const result = ArrayStorage.empty(outputShape, 'float64');
+    const resultData = result.data as Float64Array;
 
     const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
       shape,
@@ -3634,8 +3627,6 @@ export function nanvar(
       }
       resultData[outerIdx] = sumSq / (count - ddof);
     }
-
-    const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
     if (keepdims) {
       const keepdimsShape = [...shape];
@@ -3710,7 +3701,8 @@ export function nanvar(
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -3754,8 +3746,6 @@ export function nanvar(
     resultData[outerIdx] = sumSq / (count - ddof);
   }
 
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
-
   if (keepdims) {
     const keepdimsShape = [...shape];
     keepdimsShape[normalizedAxis] = 1;
@@ -3781,11 +3771,12 @@ export function nanstd(
     return Math.sqrt(varResult);
   }
   const varStorage = varResult as ArrayStorage;
-  const resultData = new Float64Array(varStorage.size);
+  const result = ArrayStorage.empty([...varStorage.shape], 'float64');
+  const resultData = result.data as Float64Array;
   for (let i = 0; i < varStorage.size; i++) {
     resultData[i] = Math.sqrt(Number(varStorage.data[i]));
   }
-  return ArrayStorage.fromData(resultData, [...varStorage.shape], 'float64');
+  return result;
 }
 
 /**
@@ -3877,7 +3868,8 @@ export function nanmin(
 
     const outerSize = outputShape.reduce((a, b) => a * b, 1);
     const axisSize = shape[normalizedAxis]!;
-    const resultData = new Float64Array(outerSize * 2);
+    const result = ArrayStorage.empty(outputShape, dtype);
+    const resultData = result.data as Float64Array;
 
     const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
       shape,
@@ -3914,8 +3906,6 @@ export function nanmin(
       resultData[outerIdx * 2] = foundNonNaN ? minRe : NaN;
       resultData[outerIdx * 2 + 1] = foundNonNaN ? minIm : NaN;
     }
-
-    const result = ArrayStorage.fromData(resultData, outputShape, dtype);
 
     if (keepdims) {
       const keepdimsShape = [...shape];
@@ -3969,7 +3959,8 @@ export function nanmin(
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -3991,8 +3982,6 @@ export function nanmin(
     }
     resultData[outerIdx] = minVal === Infinity ? NaN : minVal;
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -4092,7 +4081,8 @@ export function nanmax(
 
     const outerSize = outputShape.reduce((a, b) => a * b, 1);
     const axisSize = shape[normalizedAxis]!;
-    const resultData = new Float64Array(outerSize * 2);
+    const result = ArrayStorage.empty(outputShape, dtype);
+    const resultData = result.data as Float64Array;
 
     const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
       shape,
@@ -4129,8 +4119,6 @@ export function nanmax(
       resultData[outerIdx * 2] = foundNonNaN ? maxRe : NaN;
       resultData[outerIdx * 2 + 1] = foundNonNaN ? maxIm : NaN;
     }
-
-    const result = ArrayStorage.fromData(resultData, outputShape, dtype);
 
     if (keepdims) {
       const keepdimsShape = [...shape];
@@ -4184,7 +4172,8 @@ export function nanmax(
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -4206,8 +4195,6 @@ export function nanmax(
     }
     resultData[outerIdx] = maxVal === -Infinity ? NaN : maxVal;
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -4285,7 +4272,8 @@ export function nanargmin(storage: ArrayStorage, axis?: number): ArrayStorage | 
 
     const outerSize = outputShape.reduce((a, b) => a * b, 1);
     const axisSize = shape[normalizedAxis]!;
-    const resultData = new Int32Array(outerSize);
+    const result = ArrayStorage.empty(outputShape, 'int32');
+    const resultData = result.data as Int32Array;
 
     const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
       shape,
@@ -4313,7 +4301,7 @@ export function nanargmin(storage: ArrayStorage, axis?: number): ArrayStorage | 
       resultData[outerIdx] = minIdx;
     }
 
-    return ArrayStorage.fromData(resultData, outputShape, 'int32');
+    return result;
   }
 
   // Non-complex path
@@ -4357,7 +4345,8 @@ export function nanargmin(storage: ArrayStorage, axis?: number): ArrayStorage | 
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Int32Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'int32');
+  const resultData = result.data as Int32Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -4382,7 +4371,7 @@ export function nanargmin(storage: ArrayStorage, axis?: number): ArrayStorage | 
     resultData[outerIdx] = minIdx;
   }
 
-  return ArrayStorage.fromData(resultData, outputShape, 'int32');
+  return result;
 }
 
 /**
@@ -4453,7 +4442,8 @@ export function nanargmax(storage: ArrayStorage, axis?: number): ArrayStorage | 
 
     const outerSize = outputShape.reduce((a, b) => a * b, 1);
     const axisSize = shape[normalizedAxis]!;
-    const resultData = new Int32Array(outerSize);
+    const result = ArrayStorage.empty(outputShape, 'int32');
+    const resultData = result.data as Int32Array;
 
     const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
       shape,
@@ -4481,7 +4471,7 @@ export function nanargmax(storage: ArrayStorage, axis?: number): ArrayStorage | 
       resultData[outerIdx] = maxIdx;
     }
 
-    return ArrayStorage.fromData(resultData, outputShape, 'int32');
+    return result;
   }
 
   // Non-complex path
@@ -4525,7 +4515,8 @@ export function nanargmax(storage: ArrayStorage, axis?: number): ArrayStorage | 
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Int32Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'int32');
+  const resultData = result.data as Int32Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -4550,7 +4541,7 @@ export function nanargmax(storage: ArrayStorage, axis?: number): ArrayStorage | 
     resultData[outerIdx] = maxIdx;
   }
 
-  return ArrayStorage.fromData(resultData, outputShape, 'int32');
+  return result;
 }
 
 /**
@@ -4675,7 +4666,8 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
   if (axis === undefined) {
     // Flatten and cumsum
     const size = storage.size;
-    const resultData = new Float64Array(size);
+    const result = ArrayStorage.empty([size], 'float64');
+    const resultData = result.data as Float64Array;
     let sum = 0;
     const contiguous = storage.isCContiguous;
     if (contiguous) {
@@ -4695,7 +4687,7 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
         resultData[i] = sum;
       }
     }
-    return ArrayStorage.fromData(resultData, [size], 'float64');
+    return result;
   }
 
   // Normalize axis
@@ -4708,7 +4700,8 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
   }
 
   // Create result with same shape
-  const resultData = new Float64Array(storage.size);
+  const result = ArrayStorage.empty([...shape], 'float64');
+  const resultData = result.data as Float64Array;
   const axisSize = shape[normalizedAxis]!;
 
   // Calculate strides
@@ -4748,7 +4741,7 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(resultData, [...shape], 'float64');
+  return result;
 }
 
 /**
@@ -4892,7 +4885,8 @@ export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   if (axis === undefined) {
     // Flatten and cumprod
     const size = storage.size;
-    const resultData = new Float64Array(size);
+    const result = ArrayStorage.empty([size], 'float64');
+    const resultData = result.data as Float64Array;
     let prod = 1;
     const contiguous = storage.isCContiguous;
     if (contiguous) {
@@ -4912,7 +4906,7 @@ export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
         resultData[i] = prod;
       }
     }
-    return ArrayStorage.fromData(resultData, [size], 'float64');
+    return result;
   }
 
   // Normalize axis
@@ -4925,7 +4919,8 @@ export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   }
 
   // Create result with same shape
-  const resultData = new Float64Array(storage.size);
+  const result = ArrayStorage.empty([...shape], 'float64');
+  const resultData = result.data as Float64Array;
   const axisSize = shape[normalizedAxis]!;
 
   // Calculate strides
@@ -4965,7 +4960,7 @@ export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
     }
   }
 
-  return ArrayStorage.fromData(resultData, [...shape], 'float64');
+  return result;
 }
 
 /**
@@ -5039,7 +5034,8 @@ export function nanmedian(
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -5076,8 +5072,6 @@ export function nanmedian(
       resultData[outerIdx] = values[mid]!;
     }
   }
-
-  const result = ArrayStorage.fromData(resultData, outputShape, 'float64');
 
   if (keepdims) {
     const keepdimsShape = [...shape];
@@ -5167,7 +5161,8 @@ export function nanquantile(
 
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
-  const resultData = new Float64Array(outerSize);
+  const result = ArrayStorage.empty(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
     shape,
@@ -5207,15 +5202,13 @@ export function nanquantile(
     }
   }
 
-  const resultQ = ArrayStorage.fromData(resultData, outputShape, 'float64');
-
   if (keepdims) {
     const keepdimsShape = [...shape];
     keepdimsShape[normalizedAxis] = 1;
     return ArrayStorage.fromData(resultData, keepdimsShape, 'float64');
   }
 
-  return resultQ;
+  return result;
 }
 
 /**
