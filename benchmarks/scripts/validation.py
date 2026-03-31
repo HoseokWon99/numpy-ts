@@ -118,8 +118,6 @@ def run_operation(spec):
         result = np.identity(arrays["n"])
     elif operation == "empty":
         result = np.empty(arrays["shape"])
-        # For empty, just return zeros (we can't compare uninitialized data)
-        result = np.zeros(arrays["shape"])
     elif operation == "full":
         result = np.full(arrays["shape"], arrays["fill_value"])
     elif operation == "copy":

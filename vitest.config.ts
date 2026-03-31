@@ -112,9 +112,10 @@ export default defineConfig({
         },
       }),
       // Tree-shaking tests (tests with multiple bundlers)
-      // Runs after all other projects (groupOrder: 1) so the beforeAll can
+      // Runs after all other projects (groupOrder: 1) so the setupFile can
       // rebuild with production (ReleaseFast) WASM without clobbering dist/
       // while bundle tests are still reading from it.
+      // Uses setupFiles (not globalSetup) so the build respects project ordering.
       defineProject({
         test: {
           name: 'tree-shaking',
@@ -123,7 +124,7 @@ export default defineConfig({
           environment: 'node',
           testTimeout: 300000, // 5 minutes - bundling can take time
           sequence: { groupOrder: 1 },
-          globalSetup: ['tests/tree-shaking/global-setup.ts'],
+          setupFiles: ['tests/tree-shaking/setup.ts'],
         },
       }),
     ],
