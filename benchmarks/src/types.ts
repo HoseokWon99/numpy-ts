@@ -54,7 +54,7 @@ export interface BenchmarkComparison {
 }
 
 export interface BenchmarkSummary {
-  avg_slowdown: number;
+  geo_mean: number;
   median_slowdown: number;
   best_case: number;
   worst_case: number;

@@ -69,8 +69,7 @@ export function compareResults(
 export function calculateSummary(comparisons: BenchmarkComparison[]): BenchmarkSummary {
   const ratios = comparisons.map((c) => c.ratio);
 
-  const sum = ratios.reduce((a, b) => a + b, 0);
-  const avg_slowdown = sum / ratios.length;
+  const geo_mean = Math.exp(ratios.reduce((s, r) => s + Math.log(r), 0) / ratios.length);
 
   const sorted = [...ratios].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -81,7 +80,7 @@ export function calculateSummary(comparisons: BenchmarkComparison[]): BenchmarkS
   const worst_case = Math.max(...ratios);
 
   return {
-    avg_slowdown,
+    geo_mean,
     median_slowdown,
     best_case,
     worst_case,
@@ -109,16 +108,16 @@ export function groupByCategory(
 
 export function getCategorySummaries(
   comparisons: BenchmarkComparison[]
-): Map<string, { avg_slowdown: number; count: number }> {
+): Map<string, { geo_mean: number; count: number }> {
   const groups = groupByCategory(comparisons);
-  const summaries = new Map<string, { avg_slowdown: number; count: number }>();
+  const summaries = new Map<string, { geo_mean: number; count: number }>();
 
   for (const [category, items] of groups) {
     const ratios = items.map((item) => item.ratio);
-    const avg_slowdown = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const geo_mean = Math.exp(ratios.reduce((s, r) => s + Math.log(r), 0) / ratios.length);
 
     summaries.set(category, {
-      avg_slowdown,
+      geo_mean,
       count: items.length,
     });
   }
@@ -128,7 +127,7 @@ export function getCategorySummaries(
 
 export function getDtypeSummaries(
   comparisons: BenchmarkComparison[]
-): Map<string, { avg_slowdown: number; median_slowdown: number; count: number }> {
+): Map<string, { geo_mean: number; median_slowdown: number; count: number }> {
   const dtypeRe =
     /\s+(float64|float32|float16|complex128|complex64|int64|int32|int16|int8|uint64|uint32|uint16|uint8|bool)$/;
   const groups = new Map<string, number[]>();
@@ -143,7 +142,7 @@ export function getDtypeSummaries(
 
   const summaries = new Map<
     string,
-    { avg_slowdown: number; median_slowdown: number; count: number }
+    { geo_mean: number; median_slowdown: number; count: number }
   >();
   // Order dtypes consistently
   const dtypeOrder = [
@@ -166,11 +165,11 @@ export function getDtypeSummaries(
   for (const dtype of dtypeOrder) {
     const ratios = groups.get(dtype);
     if (!ratios) continue;
-    const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const geo = Math.exp(ratios.reduce((s, r) => s + Math.log(r), 0) / ratios.length);
     const sorted = [...ratios].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     const median = sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
-    summaries.set(dtype, { avg_slowdown: avg, median_slowdown: median, count: ratios.length });
+    summaries.set(dtype, { geo_mean: geo, median_slowdown: median, count: ratios.length });
   }
 
   return summaries;
@@ -179,7 +178,7 @@ export function getDtypeSummaries(
 export function getMultiRuntimeDtypeSummaries(
   comparisons: RuntimeComparison[],
   runtimeName: string
-): Map<string, { avg_slowdown: number; median_slowdown: number; count: number }> {
+): Map<string, { geo_mean: number; median_slowdown: number; count: number }> {
   // Convert RuntimeComparison to BenchmarkComparison for the given runtime
   const benchComparisons: BenchmarkComparison[] = [];
   for (const c of comparisons) {
@@ -250,7 +249,7 @@ export function printResults(comparisons: BenchmarkComparison[], summary: Benchm
   console.log('SUMMARY');
   console.log('='.repeat(80));
   console.log(`Total benchmarks: ${summary.total_benchmarks}`);
-  console.log(`Average slowdown: ${formatRatio(summary.avg_slowdown)}`);
+  console.log(`Geo mean:         ${formatRatio(summary.geo_mean)}`);
   console.log(`Median slowdown:  ${formatRatio(summary.median_slowdown)}`);
   console.log(`Best case:        ${formatRatio(summary.best_case)}`);
   console.log(`Worst case:       ${formatRatio(summary.worst_case)}`);
@@ -259,7 +258,7 @@ export function printResults(comparisons: BenchmarkComparison[], summary: Benchm
   const categorySummaries = getCategorySummaries(comparisons);
   console.log('\nBy Category:');
   for (const [category, data] of categorySummaries) {
-    console.log(`  ${category.padEnd(15)} ${formatRatio(data.avg_slowdown).padStart(8)}`);
+    console.log(`  ${category.padEnd(15)} ${formatRatio(data.geo_mean).padStart(8)}`);
   }
 
   // Print dtype summaries
@@ -268,7 +267,7 @@ export function printResults(comparisons: BenchmarkComparison[], summary: Benchm
     console.log('\nBy DType:');
     for (const [dtype, data] of dtypeSums) {
       console.log(
-        `  ${dtype.padEnd(12)} avg ${formatRatio(data.avg_slowdown).padStart(8)}  median ${formatRatio(data.median_slowdown).padStart(8)}  (${data.count} benchmarks)`
+        `  ${dtype.padEnd(12)} geo ${formatRatio(data.geo_mean).padStart(8)}  median ${formatRatio(data.median_slowdown).padStart(8)}  (${data.count} benchmarks)`
       );
     }
   }
@@ -330,15 +329,14 @@ export function calculateMultiRuntimeSummaries(
 
     if (ratios.length === 0) continue;
 
-    const sum = ratios.reduce((a, b) => a + b, 0);
-    const avg_slowdown = sum / ratios.length;
+    const geo_mean = Math.exp(ratios.reduce((s, r) => s + Math.log(r), 0) / ratios.length);
     const sorted = [...ratios].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     const median_slowdown =
       sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 
     summaries[runtimeName] = {
-      avg_slowdown,
+      geo_mean,
       median_slowdown,
       best_case: Math.min(...ratios),
       worst_case: Math.max(...ratios),
@@ -405,7 +403,7 @@ export function printMultiRuntimeResults(
 
   for (const [runtimeName, summary] of Object.entries(summaries)) {
     console.log(`\n  ${runtimeName}:`);
-    console.log(`    Average slowdown: ${formatRatio(summary.avg_slowdown)}`);
+    console.log(`    Geo mean:         ${formatRatio(summary.geo_mean)}`);
     console.log(`    Median slowdown:  ${formatRatio(summary.median_slowdown)}`);
     console.log(`    Best case:        ${formatRatio(summary.best_case)}`);
     console.log(`    Worst case:       ${formatRatio(summary.worst_case)}`);

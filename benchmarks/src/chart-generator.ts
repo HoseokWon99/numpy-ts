@@ -13,7 +13,7 @@ export async function generatePNGChart(report: BenchmarkReport, outputPath: stri
 
   // Prepare data
   const categories = Array.from(categorySummaries.keys());
-  const avgSlowdowns = categories.map((cat) => categorySummaries.get(cat)!.avg_slowdown);
+  const geoSlowdowns = categories.map((cat) => categorySummaries.get(cat)!.geo_mean);
 
   // Chart dimensions
   const width = 1200;
@@ -33,8 +33,8 @@ export async function generatePNGChart(report: BenchmarkReport, outputPath: stri
       labels: categories.map((c) => c.charAt(0).toUpperCase() + c.slice(1)),
       datasets: [
         {
-          label: 'Average Slowdown (x times slower than NumPy)',
-          data: avgSlowdowns,
+          label: 'Geo Mean Slowdown (x times slower than NumPy)',
+          data: geoSlowdowns,
           backgroundColor: [
             'rgba(75, 192, 192, 0.8)', // creation - teal
             'rgba(255, 159, 64, 0.8)', // arithmetic - orange
@@ -60,7 +60,7 @@ export async function generatePNGChart(report: BenchmarkReport, outputPath: stri
           display: true,
           text: [
             `numpy-ts vs ${report.environment.baseline === 'pyodide' ? 'Pyodide NumPy (WASM)' : 'Python NumPy'} Performance`,
-            `Overall: ${summary.avg_slowdown.toFixed(1)}x slower (avg) | Best: ${summary.best_case.toFixed(1)}x | Worst: ${summary.worst_case.toFixed(1)}x`,
+            `Overall: ${summary.geo_mean.toFixed(1)}x slower (geo) | Best: ${summary.best_case.toFixed(1)}x | Worst: ${summary.worst_case.toFixed(1)}x`,
           ],
           font: {
             size: 18,
@@ -298,7 +298,7 @@ export async function generateMultiRuntimePNGChart(
       border: 'rgba(153, 102, 255, 1)',
     };
     return {
-      label: `${rt.charAt(0).toUpperCase() + rt.slice(1)} (avg slowdown)`,
+      label: `${rt.charAt(0).toUpperCase() + rt.slice(1)} (geo slowdown)`,
       data,
       backgroundColor: colors.bg,
       borderColor: colors.border,
@@ -309,7 +309,7 @@ export async function generateMultiRuntimePNGChart(
   // Build subtitle parts
   const subtitleParts = runtimeNames
     .filter((rt) => summaries[rt])
-    .map((rt) => `${rt}: ${summaries[rt]!.avg_slowdown.toFixed(1)}x avg`);
+    .map((rt) => `${rt}: ${summaries[rt]!.geo_mean.toFixed(1)}x geo`);
 
   const width = 1200;
   const height = 600;

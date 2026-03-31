@@ -67,7 +67,7 @@ function createHTML(report: BenchmarkReport): string {
 
   // Prepare data for charts
   const categories = Array.from(groups.keys());
-  const categoryAvgSlowdowns = categories.map((cat) => categorySummaries.get(cat)!.avg_slowdown);
+  const categoryAvgSlowdowns = categories.map((cat) => categorySummaries.get(cat)!.geo_mean);
 
   // All benchmark names and ratios for detailed chart
   const benchmarkNames = results.map((r) => r.name);
@@ -258,8 +258,8 @@ function createHTML(report: BenchmarkReport): string {
 
     <div class="summary-grid">
       <div class="summary-card">
-        <h3>Average Slowdown</h3>
-        <div class="value">${formatRatio(summary.avg_slowdown)}</div>
+        <h3>Geo Mean</h3>
+        <div class="value">${formatRatio(summary.geo_mean)}</div>
       </div>
       <div class="summary-card">
         <h3>Median Slowdown</h3>
@@ -278,7 +278,7 @@ function createHTML(report: BenchmarkReport): string {
     ${generateDtypeBreakdown(dtypeSummaries)}
 
     <div class="chart-container">
-      <h2>📊 Average Slowdown by Category</h2>
+      <h2>📊 Geo Mean by Category</h2>
       <canvas id="categoryChart"></canvas>
     </div>
 
@@ -302,7 +302,7 @@ function createHTML(report: BenchmarkReport): string {
       data: {
         labels: ${JSON.stringify(categories)},
         datasets: [{
-          label: 'Average Slowdown (x times slower than NumPy)',
+          label: 'Geo Mean (x times slower than NumPy)',
           data: ${JSON.stringify(categoryAvgSlowdowns)},
           backgroundColor: 'rgba(102, 126, 234, 0.8)',
           borderColor: 'rgba(102, 126, 234, 1)',
@@ -476,7 +476,7 @@ function createMultiRuntimeHTML(report: MultiRuntimeReport): string {
         <div class="runtime-card ${rt}">
           <h3>${rt}</h3>
           <div class="version">v${environment.runtimes[rt]}</div>
-          ${summaries[rt] ? `<div class="version">Avg: ${formatRatio(summaries[rt]!.avg_slowdown)} | Median: ${formatRatio(summaries[rt]!.median_slowdown)}</div>` : ''}
+          ${summaries[rt] ? `<div class="version">Geo: ${formatRatio(summaries[rt]!.geo_mean)} | Median: ${formatRatio(summaries[rt]!.median_slowdown)}</div>` : ''}
         </div>
       `
         )
@@ -490,9 +490,9 @@ function createMultiRuntimeHTML(report: MultiRuntimeReport): string {
           if (!s) return '';
           return `
         <div class="summary-card">
-          <h3>Average Slowdown</h3>
+          <h3>Geo Mean</h3>
           <div class="runtime-label">${rt}</div>
-          <div class="value">${formatRatio(s.avg_slowdown)}</div>
+          <div class="value">${formatRatio(s.geo_mean)}</div>
         </div>`;
         })
         .join('')}
@@ -507,7 +507,7 @@ function createMultiRuntimeHTML(report: MultiRuntimeReport): string {
       .join('')}
 
     <div class="chart-container">
-      <h2>Average Slowdown by Category (Grouped)</h2>
+      <h2>Geo Mean by Category (Grouped)</h2>
       <canvas id="categoryChart"></canvas>
     </div>
 
@@ -619,7 +619,7 @@ function generateMultiRuntimeCategoryTables(
 }
 
 function generateDtypeBreakdown(
-  dtypeSummaries: Map<string, { avg_slowdown: number; median_slowdown: number; count: number }>
+  dtypeSummaries: Map<string, { geo_mean: number; median_slowdown: number; count: number }>
 ): string {
   if (dtypeSummaries.size <= 1) return ''; // Only float64 — nothing interesting to show
 
@@ -644,12 +644,12 @@ function generateDtypeBreakdown(
 
   for (const [dtype, data] of dtypeSummaries) {
     const colors = DTYPE_COLORS[dtype] ?? DTYPE_COLORS['float64']!;
-    const ratioClass = data.avg_slowdown < 2 ? 'good' : data.avg_slowdown < 5 ? 'ok' : 'bad';
+    const ratioClass = data.geo_mean < 2 ? 'good' : data.geo_mean < 5 ? 'ok' : 'bad';
     html += `
               <tr>
                 <td><span style="display:inline-block;font-size:0.85em;font-weight:600;padding:2px 8px;border-radius:3px;background:${colors.bg};color:${colors.text}">${dtype}</span></td>
                 <td>${data.count}</td>
-                <td><span class="ratio ${ratioClass}">${formatRatio(data.avg_slowdown)}</span></td>
+                <td><span class="ratio ${ratioClass}">${formatRatio(data.geo_mean)}</span></td>
                 <td>${formatRatio(data.median_slowdown)}</td>
               </tr>`;
   }
@@ -665,7 +665,7 @@ function generateDtypeBreakdown(
 }
 
 function generateDtypeBreakdownMultiRuntime(
-  dtypeSummaries: Map<string, { avg_slowdown: number; median_slowdown: number; count: number }>,
+  dtypeSummaries: Map<string, { geo_mean: number; median_slowdown: number; count: number }>,
   runtimeName: string
 ): string {
   if (dtypeSummaries.size <= 1) return '';
@@ -692,12 +692,12 @@ function generateDtypeBreakdownMultiRuntime(
 
   for (const [dtype, data] of dtypeSummaries) {
     const colors = DTYPE_COLORS[dtype] ?? DTYPE_COLORS['float64']!;
-    const ratioClass = data.avg_slowdown < 2 ? 'good' : data.avg_slowdown < 5 ? 'ok' : 'bad';
+    const ratioClass = data.geo_mean < 2 ? 'good' : data.geo_mean < 5 ? 'ok' : 'bad';
     html += `
               <tr>
                 <td><span style="display:inline-block;font-size:0.85em;font-weight:600;padding:2px 8px;border-radius:3px;background:${colors.bg};color:${colors.text}">${dtype}</span></td>
                 <td>${data.count}</td>
-                <td><span class="ratio ${ratioClass}">${formatRatio(data.avg_slowdown)}</span></td>
+                <td><span class="ratio ${ratioClass}">${formatRatio(data.geo_mean)}</span></td>
                 <td>${formatRatio(data.median_slowdown)}</td>
               </tr>`;
   }
@@ -713,13 +713,13 @@ function generateDtypeBreakdownMultiRuntime(
 }
 
 function generateDtypeChartScript(
-  dtypeSummaries: Map<string, { avg_slowdown: number; median_slowdown: number; count: number }>,
+  dtypeSummaries: Map<string, { geo_mean: number; median_slowdown: number; count: number }>,
   canvasId: string = 'dtypeChart'
 ): string {
   if (dtypeSummaries.size <= 1) return '';
 
   const labels = Array.from(dtypeSummaries.keys());
-  const avgData = labels.map((d) => dtypeSummaries.get(d)!.avg_slowdown);
+  const avgData = labels.map((d) => dtypeSummaries.get(d)!.geo_mean);
   const medianData = labels.map((d) => dtypeSummaries.get(d)!.median_slowdown);
   const bgColors = labels.map((d) => {
     const c = DTYPE_COLORS[d] ?? DTYPE_COLORS['float64']!;
