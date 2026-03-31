@@ -19,15 +19,15 @@ import { Complex } from '../complex';
 import { wasmReduceSum, wasmReduceSumStrided } from '../wasm/reduce_sum';
 import { wasmReduceMax, wasmReduceMaxStrided } from '../wasm/reduce_max';
 import { wasmReduceMin, wasmReduceMinStrided } from '../wasm/reduce_min';
-import { wasmReduceArgmax } from '../wasm/reduce_argmax';
-import { wasmReduceArgmin } from '../wasm/reduce_argmin';
+import { wasmReduceArgmax, wasmReduceArgmaxStrided } from '../wasm/reduce_argmax';
+import { wasmReduceArgmin, wasmReduceArgminStrided } from '../wasm/reduce_argmin';
 import { wasmReduceMean, wasmReduceMeanStrided } from '../wasm/reduce_mean';
 import { wasmReduceVar } from '../wasm/reduce_var';
 import { wasmReduceNansum } from '../wasm/reduce_nansum';
 import { wasmReduceNanmin } from '../wasm/reduce_nanmin';
 import { wasmReduceNanmax } from '../wasm/reduce_nanmax';
 import { wasmReduceProd, wasmReduceProdStrided } from '../wasm/reduce_prod';
-import { wasmReduceQuantile } from '../wasm/reduce_quantile';
+import { wasmReduceQuantile, wasmReduceQuantileStrided } from '../wasm/reduce_quantile';
 import { wasmReduceAny } from '../wasm/reduce_any';
 import { wasmReduceAll } from '../wasm/reduce_all';
 import { wasmReduceStd } from '../wasm/reduce_std';
@@ -1442,11 +1442,37 @@ export function argmin(storage: ArrayStorage, axis?: number): ArrayStorage | num
   }
 
   // Create result storage with int32 dtype (indices are always integers)
+  const axisSize = shape[normalizedAxis]!;
+
+  // WASM strided fast path for argmin (output is always int32)
+  if (storage.isCContiguous && !isComplexDType(dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceArgminStrided(storage, wasmOuter, axisSize, innerSize);
+    if (wasmResult) {
+      const outStrides: number[] = new Array(outputShape.length);
+      let s = 1;
+      for (let i = outputShape.length - 1; i >= 0; i--) {
+        outStrides[i] = s;
+        s *= outputShape[i]!;
+      }
+      const shared = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outputShape,
+        'int32',
+        outStrides,
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return shared;
+    }
+  }
+
   const result = ArrayStorage.zeros(outputShape, 'int32');
   const resultData = result.data;
 
   // Perform reduction along axis
-  const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
@@ -1614,11 +1640,37 @@ export function argmax(storage: ArrayStorage, axis?: number): ArrayStorage | num
   }
 
   // Create result storage with int32 dtype (indices are always integers)
+  const axisSize = shape[normalizedAxis]!;
+
+  // WASM strided fast path for argmax (output is always int32)
+  if (storage.isCContiguous && !isComplexDType(dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceArgmaxStrided(storage, wasmOuter, axisSize, innerSize);
+    if (wasmResult) {
+      const outStrides: number[] = new Array(outputShape.length);
+      let s = 1;
+      for (let i = outputShape.length - 1; i >= 0; i--) {
+        outStrides[i] = s;
+        s *= outputShape[i]!;
+      }
+      const shared = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outputShape,
+        'int32',
+        outStrides,
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return shared;
+    }
+  }
+
   const result = ArrayStorage.zeros(outputShape, 'int32');
   const resultData = result.data;
 
   // Perform reduction along axis
-  const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);
 
   const { baseOffsets, axisStride: axisStr } = precomputeAxisOffsets(
@@ -2681,8 +2733,43 @@ export function quantile(
     return out;
   }
 
-  const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const axisSize = shape[normalizedAxis]!;
+
+  // WASM fast path for strided quantile
+  if (storage.isCContiguous && !isComplexDType(storage.dtype)) {
+    const wasmOuter = shape.slice(0, normalizedAxis).reduce((a, b) => a * b, 1);
+    const innerSize = shape.slice(normalizedAxis + 1).reduce((a, b) => a * b, 1);
+    const wasmResult = wasmReduceQuantileStrided(storage, wasmOuter, axisSize, innerSize, q);
+    if (wasmResult) {
+      if (keepdims) {
+        const keepdimsShape = [...shape];
+        keepdimsShape[normalizedAxis] = 1;
+        const shared = ArrayStorage.fromDataShared(
+          wasmResult.data,
+          keepdimsShape,
+          'float64',
+          computeStrides(keepdimsShape),
+          0,
+          wasmResult.wasmRegion
+        );
+        wasmResult.dispose();
+        return shared;
+      }
+      // Reshape to outputShape
+      const reshaped = ArrayStorage.fromDataShared(
+        wasmResult.data,
+        outputShape,
+        'float64',
+        computeStrides(outputShape),
+        0,
+        wasmResult.wasmRegion
+      );
+      wasmResult.dispose();
+      return reshaped;
+    }
+  }
+
+  const outerSize = outputShape.reduce((a, b) => a * b, 1);
   const result = ArrayStorage.empty(outputShape, 'float64');
   const resultData = result.data as Float64Array;
 
@@ -2694,17 +2781,20 @@ export function quantile(
     outerSize
   );
 
+  // Reuse a single typed array for sorting — avoids per-column JS array allocation
+  const sortBuf = new Float64Array(axisSize);
+
   for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
-    // Collect values along axis
-    const values: number[] = [];
+    // Collect values along axis into reusable buffer
     let bufIdx = baseOffsets[outerIdx]!;
     for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
-      values.push(Number(data[bufIdx]));
+      sortBuf[axisIdx] = Number(data[bufIdx]);
       bufIdx += axisStr;
     }
-    values.sort((a, b) => a - b);
+    sortBuf.sort(); // Float64Array.sort() — no comparator needed, handles NaN
 
-    const n = values.length;
+    const n = axisSize;
+    const values = sortBuf;
     const idx = q * (n - 1);
     const lower = Math.floor(idx);
     const upper = Math.ceil(idx);
