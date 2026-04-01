@@ -1,6 +1,10 @@
 # Claude
 .claude
 
+# Tree-shaking test build sentinels
+.tree-shaking-build.lock
+.tree-shaking-build.done
+
 # Matmul benchmark workspace (local experimentation)
 matmul-bench/
 

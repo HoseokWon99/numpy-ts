@@ -181,6 +181,10 @@ async function main() {
   const results: BenchmarkTiming[] = [];
 
   for (let i = 0; i < specs.length; i++) {
+    // GC between specs to flush FinalizationRegistry callbacks and free WASM memory
+    if (typeof globalThis.gc === 'function') globalThis.gc();
+    else if (typeof globalThis.Bun !== 'undefined') (globalThis as any).Bun.gc(true);
+
     const spec = specs[i]!;
     try {
       const result = runBenchmark(spec);

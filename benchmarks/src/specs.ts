@@ -911,38 +911,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
-    specs.push({
-      name: `absolute [${sizes.medium.join('x')}]`,
-      category: 'math',
-      operation: 'absolute',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -100 },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `negative [${sizes.medium.join('x')}]`,
-      category: 'math',
-      operation: 'negative',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `sign [${sizes.medium.join('x')}]`,
-      category: 'math',
-      operation: 'sign',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -100 },
-      },
-      iterations,
-      warmup,
-    });
+    // absolute, negative, sign are already in arithmetic — not duplicated here.
 
     // Trigonometric & hyperbolic functions
     specs.push({
@@ -3371,27 +3340,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     // (categorized with their natural category)
     // ========================================
 
-    specs.push({
-      name: `zeros [${sizes.medium.join('x')}] complex128`,
-      category: 'creation',
-      operation: 'complex_zeros',
-      setup: {
-        shape: { shape: sizes.medium },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `ones [${sizes.medium.join('x')}] complex128`,
-      category: 'creation',
-      operation: 'complex_ones',
-      setup: {
-        shape: { shape: sizes.medium },
-      },
-      iterations,
-      warmup,
-    });
+    // complex_zeros and complex_ones removed — auto-generated as zeros/ones complex128
 
     specs.push({
       name: `real [${sizes.medium.join('x')}] complex128`,
@@ -3399,6 +3348,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       operation: 'complex_real',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `real [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_real',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
       },
       iterations,
       warmup,
@@ -3416,6 +3376,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `imag [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_imag',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
       name: `conj [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_conj',
@@ -3427,11 +3398,33 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `conj [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_conj',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
       name: `angle [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_angle',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `angle [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_angle',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
       },
       iterations,
       warmup,
@@ -3450,6 +3443,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `abs [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_abs',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
       name: `sqrt [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_sqrt',
@@ -3461,37 +3465,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `sum [${sizes.medium.join('x')}] complex128`,
-      category: 'reductions',
-      operation: 'complex_sum',
+      name: `sqrt [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_sqrt',
       setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
       },
       iterations,
       warmup,
     });
 
-    specs.push({
-      name: `mean [${sizes.medium.join('x')}] complex128`,
-      category: 'reductions',
-      operation: 'complex_mean',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `prod [${sizes.medium.join('x')}] complex128`,
-      category: 'reductions',
-      operation: 'complex_prod',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      warmup,
-    });
+    // complex_sum, complex_mean, complex_prod removed — auto-generated as sum/mean/prod complex128
 
     // ========================================
     // Polynomial Benchmarks

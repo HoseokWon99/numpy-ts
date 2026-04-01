@@ -3,6 +3,7 @@ import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
   test: {
+    globalSetup: ['tests/tree-shaking/global-setup.ts'],
     globals: true,
     environment: 'node',
     reporters: ['default'],
