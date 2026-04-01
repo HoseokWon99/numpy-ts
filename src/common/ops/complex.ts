@@ -10,6 +10,7 @@
 import { ArrayStorage } from '../storage';
 import { isComplexDType, getComplexComponentDType, type DType } from '../dtype';
 import { Complex } from '../complex';
+import { wasmReal, wasmImag } from '../wasm/complex_extract';
 
 /**
  * Return the real part of complex argument.
@@ -22,17 +23,20 @@ import { Complex } from '../complex';
  */
 export function real(a: ArrayStorage): ArrayStorage {
   const dtype = a.dtype as DType;
-  const shape = Array.from(a.shape);
-  const size = a.size;
 
   if (isComplexDType(dtype)) {
-    // Complex array: extract real parts
+    // Try WASM stride-2 extract first
+    const wasm = wasmReal(a);
+    if (wasm) return wasm;
+
+    // JS fallback
+    const shape = Array.from(a.shape);
+    const size = a.size;
     const resultDtype = getComplexComponentDType(dtype);
     const result = ArrayStorage.empty(shape, resultDtype);
     const resultData = result.data;
     const srcData = a.data as Float64Array | Float32Array;
 
-    // Data is interleaved [re, im, re, im, ...]
     for (let i = 0; i < size; i++) {
       (resultData as Float64Array | Float32Array)[i] = srcData[i * 2]!;
     }
@@ -55,17 +59,20 @@ export function real(a: ArrayStorage): ArrayStorage {
  */
 export function imag(a: ArrayStorage): ArrayStorage {
   const dtype = a.dtype as DType;
-  const shape = Array.from(a.shape);
-  const size = a.size;
 
   if (isComplexDType(dtype)) {
-    // Complex array: extract imaginary parts
+    // Try WASM stride-2 extract first
+    const wasm = wasmImag(a);
+    if (wasm) return wasm;
+
+    // JS fallback
+    const shape = Array.from(a.shape);
+    const size = a.size;
     const resultDtype = getComplexComponentDType(dtype);
     const result = ArrayStorage.empty(shape, resultDtype);
     const resultData = result.data;
     const srcData = a.data as Float64Array | Float32Array;
 
-    // Data is interleaved [re, im, re, im, ...]
     for (let i = 0; i < size; i++) {
       (resultData as Float64Array | Float32Array)[i] = srcData[i * 2 + 1]!;
     }
@@ -74,7 +81,7 @@ export function imag(a: ArrayStorage): ArrayStorage {
   }
 
   // Real array: return zeros with appropriate dtype
-  // NumPy returns float64 for integer types
+  const shape = Array.from(a.shape);
   const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
   return ArrayStorage.zeros(shape, resultDtype);
 }

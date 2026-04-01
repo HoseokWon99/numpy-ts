@@ -5,23 +5,27 @@
  * Returns null if WASM can't handle this case.
  */
 
-import { arctan2_f64, arctan2_f32 } from './bins/arctan2.wasm';
+import {
+  arctan2_f64,
+  arctan2_f32,
+  arctan2_i64_f64,
+  arctan2_u64_f64,
+  arctan2_i32_f64,
+  arctan2_u32_f64,
+  arctan2_i16_f64,
+  arctan2_u16_f64,
+  arctan2_i8_f64,
+  arctan2_u8_f64,
+} from './bins/arctan2.wasm';
 import {
   wasmMalloc,
   resetScratchAllocator,
   resolveInputPtr,
-  scratchCopyIn,
   f16InputToScratchF32,
   f32OutputToF16Region,
 } from './runtime';
 import { ArrayStorage } from '../storage';
-import {
-  promoteDTypes,
-  isComplexDType,
-  isBigIntDType,
-  type DType,
-  type TypedArray,
-} from '../dtype';
+import { promoteDTypes, isComplexDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
 
 const BASE_THRESHOLD = 64;
@@ -32,6 +36,29 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: arctan2_f64,
   float32: arctan2_f32,
   float16: arctan2_f32,
+};
+
+// Integer-to-f64 binary kernels: both inputs same integer type, output f64
+const intBinaryKernels: Partial<Record<DType, BinaryFn>> = {
+  int64: arctan2_i64_f64,
+  uint64: arctan2_u64_f64,
+  int32: arctan2_i32_f64,
+  uint32: arctan2_u32_f64,
+  int16: arctan2_i16_f64,
+  uint16: arctan2_u16_f64,
+  int8: arctan2_i8_f64,
+  uint8: arctan2_u8_f64,
+};
+
+const bpeMap: Partial<Record<DType, number>> = {
+  int64: 8,
+  uint64: 8,
+  int32: 4,
+  uint32: 4,
+  int16: 2,
+  uint16: 2,
+  int8: 1,
+  uint8: 1,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -104,34 +131,21 @@ export function wasmArctan2(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nu
     );
   }
 
-  // Integer path: convert both inputs to f64, use f64 kernel (NumPy promotes int→float64)
+  // Integer path: Zig kernel reads native int type, converts to f64 internally.
+  // Both inputs must be the same promoted dtype for the integer kernel.
+  const intKernel = intBinaryKernels[dtype];
+  const inBpe = bpeMap[dtype];
+  if (!intKernel || !inBpe) return null;
+
   const outRegion = wasmMalloc(size * 8);
   if (!outRegion) return null;
 
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, inBpe);
+  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, inBpe);
 
-  const aOff = a.offset;
-  const bOff = b.offset;
-  const aSrc = a.data;
-  const bSrc = b.data;
-  const aF64 = new Float64Array(size);
-  const bF64 = new Float64Array(size);
-  if (isBigIntDType(a.dtype)) {
-    for (let i = 0; i < size; i++) aF64[i] = Number(aSrc[aOff + i]!);
-  } else {
-    for (let i = 0; i < size; i++) aF64[i] = aSrc[aOff + i] as number;
-  }
-  if (isBigIntDType(b.dtype)) {
-    for (let i = 0; i < size; i++) bF64[i] = Number(bSrc[bOff + i]!);
-  } else {
-    for (let i = 0; i < size; i++) bF64[i] = bSrc[bOff + i] as number;
-  }
-
-  const aPtr = scratchCopyIn(aF64 as unknown as TypedArray);
-  const bPtr = scratchCopyIn(bF64 as unknown as TypedArray);
-
-  arctan2_f64(aPtr, bPtr, outRegion.ptr, size);
+  intKernel(aPtr, bPtr, outRegion.ptr, size);
 
   return ArrayStorage.fromWasmRegion(
     Array.from(a.shape),

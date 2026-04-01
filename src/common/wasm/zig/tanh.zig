@@ -41,6 +41,33 @@ export fn tanh_u64(a: [*]const u64, out: [*]f64, N: u32) void {
     }
 }
 
+// --- Smaller integer-to-f64 variants ---
+
+export fn tanh_i32_f64(a: [*]const i32, out: [*]f64, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @floatCast(math.tanh(@as(f64, @floatFromInt(a[i]))));
+}
+export fn tanh_u32_f64(a: [*]const u32, out: [*]f64, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @floatCast(math.tanh(@as(f64, @floatFromInt(a[i]))));
+}
+export fn tanh_i16_f64(a: [*]const i16, out: [*]f64, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @floatCast(math.tanh(@as(f64, @floatFromInt(a[i]))));
+}
+export fn tanh_u16_f64(a: [*]const u16, out: [*]f64, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @floatCast(math.tanh(@as(f64, @floatFromInt(a[i]))));
+}
+export fn tanh_i8_f64(a: [*]const i8, out: [*]f64, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @floatCast(math.tanh(@as(f64, @floatFromInt(a[i]))));
+}
+export fn tanh_u8_f64(a: [*]const u8, out: [*]f64, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @floatCast(math.tanh(@as(f64, @floatFromInt(a[i]))));
+}
+
 // --- Tests ---
 
 test "tanh_f64 basic" {
