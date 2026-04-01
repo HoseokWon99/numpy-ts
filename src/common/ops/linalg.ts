@@ -15,6 +15,8 @@ import {
 } from '../dtype';
 import { Complex } from '../complex';
 import { wasmMatmul } from '../wasm/matmul';
+import { wasmSvdValues } from '../wasm/svd';
+import { wasmVectorNorm2 } from '../wasm/vector_norm';
 import { wasmInner } from '../wasm/inner';
 import { wasmDot1D } from '../wasm/dot';
 import { wasmMatvec } from '../wasm/matvec';
@@ -2724,12 +2726,19 @@ export function vector_norm(
         result += Math.abs(Number(flat.get(i)));
       }
     } else if (ord === 2) {
-      result = 0;
-      for (let i = 0; i < n; i++) {
-        const val = Number(flat.get(i));
-        result += val * val;
+      // WASM fast path for L2 norm
+      const wasmNorm = wasmVectorNorm2(flat);
+      if (wasmNorm !== null) {
+        if (flat !== x) flat.dispose();
+        result = wasmNorm;
+      } else {
+        result = 0;
+        for (let i = 0; i < n; i++) {
+          const val = Number(flat.get(i));
+          result += val * val;
+        }
+        result = Math.sqrt(result);
       }
-      result = Math.sqrt(result);
     } else {
       result = 0;
       for (let i = 0; i < n; i++) {
@@ -4127,8 +4136,8 @@ export function cond(a: ArrayStorage, p: number | 'fro' | 'nuc' = 2): number {
   const [m, n] = a.shape;
 
   if (p === 2 || p === -2) {
-    // Condition number from singular values
-    const { u, s, vt } = svdFull(a);
+    // Condition number from singular values (values only — no U/V needed)
+    const s = svdvals(a);
     try {
       const k = Math.min(m!, n!);
       const maxS = Number(s.get(0));
@@ -4140,9 +4149,7 @@ export function cond(a: ArrayStorage, p: number | 'fro' | 'nuc' = 2): number {
         return maxS > 0 ? minS / maxS : 0;
       }
     } finally {
-      u.dispose();
       s.dispose();
-      vt.dispose();
     }
   }
 
@@ -4184,7 +4191,7 @@ export function matrix_rank(a: ArrayStorage, tol?: number): number {
     throw new Error(`matrix_rank: input must be at most 2D, got ${a.ndim}D`);
   }
 
-  const { u, s, vt } = svdFull(a);
+  const s = svdvals(a);
   try {
     const maxS = Number(s.get(0));
 
@@ -4200,9 +4207,7 @@ export function matrix_rank(a: ArrayStorage, tol?: number): number {
 
     return rank;
   } finally {
-    u.dispose();
     s.dispose();
-    vt.dispose();
   }
 }
 
@@ -5348,7 +5353,11 @@ export function slogdet(a: ArrayStorage): {
  * @returns 1D array of singular values in descending order
  */
 export function svdvals(a: ArrayStorage): ArrayStorage {
-  // Use the existing svd function with compute_uv=false
+  // Fast path: Golub-Kahan (values only, no U/V)
+  const wasmResult = wasmSvdValues(a);
+  if (wasmResult) return wasmResult;
+
+  // Fallback: full SVD, extract S
   const result = svd(a, true, false);
   return result as ArrayStorage;
 }

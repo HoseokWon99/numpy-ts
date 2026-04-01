@@ -793,15 +793,8 @@ function runNumpyTsOperation(spec: BenchmarkCase): any {
       // Return just Q for validation (simpler)
       return (result as { q: any }).q;
     }
-    case 'linalg_cholesky': {
-      // Create positive definite matrix: A^T * A + trace(A^T * A) * I
-      const n = arrays.a.shape[0];
-      const aT = arrays.a.transpose();
-      const aTa = aT.matmul(arrays.a);
-      const tr = np.trace(aTa);
-      const posdef = aTa.add(np.eye(n, undefined, 0, arrays.a.dtype).multiply(tr));
-      return np.linalg.cholesky(posdef);
-    }
+    case 'linalg_cholesky':
+      return np.linalg.cholesky(arrays._posdef ?? arrays.a);
     case 'linalg_svd': {
       const result = np.linalg.svd(arrays.a);
       // Return just S (singular values) for validation

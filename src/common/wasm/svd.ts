@@ -6,7 +6,7 @@
  * Returns null if WASM can't handle this case.
  */
 
-import { svd_f64 } from './bins/svd.wasm';
+import { svd_f64, svd_values_gk_f64 } from './bins/svd.wasm';
 import { wasmMalloc, resetScratchAllocator, scratchCopyIn, scratchAlloc } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { TypedArray } from '../dtype';
@@ -82,4 +82,55 @@ export function wasmSvd(
   const vtStorage = ArrayStorage.fromWasmRegion([n, n], 'float64', vtRegion, vtSize, F64Ctor);
 
   return { u: uStorage, s: sStorage, vt: vtStorage };
+}
+
+/**
+ * WASM-accelerated singular values only (no U, V) via Golub-Kahan.
+ * Much faster than full SVD for svdvals/cond/matrix_rank.
+ * Returns ArrayStorage with singular values, or null.
+ */
+export function wasmSvdValues(a: ArrayStorage): ArrayStorage | null {
+  if (a.ndim !== 2) return null;
+
+  const m = a.shape[0]!;
+  const n = a.shape[1]!;
+  if (
+    m < BASE_THRESHOLD * wasmConfig.thresholdMultiplier ||
+    n < BASE_THRESHOLD * wasmConfig.thresholdMultiplier
+  )
+    return null;
+
+  const k = Math.min(m, n);
+
+  const sRegion = wasmMalloc(k * 8);
+  if (!sRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  // Copy input to scratch as float64
+  const aSize = m * n;
+  const aData = new Float64Array(aSize);
+  const data = a.data;
+  const off = a.offset;
+  if (a.isCContiguous && a.dtype === 'float64') {
+    aData.set((data as Float64Array).subarray(off, off + aSize));
+  } else {
+    for (let i = 0; i < aSize; i++) aData[i] = Number(a.iget(i));
+  }
+
+  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
+  // scratch: m*n (a copy) + 3*k (diag, superdiag, tau)
+  const scratchSize = m * n + 4 * k;
+  const scratchPtr = scratchAlloc(scratchSize * 8);
+
+  svd_values_gk_f64(aPtr, sRegion.ptr, scratchPtr, m, n);
+
+  const F64Ctor = Float64Array as unknown as new (
+    buffer: ArrayBuffer,
+    byteOffset: number,
+    length: number
+  ) => TypedArray;
+
+  return ArrayStorage.fromWasmRegion([k], 'float64', sRegion, k, F64Ctor);
 }
