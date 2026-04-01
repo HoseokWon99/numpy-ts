@@ -16,6 +16,7 @@ const BASE_THRESHOLD = 64;
 
 export function wasmGcdScalar(a: ArrayStorage, scalar: number): ArrayStorage | null {
   if (!a.isCContiguous) return null;
+
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 

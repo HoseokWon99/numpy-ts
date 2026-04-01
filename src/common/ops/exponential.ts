@@ -98,6 +98,11 @@ export function power(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
     return complexPowerArray(a, b);
   }
 
+  // Scalar broadcast: if b is a single element, use the faster scalar path
+  if (b.size === 1) {
+    return powerScalar(a, Number(b.iget(0)));
+  }
+
   const wasmResult = wasmPower(a, b);
   if (wasmResult) return wasmResult;
 

@@ -13,15 +13,7 @@ import {
   tile_2d_i16,
   tile_2d_i8,
 } from './bins/tile.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  resolveInputPtr,
-  scratchCopyIn,
-  getSharedMemory,
-  f16ToF32Input,
-  f32ToF16Output,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -97,20 +89,16 @@ export function wasmTile2D(a: ArrayStorage, repRows: number, repCols: number): A
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
+  // Float16: tile as raw i16 bytes (same 2-byte layout, no conversion needed)
   if (isF16) {
-    let aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    aData = f16ToF32Input(aData, dtype);
-    const aPtr = scratchCopyIn(aData);
-    kernel(aPtr, outRegion.ptr, rows, cols, repRows, repCols);
-    const mem = getSharedMemory();
-    const f32View = new Float32Array(mem.buffer, outRegion.ptr, outSize);
-    const f32Copy = new Float32Array(outSize);
-    f32Copy.set(f32View);
-    outRegion.release();
-    return ArrayStorage.fromData(
-      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
+    tile_2d_i16(aPtr, outRegion.ptr, rows, cols, repRows, repCols);
+    return ArrayStorage.fromWasmRegion(
       [rows * repRows, cols * repCols],
-      dtype
+      dtype,
+      outRegion,
+      outSize,
+      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
   }
 

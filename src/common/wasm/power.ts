@@ -87,6 +87,8 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
  */
 export function wasmPower(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!a.isCContiguous || !b.isCContiguous) return null;
+  // Must be same size — WASM kernel doesn't broadcast
+  if (a.size !== b.size) return null;
 
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;

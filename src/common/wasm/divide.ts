@@ -96,6 +96,9 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 
 export function wasmDiv(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!a.isCContiguous || !b.isCContiguous) return null;
+  // WASM kernel does not broadcast — sizes must match
+  if (a.size !== b.size) return null;
+
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 

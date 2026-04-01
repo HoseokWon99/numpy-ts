@@ -17,10 +17,6 @@ import {
   wasmMalloc,
   resetScratchAllocator,
   resolveInputPtr,
-  scratchCopyIn,
-  getSharedMemory,
-  f16ToF32Input,
-  f32ToF16Output,
 } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
@@ -41,7 +37,7 @@ const kernels: Partial<Record<DType, RepeatFn>> = {
   uint16: repeat_i16,
   int8: repeat_i8,
   uint8: repeat_i8,
-  float16: repeat_f32,
+  float16: repeat_i16, // byte-copy: treat f16 as raw i16
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -56,7 +52,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
-  float16: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
 };
 
 /**
@@ -87,19 +83,11 @@ export function wasmRepeat(a: ArrayStorage, reps: number): ArrayStorage | null {
   resetScratchAllocator();
 
   if (isF16) {
-    let aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    aData = f16ToF32Input(aData, dtype);
-    const aPtr = scratchCopyIn(aData);
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
     kernel(aPtr, outRegion.ptr, size, reps);
-    const mem = getSharedMemory();
-    const f32View = new Float32Array(mem.buffer, outRegion.ptr, outSize);
-    const f32Copy = new Float32Array(outSize);
-    f32Copy.set(f32View);
-    outRegion.release();
-    return ArrayStorage.fromData(
-      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
-      [outSize],
-      dtype
+    return ArrayStorage.fromWasmRegion(
+      [outSize], dtype, outRegion, outSize,
+      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
   }
 

@@ -6,15 +6,7 @@
  */
 
 import { roll_f64, roll_f32, roll_i64, roll_i32, roll_i16, roll_i8 } from './bins/roll.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  resolveInputPtr,
-  scratchCopyIn,
-  getSharedMemory,
-  f16ToF32Input,
-  f32ToF16Output,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -34,7 +26,7 @@ const kernels: Partial<Record<DType, RollFn>> = {
   uint16: roll_i16,
   int8: roll_i8,
   uint8: roll_i8,
-  float16: roll_f32,
+  float16: roll_i16, // byte-copy: treat f16 as raw i16
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -49,7 +41,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
-  float16: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
 };
 
 /**
@@ -77,20 +69,13 @@ export function wasmRoll(a: ArrayStorage, shift: number): ArrayStorage | null {
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
+  // Float16: use i16 kernel on raw bytes (byte-copy, no conversion needed)
   if (isF16) {
-    let aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    aData = f16ToF32Input(aData, dtype);
-    const aPtr = scratchCopyIn(aData);
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
     kernel(aPtr, outRegion.ptr, size, shift);
-    const mem = getSharedMemory();
-    const f32View = new Float32Array(mem.buffer, outRegion.ptr, size);
-    const f32Copy = new Float32Array(size);
-    f32Copy.set(f32View);
-    outRegion.release();
-    return ArrayStorage.fromData(
-      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
-      Array.from(a.shape),
-      dtype
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape), dtype, outRegion, size,
+      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
   }
 

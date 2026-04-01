@@ -1,6 +1,9 @@
 # Claude
 .claude
 
+# Matmul benchmark workspace (local experimentation)
+matmul-bench/
+
 # Node.js
 node_modules/
 npm-debug.log*
