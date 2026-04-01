@@ -7,6 +7,7 @@
  */
 
 import {
+  reduce_argmax_f64,
   reduce_argmax_f32,
   reduce_argmax_i64,
   reduce_argmax_i32,
@@ -42,7 +43,7 @@ const BASE_THRESHOLD = 64;
 type ReduceFn = (aPtr: number, N: number) => number | bigint;
 
 const kernels: Partial<Record<DType, ReduceFn>> = {
-  // float64 excluded: WASM scalar loop is slower than V8's JIT'd loop
+  float64: reduce_argmax_f64,
   float32: reduce_argmax_f32,
   float16: reduce_argmax_f32,
   int64: reduce_argmax_i64,

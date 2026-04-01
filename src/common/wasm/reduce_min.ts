@@ -7,6 +7,7 @@
  */
 
 import {
+  reduce_min_f64,
   reduce_min_f32,
   reduce_min_i64,
   reduce_min_i32,
@@ -16,6 +17,7 @@ import {
   reduce_min_u32,
   reduce_min_u16,
   reduce_min_u8,
+  reduce_min_strided_f64,
   reduce_min_strided_f32,
   reduce_min_strided_i64,
   reduce_min_strided_i32,
@@ -44,7 +46,7 @@ const BASE_THRESHOLD = 64;
 type ReduceFn = (aPtr: number, N: number) => number | bigint;
 
 const kernels: Partial<Record<DType, ReduceFn>> = {
-  // float64 excluded: V2f64 SIMD (2-wide) is slower than V8's JIT'd scalar loop
+  float64: reduce_min_f64,
   float32: reduce_min_f32,
   float16: reduce_min_f32,
   int64: reduce_min_i64,
@@ -107,6 +109,7 @@ export function wasmReduceMin(a: ArrayStorage): number | null {
 type StridedFn = (aPtr: number, outPtr: number, outer: number, axis: number, inner: number) => void;
 
 const stridedKernels: Partial<Record<DType, StridedFn>> = {
+  float64: reduce_min_strided_f64,
   float32: reduce_min_strided_f32,
   float16: reduce_min_strided_f32,
   int64: reduce_min_strided_i64,

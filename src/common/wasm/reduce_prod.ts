@@ -26,7 +26,14 @@ import {
   reduce_prod_strided_u16,
   reduce_prod_strided_u8,
 } from './bins/reduce_prod.wasm';
-import { resetScratchAllocator, resolveInputPtr, alloc, copyOut } from './runtime';
+import {
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  f16ToF32Input,
+  alloc,
+  copyOut,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -38,6 +45,7 @@ type ReduceFn = (aPtr: number, N: number) => number | bigint;
 const kernels: Partial<Record<DType, ReduceFn>> = {
   float64: reduce_prod_f64,
   float32: reduce_prod_f32,
+  float16: reduce_prod_f32, // f16 input converted to f32, then multiplied
   int64: reduce_prod_i64,
   uint64: reduce_prod_i64,
   int32: reduce_prod_i32,
@@ -53,6 +61,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array, // f16 converted to f32 before kernel call
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -78,10 +87,17 @@ export function wasmReduceProd(a: ArrayStorage): number | null {
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
 
-  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
+
+  // Float16: convert to f32 before passing to f32 kernel
+  if (dtype === 'float16') {
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
+    const aPtr = scratchCopyIn(aData);
+    return Number(kernel(aPtr, size));
+  }
+
+  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
   return Number(kernel(aPtr, size));
@@ -95,6 +111,7 @@ type StridedFn = (aPtr: number, outPtr: number, outer: number, axis: number, inn
 const stridedKernels: Partial<Record<DType, StridedFn>> = {
   float64: reduce_prod_strided_f64,
   float32: reduce_prod_strided_f32,
+  float16: reduce_prod_strided_f32,
   int64: reduce_prod_strided_i64,
   uint64: reduce_prod_strided_u64,
   int32: reduce_prod_strided_i32,
@@ -109,6 +126,7 @@ const stridedKernels: Partial<Record<DType, StridedFn>> = {
 const stridedOutDtype: Partial<Record<DType, DType>> = {
   float64: 'float64',
   float32: 'float32',
+  float16: 'float32',
   int64: 'int64',
   uint64: 'uint64',
   int32: 'int32',
@@ -128,6 +146,11 @@ const stridedOutCtor: Partial<
     len: number
   ) => TypedArray,
   float32: Float32Array as unknown as new (
+    buf: ArrayBuffer,
+    off: number,
+    len: number
+  ) => TypedArray,
+  float16: Float32Array as unknown as new (
     buf: ArrayBuffer,
     off: number,
     len: number
@@ -157,6 +180,7 @@ const stridedOutCtor: Partial<
 const stridedOutBpe: Partial<Record<DType, number>> = {
   float64: 8,
   float32: 4,
+  float16: 4,
   int64: 8,
   uint64: 8,
   int32: 4,
@@ -196,7 +220,13 @@ export function wasmReduceProdStrided(
 
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
-  const inPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, totalSize, inBpe);
+  let inPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + totalSize) as TypedArray;
+    inPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    inPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, totalSize, inBpe);
+  }
   const outPtr = alloc(outSize * outBpe);
 
   kernel(inPtr, outPtr, outerSize, axisSize, innerSize);
