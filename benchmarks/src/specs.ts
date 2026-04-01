@@ -3969,6 +3969,10 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'polyfit',
     'polyval',
     'roots',
+    // dot/inner/vdot: NumPy accumulates in f16 (overflows to inf), our WASM uses f32 (finite)
+    'dot',
+    'inner',
+    'vdot',
   ]);
 
   // Operations to skip for ALL int dtype variants (blocks both int and uint families)
