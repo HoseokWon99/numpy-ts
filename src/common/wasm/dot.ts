@@ -15,7 +15,14 @@ import {
   dot_i16,
   dot_i8,
 } from './bins/dot.wasm';
-import { resetScratchAllocator, resolveInputPtr, scratchAlloc, getSharedMemory } from './runtime';
+import {
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchAlloc,
+  scratchCopyIn,
+  f16ToF32Input,
+  getSharedMemory,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { Complex } from '../complex';
@@ -29,6 +36,7 @@ type WasmDotFn = (aPtr: number, bPtr: number, outPtr: number, K: number) => void
 const wasmKernels: Partial<Record<DType, WasmDotFn>> = {
   float64: dot_f64,
   float32: dot_f32,
+  float16: dot_f32, // f16 inputs converted to f32
   complex128: dot_c128,
   complex64: dot_c64,
   int64: dot_i64,
@@ -45,6 +53,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array, // f16 converted to f32 before kernel
   complex128: Float64Array,
   complex64: Float32Array,
   int64: BigInt64Array,
@@ -87,22 +96,32 @@ export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | Complex | 
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  const aPtr = resolveInputPtr(
-    a.data,
-    a.isWasmBacked,
-    a.wasmPtr,
-    a.offset * factor,
-    K * factor,
-    bytesPerElement
-  );
-  const bPtr = resolveInputPtr(
-    b.data,
-    b.isWasmBacked,
-    b.wasmPtr,
-    b.offset * factor,
-    K * factor,
-    bytesPerElement
-  );
+  let aPtr: number;
+  let bPtr: number;
+  if (resultDtype === 'float16') {
+    // f16→f32 conversion for both inputs
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + K) as TypedArray, a.dtype);
+    aPtr = scratchCopyIn(aData);
+    const bData = f16ToF32Input(b.data.subarray(b.offset, b.offset + K) as TypedArray, b.dtype);
+    bPtr = scratchCopyIn(bData);
+  } else {
+    aPtr = resolveInputPtr(
+      a.data,
+      a.isWasmBacked,
+      a.wasmPtr,
+      a.offset * factor,
+      K * factor,
+      bytesPerElement
+    );
+    bPtr = resolveInputPtr(
+      b.data,
+      b.isWasmBacked,
+      b.wasmPtr,
+      b.offset * factor,
+      K * factor,
+      bytesPerElement
+    );
+  }
   const outPtr = scratchAlloc(outBytes);
 
   kernel(aPtr, bPtr, outPtr, K);

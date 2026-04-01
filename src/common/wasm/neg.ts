@@ -12,6 +12,7 @@ import {
   neg_i32,
   neg_i16,
   neg_i8,
+  neg_f16,
   neg_c128,
   neg_c64,
 } from './bins/neg.wasm';
@@ -27,6 +28,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: neg_f64,
   float32: neg_f32,
+  float16: neg_f16,
   int64: neg_i64,
   uint64: neg_i64,
   int32: neg_i32,
@@ -43,6 +45,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   complex128: Float64Array,
   complex64: Float32Array,
   int64: BigInt64Array,
@@ -71,6 +74,7 @@ export function wasmNeg(a: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;

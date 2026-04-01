@@ -6,7 +6,15 @@
  * Not defined for complex types.
  */
 
-import { sign_f64, sign_f32, sign_i64, sign_i32, sign_i16, sign_i8 } from './bins/sign.wasm';
+import {
+  sign_f64,
+  sign_f32,
+  sign_f16,
+  sign_i64,
+  sign_i32,
+  sign_i16,
+  sign_i8,
+} from './bins/sign.wasm';
 import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
@@ -19,6 +27,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: sign_f64,
   float32: sign_f32,
+  float16: sign_f16,
   int64: sign_i64,
   int32: sign_i32,
   int16: sign_i16,
@@ -30,6 +39,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -51,6 +61,7 @@ export function wasmSign(a: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;

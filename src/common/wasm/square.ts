@@ -27,6 +27,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: square_f64,
   float32: square_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
   complex128: square_c128,
   complex64: square_c64,
   int64: square_i64,
@@ -65,6 +66,7 @@ export function wasmSquare(a: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;

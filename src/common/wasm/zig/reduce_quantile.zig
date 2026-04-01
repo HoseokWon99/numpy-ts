@@ -31,15 +31,7 @@ export fn reduce_quantile_f64(a: [*]f64, N: u32, q: f64) f64 {
 /// Strided quantile: for each output position (outer × inner), sort the axis slice and interpolate.
 /// Input a is [outer × axis × inner] contiguous f64. Output is [outer × inner] f64.
 /// Uses a scratch buffer for sorting each column (does NOT modify input).
-export fn reduce_quantile_strided_f64(
-    a: [*]const f64,
-    out: [*]f64,
-    scratch: [*]f64,
-    outer: u32,
-    axis: u32,
-    inner: u32,
-    q: f64
-) void {
+export fn reduce_quantile_strided_f64(a: [*]const f64, out: [*]f64, scratch: [*]f64, outer: u32, axis: u32, inner: u32, q: f64) void {
     const stride = @as(usize, axis) * @as(usize, inner);
     var o: u32 = 0;
     while (o < outer) : (o += 1) {

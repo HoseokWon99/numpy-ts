@@ -6,7 +6,7 @@
  * Complex types are not handled here (magnitude needs sqrt, handled in JS).
  */
 
-import { abs_f64, abs_f32, abs_i64, abs_i32, abs_i16, abs_i8 } from './bins/abs.wasm';
+import { abs_f64, abs_f32, abs_f16, abs_i64, abs_i32, abs_i16, abs_i8 } from './bins/abs.wasm';
 import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
@@ -19,6 +19,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: abs_f64,
   float32: abs_f32,
+  float16: abs_f16,
   int64: abs_i64,
   int32: abs_i32,
   int16: abs_i16,
@@ -30,6 +31,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,

@@ -98,7 +98,11 @@ export function wasmTile2D(a: ArrayStorage, repRows: number, repCols: number): A
       dtype,
       outRegion,
       outSize,
-      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      Float16Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
   }
 

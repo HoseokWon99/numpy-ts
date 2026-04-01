@@ -33,7 +33,7 @@ export fn repeat_f64(a: [*]const f64, out: [*]f64, N: u32, reps: u32) void {
 export fn repeat_f32(a: [*]const f32, out: [*]f32, N: u32, reps: u32) void {
     const n = @as(usize, N);
     if (reps == 2) {
-        const out64: [*]u64 = @alignCast(@ptrCast(out));
+        const out64: [*]u64 = @ptrCast(@alignCast(out));
         var i: usize = 0;
         while (i < n) : (i += 1) {
             const bits: u32 = @bitCast(a[i]);
@@ -80,7 +80,7 @@ export fn repeat_i64(a: [*]const i64, out: [*]i64, N: u32, reps: u32) void {
 export fn repeat_i32(a: [*]const i32, out: [*]i32, N: u32, reps: u32) void {
     const n = @as(usize, N);
     if (reps == 2) {
-        const out64: [*]u64 = @alignCast(@ptrCast(out));
+        const out64: [*]u64 = @ptrCast(@alignCast(out));
         var i: usize = 0;
         while (i < n) : (i += 1) {
             const bits: u32 = @bitCast(a[i]);
@@ -104,7 +104,7 @@ export fn repeat_i32(a: [*]const i32, out: [*]i32, N: u32, reps: u32) void {
 export fn repeat_i16(a: [*]const i16, out: [*]i16, N: u32, reps: u32) void {
     const n = @as(usize, N);
     if (reps == 2) {
-        const out32: [*]u32 = @alignCast(@ptrCast(out));
+        const out32: [*]u32 = @ptrCast(@alignCast(out));
         var i: usize = 0;
         while (i < n) : (i += 1) {
             const v: u16 = @bitCast(a[i]);
@@ -131,7 +131,7 @@ export fn repeat_i8(a: [*]const i8, out: [*]i8, N: u32, reps: u32) void {
 
     // Fast path: reps=2 — write pairs as i16
     if (reps == 2) {
-        const out16: [*]u16 = @alignCast(@ptrCast(out));
+        const out16: [*]u16 = @ptrCast(@alignCast(out));
         var i: usize = 0;
         while (i < n) : (i += 1) {
             const v: u8 = @bitCast(a[i]);

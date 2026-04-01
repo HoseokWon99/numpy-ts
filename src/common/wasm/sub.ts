@@ -37,6 +37,7 @@ type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => voi
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: sub_f64,
   float32: sub_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
   int64: sub_i64,
   uint64: sub_i64,
   int32: sub_i32,
@@ -52,6 +53,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: sub_scalar_f64,
   float32: sub_scalar_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
   int64: sub_scalar_i64,
   uint64: sub_scalar_i64,
   int32: sub_scalar_i32,
@@ -99,6 +101,7 @@ export function wasmSub(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = promoteDTypes(a.dtype, b.dtype);
+
   const kernel = binaryKernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
@@ -153,6 +156,7 @@ export function wasmSubScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = scalarKernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;

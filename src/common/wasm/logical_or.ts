@@ -19,6 +19,8 @@ import {
   logical_or_scalar_i32,
   logical_or_scalar_i16,
   logical_or_scalar_i8,
+  logical_or_f16,
+  logical_or_scalar_f16,
 } from './bins/logical_or.wasm';
 import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
@@ -33,6 +35,7 @@ type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => voi
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: logical_or_f64,
   float32: logical_or_f32,
+  float16: logical_or_f16 as unknown as BinaryFn,
   int64: logical_or_i64,
   uint64: logical_or_i64,
   int32: logical_or_i32,
@@ -46,6 +49,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: logical_or_scalar_f64,
   float32: logical_or_scalar_f32,
+  float16: logical_or_scalar_f16 as unknown as ScalarFn,
   int64: logical_or_scalar_i64,
   uint64: logical_or_scalar_i64,
   int32: logical_or_scalar_i32,
@@ -60,6 +64,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const inputCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -84,10 +89,11 @@ export function wasmLogicalOr(a: ArrayStorage, b: ArrayStorage): ArrayStorage | 
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+  if (b.dtype !== dtype) return null;
+
   const kernel = binaryKernels[dtype];
   const InCtor = inputCtorMap[dtype];
   if (!kernel || !InCtor) return null;
-  if (b.dtype !== dtype) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const outBytes = size; // u8 output
@@ -129,6 +135,7 @@ export function wasmLogicalOrScalar(a: ArrayStorage, scalar: number): ArrayStora
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = scalarKernels[dtype];
   const InCtor = inputCtorMap[dtype];
   if (!kernel || !InCtor) return null;

@@ -74,8 +74,15 @@ export function wasmRoll(a: ArrayStorage, shift: number): ArrayStorage | null {
     const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
     kernel(aPtr, outRegion.ptr, size, shift);
     return ArrayStorage.fromWasmRegion(
-      Array.from(a.shape), dtype, outRegion, size,
-      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      Array.from(a.shape),
+      dtype,
+      outRegion,
+      size,
+      Float16Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
   }
 

@@ -23,6 +23,8 @@ import {
   resetScratchAllocator,
   resolveInputPtr,
   scratchAlloc,
+  scratchCopyIn,
+  f16ToF32Input,
   getSharedMemory,
 } from './runtime';
 import { ArrayStorage } from '../storage';
@@ -58,6 +60,7 @@ type WasmComplexInnerFn = (
 const wasmKernels: Partial<Record<DType, WasmInnerFn>> = {
   float64: inner_f64,
   float32: inner_f32,
+  float16: inner_f32, // f16 inputs converted to f32
   int64: inner_i64,
   uint64: inner_i64,
   int32: inner_i32,
@@ -79,6 +82,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array, // f16 converted to f32 before kernel
   complex128: Float64Array, // interleaved re/im
   complex64: Float32Array,
   int64: BigInt64Array,
@@ -142,22 +146,31 @@ export function wasmInner(
     wasmConfig.wasmCallCount++;
     resetScratchAllocator();
 
-    const aPtr = resolveInputPtr(
-      a.data,
-      a.isWasmBacked,
-      a.wasmPtr,
-      a.offset * factor,
-      M * K * factor,
-      bpe
-    );
-    const bPtr = resolveInputPtr(
-      b.data,
-      b.isWasmBacked,
-      b.wasmPtr,
-      b.offset * factor,
-      N * K * factor,
-      bpe
-    );
+    let aPtr: number;
+    let bPtr: number;
+    if (resultDtype === 'float16') {
+      const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + K) as TypedArray, a.dtype);
+      aPtr = scratchCopyIn(aData);
+      const bData = f16ToF32Input(b.data.subarray(b.offset, b.offset + K) as TypedArray, b.dtype);
+      bPtr = scratchCopyIn(bData);
+    } else {
+      aPtr = resolveInputPtr(
+        a.data,
+        a.isWasmBacked,
+        a.wasmPtr,
+        a.offset * factor,
+        M * K * factor,
+        bpe
+      );
+      bPtr = resolveInputPtr(
+        b.data,
+        b.isWasmBacked,
+        b.wasmPtr,
+        b.offset * factor,
+        N * K * factor,
+        bpe
+      );
+    }
     const outPtr = scratchAlloc(outBytes);
 
     if (complexKernel) {
@@ -192,22 +205,39 @@ export function wasmInner(
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  const aPtr = resolveInputPtr(
-    a.data,
-    a.isWasmBacked,
-    a.wasmPtr,
-    a.offset * factor,
-    M * K * factor,
-    bpe
-  );
-  const bPtr = resolveInputPtr(
-    b.data,
-    b.isWasmBacked,
-    b.wasmPtr,
-    b.offset * factor,
-    N * K * factor,
-    bpe
-  );
+  let aPtr: number;
+  let bPtr: number;
+  if (resultDtype === 'float16') {
+    const totalA = M * K;
+    const aData = f16ToF32Input(
+      a.data.subarray(a.offset, a.offset + totalA) as TypedArray,
+      a.dtype
+    );
+    aPtr = scratchCopyIn(aData);
+    const totalB = N * K;
+    const bData = f16ToF32Input(
+      b.data.subarray(b.offset, b.offset + totalB) as TypedArray,
+      b.dtype
+    );
+    bPtr = scratchCopyIn(bData);
+  } else {
+    aPtr = resolveInputPtr(
+      a.data,
+      a.isWasmBacked,
+      a.wasmPtr,
+      a.offset * factor,
+      M * K * factor,
+      bpe
+    );
+    bPtr = resolveInputPtr(
+      b.data,
+      b.isWasmBacked,
+      b.wasmPtr,
+      b.offset * factor,
+      N * K * factor,
+      bpe
+    );
+  }
 
   if (complexKernel) {
     const scratchElements = 2 * M * K + 2 * N * K + 3 * M * N;

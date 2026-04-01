@@ -21,6 +21,12 @@ export fn logical_not_f32(a: [*]const f32, out: [*]u8, N: u32) void {
     }
 }
 
+/// Float16 logical not: (u16 & 0x7FFF == 0) ? 1 : 0. Handles -0.
+export fn logical_not_f16(a: [*]const u16, out: [*]u8, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF == 0) 1 else 0;
+}
+
 /// Element-wise logical NOT for i64, scalar loop (no i64x2 compare in WASM SIMD).
 export fn logical_not_i64(a: [*]const i64, out: [*]u8, N: u32) void {
     var i: u32 = 0;
@@ -170,4 +176,16 @@ test "logical_not_i16 SIMD boundary N=9" {
     try testing.expectEqual(out[3], 0);
     try testing.expectEqual(out[4], 1);
     try testing.expectEqual(out[8], 0);
+}
+
+test "logical_not_f16 basic" {
+    const testing = @import("std").testing;
+    // 1.0=0x3C00, 0.0=0x0000, -0.0=0x8000, -1.0=0xBC00
+    const a = [_]u16{ 0x3C00, 0x0000, 0x8000, 0xBC00 };
+    var out: [4]u8 = undefined;
+    logical_not_f16(&a, &out, 4);
+    try testing.expectEqual(out[0], 0); // !1.0 = 0
+    try testing.expectEqual(out[1], 1); // !0.0 = 1
+    try testing.expectEqual(out[2], 1); // !(-0.0) = 1
+    try testing.expectEqual(out[3], 0); // !(-1.0) = 0
 }

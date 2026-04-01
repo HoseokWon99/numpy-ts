@@ -46,6 +46,21 @@ export fn logical_and_scalar_f32(a: [*]const f32, out: [*]u8, N: u32, scalar: f3
     }
 }
 
+/// Float16 logical and (array): both nonzero?
+export fn logical_and_f16(a: [*]const u16, b: [*]const u16, out: [*]u8, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF != 0 and b[i] & 0x7FFF != 0) 1 else 0;
+}
+
+export fn logical_and_scalar_f16(a: [*]const u16, out: [*]u8, N: u32, scalar_truthy: u32) void {
+    if (scalar_truthy == 0) {
+        @memset(out[0..N], 0);
+        return;
+    }
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF != 0) 1 else 0;
+}
+
 /// Element-wise logical AND for i64, scalar loop (no i64x2 compare in WASM SIMD).
 export fn logical_and_i64(a: [*]const i64, b: [*]const i64, out: [*]u8, N: u32) void {
     var i: u32 = 0;
@@ -457,4 +472,33 @@ test "logical_and_i8 mixed positive/negative" {
     try testing.expectEqual(out[1], 1);
     try testing.expectEqual(out[2], 1);
     try testing.expectEqual(out[3], 0);
+}
+
+test "logical_and_f16 basic" {
+    const testing = @import("std").testing;
+    // 1.0=0x3C00, 0.0=0x0000, -0.0=0x8000, -1.0=0xBC00
+    const a = [_]u16{ 0x3C00, 0x0000, 0x3C00, 0x0000 };
+    const b = [_]u16{ 0x3C00, 0x3C00, 0x0000, 0x0000 };
+    var out: [4]u8 = undefined;
+    logical_and_f16(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 1); // 1 AND 1 = 1
+    try testing.expectEqual(out[1], 0); // 0 AND 1 = 0
+    try testing.expectEqual(out[2], 0); // 1 AND 0 = 0
+    try testing.expectEqual(out[3], 0); // 0 AND 0 = 0
+}
+
+test "logical_and_scalar_f16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 0x3C00, 0x0000, 0x8000, 0xBC00 };
+    var out: [4]u8 = undefined;
+    // scalar_truthy=1 (nonzero scalar)
+    logical_and_scalar_f16(&a, &out, 4, 1);
+    try testing.expectEqual(out[0], 1); // 1.0 AND true
+    try testing.expectEqual(out[1], 0); // 0.0 AND true
+    try testing.expectEqual(out[2], 0); // -0.0 AND true
+    try testing.expectEqual(out[3], 1); // -1.0 AND true
+    // scalar_truthy=0
+    logical_and_scalar_f16(&a, &out, 4, 0);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 0);
 }

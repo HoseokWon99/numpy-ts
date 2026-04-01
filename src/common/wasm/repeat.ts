@@ -13,11 +13,7 @@ import {
   repeat_i16,
   repeat_i8,
 } from './bins/repeat.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  resolveInputPtr,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -86,8 +82,15 @@ export function wasmRepeat(a: ArrayStorage, reps: number): ArrayStorage | null {
     const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
     kernel(aPtr, outRegion.ptr, size, reps);
     return ArrayStorage.fromWasmRegion(
-      [outSize], dtype, outRegion, outSize,
-      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      [outSize],
+      dtype,
+      outRegion,
+      outSize,
+      Float16Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
   }
 

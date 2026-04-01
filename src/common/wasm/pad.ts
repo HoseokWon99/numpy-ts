@@ -13,11 +13,7 @@ import {
   pad_2d_i16,
   pad_2d_i8,
 } from './bins/pad.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  resolveInputPtr,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -92,8 +88,15 @@ export function wasmPad2D(a: ArrayStorage, padWidth: number): ArrayStorage | nul
     const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
     kernel(aPtr, outRegion.ptr, rows, cols, padWidth);
     return ArrayStorage.fromWasmRegion(
-      [outRows, outCols], dtype, outRegion, outSize,
-      Float16Array as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+      [outRows, outCols],
+      dtype,
+      outRegion,
+      outSize,
+      Float16Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
     );
   }
 

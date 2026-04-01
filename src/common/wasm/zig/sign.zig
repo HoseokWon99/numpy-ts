@@ -46,6 +46,22 @@ export fn sign_f32(a: [*]const f32, out: [*]f32, N: u32) void {
     }
 }
 
+/// Float16 sign via bit inspection: returns -1.0(0xBC00)/0(0x0000)/+1.0(0x3C00).
+export fn sign_f16(a: [*]const u16, out: [*]u16, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        const v = a[i];
+        const mag = v & 0x7FFF;
+        if (mag == 0) {
+            out[i] = 0;
+        } else if (v & 0x8000 != 0) {
+            out[i] = 0xBC00; // -1.0
+        } else {
+            out[i] = 0x3C00; // +1.0
+        }
+    }
+}
+
 /// Element-wise sign for i64, scalar loop (no i64x2 compare in WASM SIMD).
 export fn sign_i64(a: [*]const i64, out: [*]i64, N: u32) void {
     var i: u32 = 0;
@@ -189,4 +205,16 @@ test "sign_i32 SIMD boundary N=7" {
     try testing.expectEqual(out[4], 1);
     try testing.expectEqual(out[5], 0);
     try testing.expectEqual(out[6], -1);
+}
+
+test "sign_f16 basic" {
+    const testing = @import("std").testing;
+    // 2.0=0x4000, -2.0=0xC000, 0.0=0x0000, -0.0=0x8000
+    const a = [_]u16{ 0x4000, 0xC000, 0x0000, 0x8000 };
+    var out: [4]u16 = undefined;
+    sign_f16(&a, &out, 4);
+    try testing.expectEqual(out[0], 0x3C00); // sign(2) = 1.0
+    try testing.expectEqual(out[1], 0xBC00); // sign(-2) = -1.0
+    try testing.expectEqual(out[2], 0x0000); // sign(0) = 0
+    try testing.expectEqual(out[3], 0x0000); // sign(-0) = 0
 }

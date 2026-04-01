@@ -26,6 +26,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const floatKernels: Partial<Record<DType, UnaryFn>> = {
   float64: reciprocal_f64,
   float32: reciprocal_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
 };
 
 // Integer-to-f64 kernels (int in, f64 out)

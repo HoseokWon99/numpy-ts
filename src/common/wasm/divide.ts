@@ -44,6 +44,7 @@ type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => voi
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: div_f64,
   float32: div_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
   complex128: div_c128,
   complex64: div_c64,
 };
@@ -52,6 +53,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: div_scalar_f64,
   float32: div_scalar_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
 };
 
 // Integer-to-f64 binary kernels (int/uint in, f64 out)

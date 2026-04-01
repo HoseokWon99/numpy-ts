@@ -40,6 +40,12 @@ export fn signbit_f32(a: [*]const f32, out: [*]u8, N: u32) void {
     }
 }
 
+/// Float16 signbit via bit extraction: (u16 >> 15).
+export fn signbit_f16(a: [*]const u16, out: [*]u8, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = @intCast(a[i] >> 15);
+}
+
 /// signbit for i64 — 2-wide SIMD compare < 0.
 export fn signbit_i64(a: [*]const i64, out: [*]u8, N: u32) void {
     const zero: simd.V2i64 = @splat(0);
@@ -156,4 +162,16 @@ test "signbit_i8 16-wide" {
     try testing.expectEqual(out[3], 1);
     try testing.expectEqual(out[16], 0);
     try testing.expectEqual(out[17], 1);
+}
+
+test "signbit_f16 basic" {
+    const testing = @import("std").testing;
+    // 1.0=0x3C00, -1.0=0xBC00, 0.0=0x0000, -0.0=0x8000
+    const a = [_]u16{ 0x3C00, 0xBC00, 0x0000, 0x8000 };
+    var out: [4]u8 = undefined;
+    signbit_f16(&a, &out, 4);
+    try testing.expectEqual(out[0], 0); // 1.0
+    try testing.expectEqual(out[1], 1); // -1.0
+    try testing.expectEqual(out[2], 0); // 0.0
+    try testing.expectEqual(out[3], 1); // -0.0
 }

@@ -58,13 +58,25 @@ export fn matmul_f64(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32
                             const b2 = simd.load2_f64(b, br + j + 4);
                             const b3 = simd.load2_f64(b, br + j + 6);
                             const a0: simd.V2f64 = @splat(a[(i + 0) * K + k]);
-                            c00 += a0 * b0; c01 += a0 * b1; c02 += a0 * b2; c03 += a0 * b3;
+                            c00 += a0 * b0;
+                            c01 += a0 * b1;
+                            c02 += a0 * b2;
+                            c03 += a0 * b3;
                             const a1: simd.V2f64 = @splat(a[(i + 1) * K + k]);
-                            c10 += a1 * b0; c11 += a1 * b1; c12 += a1 * b2; c13 += a1 * b3;
+                            c10 += a1 * b0;
+                            c11 += a1 * b1;
+                            c12 += a1 * b2;
+                            c13 += a1 * b3;
                             const a2: simd.V2f64 = @splat(a[(i + 2) * K + k]);
-                            c20 += a2 * b0; c21 += a2 * b1; c22 += a2 * b2; c23 += a2 * b3;
+                            c20 += a2 * b0;
+                            c21 += a2 * b1;
+                            c22 += a2 * b2;
+                            c23 += a2 * b3;
                             const a3: simd.V2f64 = @splat(a[(i + 3) * K + k]);
-                            c30 += a3 * b0; c31 += a3 * b1; c32 += a3 * b2; c33 += a3 * b3;
+                            c30 += a3 * b0;
+                            c31 += a3 * b1;
+                            c32 += a3 * b2;
+                            c33 += a3 * b3;
                         }
 
                         inline for (0..4) |r| {
@@ -98,19 +110,25 @@ export fn matmul_f64(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32
                             const b0 = simd.load2_f64(b, k * N + j);
                             const b1 = simd.load2_f64(b, k * N + j + 2);
                             const a0: simd.V2f64 = @splat(a[(i + 0) * K + k]);
-                            r00 += a0 * b0; r01 += a0 * b1;
+                            r00 += a0 * b0;
+                            r01 += a0 * b1;
                             const a1: simd.V2f64 = @splat(a[(i + 1) * K + k]);
-                            r10 += a1 * b0; r11 += a1 * b1;
+                            r10 += a1 * b0;
+                            r11 += a1 * b1;
                             const a2: simd.V2f64 = @splat(a[(i + 2) * K + k]);
-                            r20 += a2 * b0; r21 += a2 * b1;
+                            r20 += a2 * b0;
+                            r21 += a2 * b1;
                             const a3: simd.V2f64 = @splat(a[(i + 3) * K + k]);
-                            r30 += a3 * b0; r31 += a3 * b1;
+                            r30 += a3 * b0;
+                            r31 += a3 * b1;
                         }
                         inline for (0..4) |r| {
                             const off = (i + r) * N + j;
                             const rv = switch (r) {
-                                0 => .{ r00, r01 }, 1 => .{ r10, r11 },
-                                2 => .{ r20, r21 }, 3 => .{ r30, r31 },
+                                0 => .{ r00, r01 },
+                                1 => .{ r10, r11 },
+                                2 => .{ r20, r21 },
+                                3 => .{ r30, r31 },
                                 else => unreachable,
                             };
                             simd.store2_f64(c, off, simd.load2_f64(c, off) + rv[0]);
@@ -133,7 +151,13 @@ export fn matmul_f64(a: [*]const f64, b: [*]const f64, c: [*]f64, M: u32, N: u32
                         }
                         inline for (0..4) |r| {
                             const off = (i + r) * N + j;
-                            const sv = switch (r) { 0 => s0, 1 => s1, 2 => s2, 3 => s3, else => unreachable };
+                            const sv = switch (r) {
+                                0 => s0,
+                                1 => s1,
+                                2 => s2,
+                                3 => s3,
+                                else => unreachable,
+                            };
                             simd.store2_f64(c, off, simd.load2_f64(c, off) + sv);
                         }
                     }
@@ -206,14 +230,22 @@ export fn matmul_f32(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32
                 while (i + 4 <= i_end) : (i += 4) {
                     var j: usize = jj;
                     while (j + 16 <= j_end) : (j += 16) {
-                        var c00: simd.V4f32 = @splat(0); var c01: simd.V4f32 = @splat(0);
-                        var c02: simd.V4f32 = @splat(0); var c03: simd.V4f32 = @splat(0);
-                        var c10: simd.V4f32 = @splat(0); var c11: simd.V4f32 = @splat(0);
-                        var c12: simd.V4f32 = @splat(0); var c13: simd.V4f32 = @splat(0);
-                        var c20: simd.V4f32 = @splat(0); var c21: simd.V4f32 = @splat(0);
-                        var c22: simd.V4f32 = @splat(0); var c23: simd.V4f32 = @splat(0);
-                        var c30: simd.V4f32 = @splat(0); var c31: simd.V4f32 = @splat(0);
-                        var c32: simd.V4f32 = @splat(0); var c33: simd.V4f32 = @splat(0);
+                        var c00: simd.V4f32 = @splat(0);
+                        var c01: simd.V4f32 = @splat(0);
+                        var c02: simd.V4f32 = @splat(0);
+                        var c03: simd.V4f32 = @splat(0);
+                        var c10: simd.V4f32 = @splat(0);
+                        var c11: simd.V4f32 = @splat(0);
+                        var c12: simd.V4f32 = @splat(0);
+                        var c13: simd.V4f32 = @splat(0);
+                        var c20: simd.V4f32 = @splat(0);
+                        var c21: simd.V4f32 = @splat(0);
+                        var c22: simd.V4f32 = @splat(0);
+                        var c23: simd.V4f32 = @splat(0);
+                        var c30: simd.V4f32 = @splat(0);
+                        var c31: simd.V4f32 = @splat(0);
+                        var c32: simd.V4f32 = @splat(0);
+                        var c33: simd.V4f32 = @splat(0);
 
                         var k: usize = kk;
                         while (k < k_end) : (k += 1) {
@@ -223,13 +255,25 @@ export fn matmul_f32(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32
                             const b2 = simd.load4_f32(b, br + j + 8);
                             const b3 = simd.load4_f32(b, br + j + 12);
                             const a0: simd.V4f32 = @splat(a[(i + 0) * K + k]);
-                            c00 += a0 * b0; c01 += a0 * b1; c02 += a0 * b2; c03 += a0 * b3;
+                            c00 += a0 * b0;
+                            c01 += a0 * b1;
+                            c02 += a0 * b2;
+                            c03 += a0 * b3;
                             const a1: simd.V4f32 = @splat(a[(i + 1) * K + k]);
-                            c10 += a1 * b0; c11 += a1 * b1; c12 += a1 * b2; c13 += a1 * b3;
+                            c10 += a1 * b0;
+                            c11 += a1 * b1;
+                            c12 += a1 * b2;
+                            c13 += a1 * b3;
                             const a2: simd.V4f32 = @splat(a[(i + 2) * K + k]);
-                            c20 += a2 * b0; c21 += a2 * b1; c22 += a2 * b2; c23 += a2 * b3;
+                            c20 += a2 * b0;
+                            c21 += a2 * b1;
+                            c22 += a2 * b2;
+                            c23 += a2 * b3;
                             const a3: simd.V4f32 = @splat(a[(i + 3) * K + k]);
-                            c30 += a3 * b0; c31 += a3 * b1; c32 += a3 * b2; c33 += a3 * b3;
+                            c30 += a3 * b0;
+                            c31 += a3 * b1;
+                            c32 += a3 * b2;
+                            c33 += a3 * b3;
                         }
 
                         inline for (0..4) |r| {
@@ -250,28 +294,38 @@ export fn matmul_f32(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32
 
                     // Remainder: 8 cols
                     while (j + 8 <= j_end) : (j += 8) {
-                        var r00: simd.V4f32 = @splat(0); var r01: simd.V4f32 = @splat(0);
-                        var r10: simd.V4f32 = @splat(0); var r11: simd.V4f32 = @splat(0);
-                        var r20: simd.V4f32 = @splat(0); var r21: simd.V4f32 = @splat(0);
-                        var r30: simd.V4f32 = @splat(0); var r31: simd.V4f32 = @splat(0);
+                        var r00: simd.V4f32 = @splat(0);
+                        var r01: simd.V4f32 = @splat(0);
+                        var r10: simd.V4f32 = @splat(0);
+                        var r11: simd.V4f32 = @splat(0);
+                        var r20: simd.V4f32 = @splat(0);
+                        var r21: simd.V4f32 = @splat(0);
+                        var r30: simd.V4f32 = @splat(0);
+                        var r31: simd.V4f32 = @splat(0);
                         var k: usize = kk;
                         while (k < k_end) : (k += 1) {
                             const b0 = simd.load4_f32(b, k * N + j);
                             const b1 = simd.load4_f32(b, k * N + j + 4);
                             const a0: simd.V4f32 = @splat(a[(i + 0) * K + k]);
-                            r00 += a0 * b0; r01 += a0 * b1;
+                            r00 += a0 * b0;
+                            r01 += a0 * b1;
                             const a1: simd.V4f32 = @splat(a[(i + 1) * K + k]);
-                            r10 += a1 * b0; r11 += a1 * b1;
+                            r10 += a1 * b0;
+                            r11 += a1 * b1;
                             const a2: simd.V4f32 = @splat(a[(i + 2) * K + k]);
-                            r20 += a2 * b0; r21 += a2 * b1;
+                            r20 += a2 * b0;
+                            r21 += a2 * b1;
                             const a3: simd.V4f32 = @splat(a[(i + 3) * K + k]);
-                            r30 += a3 * b0; r31 += a3 * b1;
+                            r30 += a3 * b0;
+                            r31 += a3 * b1;
                         }
                         inline for (0..4) |r| {
                             const off = (i + r) * N + j;
                             const rv = switch (r) {
-                                0 => .{ r00, r01 }, 1 => .{ r10, r11 },
-                                2 => .{ r20, r21 }, 3 => .{ r30, r31 },
+                                0 => .{ r00, r01 },
+                                1 => .{ r10, r11 },
+                                2 => .{ r20, r21 },
+                                3 => .{ r30, r31 },
                                 else => unreachable,
                             };
                             simd.store4_f32(c, off, simd.load4_f32(c, off) + rv[0]);
@@ -294,7 +348,13 @@ export fn matmul_f32(a: [*]const f32, b: [*]const f32, c: [*]f32, M: u32, N: u32
                         }
                         inline for (0..4) |r| {
                             const off = (i + r) * N + j;
-                            const sv = switch (r) { 0 => s0, 1 => s1, 2 => s2, 3 => s3, else => unreachable };
+                            const sv = switch (r) {
+                                0 => s0,
+                                1 => s1,
+                                2 => s2,
+                                3 => s3,
+                                else => unreachable,
+                            };
                             simd.store4_f32(c, off, simd.load4_f32(c, off) + sv);
                         }
                     }

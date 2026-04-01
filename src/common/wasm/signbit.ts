@@ -9,6 +9,7 @@
 import {
   signbit_f64,
   signbit_f32,
+  signbit_f16,
   signbit_i64,
   signbit_i32,
   signbit_i16,
@@ -26,6 +27,7 @@ type SignbitFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, { fn: SignbitFn; bpe: number }>> = {
   float64: { fn: signbit_f64, bpe: 8 },
   float32: { fn: signbit_f32, bpe: 4 },
+  float16: { fn: signbit_f16, bpe: 2 },
   int64: { fn: signbit_i64, bpe: 8 },
   int32: { fn: signbit_i32, bpe: 4 },
   int16: { fn: signbit_i16, bpe: 2 },

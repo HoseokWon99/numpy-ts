@@ -46,6 +46,21 @@ export fn logical_or_scalar_f32(a: [*]const f32, out: [*]u8, N: u32, scalar: f32
     }
 }
 
+/// Float16 logical or (array): either nonzero?
+export fn logical_or_f16(a: [*]const u16, b: [*]const u16, out: [*]u8, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF != 0 or b[i] & 0x7FFF != 0) 1 else 0;
+}
+
+export fn logical_or_scalar_f16(a: [*]const u16, out: [*]u8, N: u32, scalar_truthy: u32) void {
+    if (scalar_truthy != 0) {
+        @memset(out[0..N], 1);
+        return;
+    }
+    var i: u32 = 0;
+    while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF != 0) 1 else 0;
+}
+
 /// Element-wise logical OR for i64, scalar loop (no i64x2 compare in WASM SIMD).
 export fn logical_or_i64(a: [*]const i64, b: [*]const i64, out: [*]u8, N: u32) void {
     var i: u32 = 0;
@@ -457,4 +472,32 @@ test "logical_or_i8 mixed positive/negative" {
     try testing.expectEqual(out[1], 1);
     try testing.expectEqual(out[2], 0);
     try testing.expectEqual(out[3], 1);
+}
+
+test "logical_or_f16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 0x3C00, 0x0000, 0x3C00, 0x0000 };
+    const b = [_]u16{ 0x3C00, 0x3C00, 0x0000, 0x0000 };
+    var out: [4]u8 = undefined;
+    logical_or_f16(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 1); // 1 OR 1 = 1
+    try testing.expectEqual(out[1], 1); // 0 OR 1 = 1
+    try testing.expectEqual(out[2], 1); // 1 OR 0 = 1
+    try testing.expectEqual(out[3], 0); // 0 OR 0 = 0
+}
+
+test "logical_or_scalar_f16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 0x3C00, 0x0000, 0x8000, 0xBC00 };
+    var out: [4]u8 = undefined;
+    // scalar_truthy=1 (nonzero scalar) -> all 1
+    logical_or_scalar_f16(&a, &out, 4, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 1);
+    // scalar_truthy=0 -> depends on a
+    logical_or_scalar_f16(&a, &out, 4, 0);
+    try testing.expectEqual(out[0], 1); // 1.0
+    try testing.expectEqual(out[1], 0); // 0.0
+    try testing.expectEqual(out[2], 0); // -0.0
+    try testing.expectEqual(out[3], 1); // -1.0
 }

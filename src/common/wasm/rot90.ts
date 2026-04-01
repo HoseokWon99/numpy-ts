@@ -18,6 +18,7 @@ type Rot90Fn = (aPtr: number, outPtr: number, rows: number, cols: number) => voi
 const kernels: Partial<Record<DType, Rot90Fn>> = {
   float64: rot90_f64,
   float32: rot90_f32,
+  float16: rot90_i16, // byte-copy: treat f16 as raw i16
   int64: rot90_i64,
   uint64: rot90_i64,
   int32: rot90_i32,
@@ -32,6 +33,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor, // byte-copy: treat f16 as raw i16
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
