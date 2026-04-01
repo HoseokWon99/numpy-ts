@@ -102,6 +102,16 @@ export default defineConfig({
           },
         },
       }),
+      // WASM memory edge-case tests (OOM fallback, double-free, refcount, mixed inputs)
+      defineProject({
+        test: {
+          name: 'wasm-memory',
+          include: ['tests/wasm-memory/**/*.test.ts'],
+          exclude: ['**/node_modules/**'],
+          environment: 'node',
+          testTimeout: 60000,
+        },
+      }),
       // WASM memory leak tests (validates operations don't leak WASM heap)
       defineProject({
         test: {

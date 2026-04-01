@@ -89,8 +89,22 @@ export function wasmDot1D(a: ArrayStorage, b: ArrayStorage): number | Complex | 
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset * factor, K * factor, bytesPerElement);
-  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset * factor, K * factor, bytesPerElement);
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    K * factor,
+    bytesPerElement
+  );
+  const bPtr = resolveInputPtr(
+    b.data,
+    b.isWasmBacked,
+    b.wasmPtr,
+    b.offset * factor,
+    K * factor,
+    bytesPerElement
+  );
   const outPtr = scratchAlloc(outBytes);
 
   kernel(aPtr, bPtr, outPtr, K);

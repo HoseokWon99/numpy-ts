@@ -144,8 +144,22 @@ export function wasmInner(
     wasmConfig.wasmCallCount++;
     resetScratchAllocator();
 
-    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset * factor, M * K * factor, bpe);
-    const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset * factor, N * K * factor, bpe);
+    const aPtr = resolveInputPtr(
+      a.data,
+      a.isWasmBacked,
+      a.wasmPtr,
+      a.offset * factor,
+      M * K * factor,
+      bpe
+    );
+    const bPtr = resolveInputPtr(
+      b.data,
+      b.isWasmBacked,
+      b.wasmPtr,
+      b.offset * factor,
+      N * K * factor,
+      bpe
+    );
     const outPtr = scratchAlloc(outBytes);
 
     if (complexKernel) {
@@ -180,8 +194,22 @@ export function wasmInner(
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset * factor, M * K * factor, bpe);
-  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset * factor, N * K * factor, bpe);
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    M * K * factor,
+    bpe
+  );
+  const bPtr = resolveInputPtr(
+    b.data,
+    b.isWasmBacked,
+    b.wasmPtr,
+    b.offset * factor,
+    N * K * factor,
+    bpe
+  );
 
   if (complexKernel) {
     const scratchElements = 2 * M * K + 2 * N * K + 3 * M * N;
