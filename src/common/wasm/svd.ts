@@ -7,7 +7,7 @@
  */
 
 import { svd_f64, svd_values_gk_f64 } from './bins/svd.wasm';
-import { wasmMalloc, resetScratchAllocator, scratchCopyIn, scratchAlloc } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr, scratchCopyIn, scratchAlloc } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { TypedArray } from '../dtype';
 
@@ -56,15 +56,19 @@ export function wasmSvd(
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  // Copy input matrix to WASM scratch (converting to float64)
+  // SVD modifies input during Householder bidiagonalization — must copy
   const aSize = m * n;
   const aData = new Float64Array(aSize);
-  for (let i = 0; i < m; i++) {
-    for (let j = 0; j < n; j++) {
-      aData[i * n + j] = Number(a.get(i, j));
+  if (a.dtype === 'float64' && a.isCContiguous) {
+    const src = a.data as Float64Array;
+    aData.set(src.subarray(a.offset, a.offset + aSize));
+  } else {
+    for (let i = 0; i < m; i++) {
+      for (let j = 0; j < n; j++) {
+        aData[i * n + j] = Number(a.get(i, j));
+      }
     }
   }
-
   const aPtr = scratchCopyIn(aData as unknown as TypedArray);
   const workSize = m * n + n * n;
   const workPtr = scratchAlloc(workSize * 8);

@@ -22,7 +22,7 @@ import {
 import {
   wasmMalloc,
   resetScratchAllocator,
-  scratchCopyIn,
+  resolveTypedArrayPtr,
   scratchAlloc,
   f32OutputToF16Region,
 } from './runtime';
@@ -117,8 +117,8 @@ function wasmMatmul2DInto(
   N: number
 ): void {
   resetScratchAllocator();
-  const aPtr = scratchCopyIn(aData);
-  const bPtr = scratchCopyIn(bData);
+  const aPtr = resolveTypedArrayPtr(aData);
+  const bPtr = resolveTypedArrayPtr(bData);
   kernel(aPtr, bPtr, outPtr, M, N, K);
 }
 
@@ -141,8 +141,8 @@ function wasmMatmul2DComplexInto(
   const scratchBytes = scratchElements * bpe;
 
   resetScratchAllocator();
-  const aPtr = scratchCopyIn(aData);
-  const bPtr = scratchCopyIn(bData);
+  const aPtr = resolveTypedArrayPtr(aData);
+  const bPtr = resolveTypedArrayPtr(bData);
   const scratchPtr = scratchAlloc(scratchBytes);
   kernel(aPtr, bPtr, outPtr, M, N, K, scratchPtr);
 }

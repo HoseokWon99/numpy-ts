@@ -267,6 +267,20 @@ export function resolveInputPtr(
   return scratchCopyIn(src);
 }
 
+/**
+ * Resolve a TypedArray to a WASM pointer. If the array is already a view
+ * into WASM memory, returns its byte offset directly (zero-copy).
+ * Otherwise copies to scratch. Useful when you have a TypedArray but
+ * don't know if it's WASM-backed (e.g. from getContiguousData).
+ */
+export function resolveTypedArrayPtr(data: TypedArray): number {
+  const mem = getSharedMemory();
+  if (data.buffer === mem.buffer) {
+    return data.byteOffset;
+  }
+  return scratchCopyIn(data);
+}
+
 // ---------------------------------------------------------------------------
 // Backward compatibility — old API mapped to scratch allocator
 // These are used by kernel wrappers that haven't been migrated yet.

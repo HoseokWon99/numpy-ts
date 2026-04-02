@@ -33,6 +33,7 @@ import {
 import {
   wasmMalloc,
   resetScratchAllocator,
+  resolveInputPtr,
   scratchCopyIn,
   scratchAlloc,
   getSharedMemory,
@@ -211,11 +212,11 @@ export function wasmArgsort(a: ArrayStorage): ArrayStorage | null {
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  const aOff = a.offset;
+  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const aPtr =
     dtype === 'float16'
       ? f16InputToScratchF32(a, size)
-      : scratchCopyIn(a.data.subarray(aOff, aOff + bufLen) as TypedArray);
+      : resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, bufLen, bpe);
 
   kernel(aPtr, outRegion.ptr, size);
 

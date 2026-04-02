@@ -47,15 +47,19 @@ export function wasmQr(a: ArrayStorage): { q: ArrayStorage; r: ArrayStorage } | 
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  // Copy input matrix to WASM scratch (converting to float64)
+  // QR modifies input during Householder reflections — must copy
   const aSize = m * n;
   const aData = new Float64Array(aSize);
-  for (let i = 0; i < m; i++) {
-    for (let j = 0; j < n; j++) {
-      aData[i * n + j] = Number(a.get(i, j));
+  if (a.dtype === 'float64' && a.isCContiguous) {
+    const src = a.data as Float64Array;
+    aData.set(src.subarray(a.offset, a.offset + aSize));
+  } else {
+    for (let i = 0; i < m; i++) {
+      for (let j = 0; j < n; j++) {
+        aData[i * n + j] = Number(a.get(i, j));
+      }
     }
   }
-
   const aPtr = scratchCopyIn(aData as unknown as TypedArray);
   const tauPtr = scratchAlloc(k * 8);
   const scratchPtr = scratchAlloc(k * 8);
