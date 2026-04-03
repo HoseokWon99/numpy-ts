@@ -1327,7 +1327,14 @@ export function flip(storage: ArrayStorage, axis?: number | number[]): ArrayStor
     strides[ax] = -strides[ax]!;
   }
 
-  return ArrayStorage.fromDataShared(storage.data, [...shape], dtype, strides, newOffset, storage.wasmRegion);
+  return ArrayStorage.fromDataShared(
+    storage.data,
+    [...shape],
+    dtype,
+    strides,
+    newOffset,
+    storage.wasmRegion
+  );
 }
 
 /**
@@ -1408,7 +1415,14 @@ export function rot90(
     newShape[axis1] = dim0;
   }
 
-  return ArrayStorage.fromDataShared(storage.data, newShape, dtype, strides, newOffset, storage.wasmRegion);
+  return ArrayStorage.fromDataShared(
+    storage.data,
+    newShape,
+    dtype,
+    strides,
+    newOffset,
+    storage.wasmRegion
+  );
 }
 
 /**

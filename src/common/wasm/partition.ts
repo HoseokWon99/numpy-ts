@@ -204,16 +204,49 @@ export function wasmPartition(a: ArrayStorage, kth: number): ArrayStorage | null
 
   const aOff = a.offset;
   if (isF16) {
-    const scratchPtr = f16InputToScratchF32(a, size);
-    kernel(scratchPtr, size, kth);
-    // Copy sorted f32 scratch into persistent output, then convert to f16
+    // Float16 partition: use the "sort floats as integers" trick.
+    // Partition only rearranges elements — it doesn't modify values — so we can
+    // transform f16 bit patterns into a form where i16 comparison gives the
+    // correct f16 order, run partition_i16, and undo the transform.
+    //
+    // Transform: if sign bit is set (negative), XOR with 0x7FFF (flip exp+mantissa).
+    // This makes signed i16 comparison match f16 ordering.
+    // The transform is self-inverse: applying it again undoes it.
+    const f16Bytes = size * 2;
+    const f16Region = wasmMalloc(f16Bytes);
+    if (!f16Region) {
+      outRegion.release();
+      return null;
+    }
     const mem = getSharedMemory();
-    new Uint8Array(mem.buffer, outRegion.ptr, outBytes).set(
-      new Uint8Array(mem.buffer, scratchPtr, outBytes)
-    );
-    const f16Region = f32OutputToF16Region(outRegion, size);
+
+    // Copy f16 input into f16Region
+    if (a.isWasmBacked) {
+      new Uint8Array(mem.buffer, f16Region.ptr, f16Bytes).set(
+        new Uint8Array(mem.buffer, a.wasmPtr + aOff * 2, f16Bytes)
+      );
+    } else {
+      const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+      new Uint8Array(mem.buffer, f16Region.ptr, f16Bytes).set(
+        new Uint8Array(aData.buffer, aData.byteOffset, aData.byteLength)
+      );
+    }
+
+    // Transform: make i16 comparison match f16 order
+    const u16View = new Uint16Array(mem.buffer, f16Region.ptr, size);
+    for (let j = 0; j < size; j++) {
+      if (u16View[j]! & 0x8000) u16View[j]! ^= 0x7fff;
+    }
+
+    // Partition using i16 kernel
+    partition_i16(f16Region.ptr, size, kth);
+
+    // Undo transform
+    for (let j = 0; j < size; j++) {
+      if (u16View[j]! & 0x8000) u16View[j]! ^= 0x7fff;
+    }
+
     outRegion.release();
-    if (!f16Region) return null;
     return ArrayStorage.fromWasmRegion(
       Array.from(a.shape),
       dtype,

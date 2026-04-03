@@ -207,12 +207,35 @@ export function wasmArgpartition(a: ArrayStorage, kth: number): ArrayStorage | n
   resetScratchAllocator();
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aPtr =
-    dtype === 'float16'
-      ? f16InputToScratchF32(a, size)
-      : resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  let aPtr: number;
+  let actualKernel = kernel;
 
-  kernel(aPtr, outRegion.ptr, size, kth);
+  if (dtype === 'float16') {
+    // "Sort floats as integers" trick: transform f16 bit patterns so that
+    // signed i16 comparison matches f16 ordering, then use argpartition_i16.
+    const f16Bytes = size * 2;
+    const mem = getSharedMemory();
+    aPtr = scratchAlloc(f16Bytes);
+    if (a.isWasmBacked) {
+      new Uint8Array(mem.buffer, aPtr, f16Bytes).set(
+        new Uint8Array(mem.buffer, a.wasmPtr + a.offset * 2, f16Bytes)
+      );
+    } else {
+      const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+      new Uint8Array(mem.buffer, aPtr, f16Bytes).set(
+        new Uint8Array(aData.buffer, aData.byteOffset, aData.byteLength)
+      );
+    }
+    const u16View = new Uint16Array(mem.buffer, aPtr, size);
+    for (let j = 0; j < size; j++) {
+      if (u16View[j]! & 0x8000) u16View[j]! ^= 0x7fff;
+    }
+    actualKernel = argpartition_i16;
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  }
+
+  actualKernel(aPtr, outRegion.ptr, size, kth);
 
   return ArrayStorage.fromWasmRegion(
     Array.from(a.shape),

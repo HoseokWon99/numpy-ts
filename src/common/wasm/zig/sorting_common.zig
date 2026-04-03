@@ -109,11 +109,60 @@ fn partitionImpl(comptime T: type, a: [*]T, lo: u32, hi: u32) u32 {
     return i;
 }
 
-/// Quickselect: rearranges a so that a[kth] is in its sorted position.
+/// 3-way partition (Dutch National Flag) — fallback for duplicate-heavy data.
+fn partition3Way(comptime T: type, a: [*]T, lo: u32, hi: u32) struct { lt: u32, gt: u32 } {
+    const med = medianOfThree(T, a, lo, hi);
+    const pivot = a[med];
+    var lt: u32 = lo;
+    var i: u32 = lo;
+    var gt: u32 = hi;
+    while (i <= gt) {
+        if (lessThan(T, a[i], pivot)) {
+            swap(T, a, lt, i);
+            lt += 1;
+            i += 1;
+        } else if (lessThan(T, pivot, a[i])) {
+            swap(T, a, i, gt);
+            if (gt == 0) break;
+            gt -= 1;
+        } else {
+            i += 1;
+        }
+    }
+    return .{ .lt = lt, .gt = gt };
+}
+
+/// Quickselect with introsort-style depth limit.
+/// Uses fast Lomuto partition by default. If the partition makes poor progress
+/// (more than 2·log₂(N) iterations — indicating heavy duplication), switches
+/// to 3-way partitioning for the remaining subproblem.
 pub fn quickselect(comptime T: type, a: [*]T, lo_arg: u32, hi_arg: u32, kth: u32) void {
     var lo = lo_arg;
     var hi = hi_arg;
+    // Depth limit: 2 * floor(log2(hi - lo + 1))
+    var depth_limit: u32 = 0;
+    {
+        var n = hi - lo + 1;
+        while (n > 1) : (n >>= 1) depth_limit += 2;
+    }
     while (lo < hi) {
+        if (depth_limit == 0) {
+            // Too many iterations — switch to 3-way for the rest
+            const p = partition3Way(T, a, lo, hi);
+            if (kth < p.lt) {
+                hi = p.lt - 1;
+            } else if (kth > p.gt) {
+                lo = p.gt + 1;
+            } else {
+                return;
+            }
+            // Reset depth for the smaller subproblem
+            depth_limit = 0;
+            var n = hi -| lo;
+            while (n > 1) : (n >>= 1) depth_limit += 2;
+            continue;
+        }
+        depth_limit -= 1;
         const pivot = partitionImpl(T, a, lo, hi);
         if (pivot == kth) return;
         if (kth < pivot) {
@@ -143,11 +192,54 @@ fn partitionImplIndirect(comptime T: type, a: [*]const T, out: [*]u32, lo: u32, 
     return i;
 }
 
-/// Indirect quickselect: rearranges out so that a[out[kth]] is the kth-smallest value.
+/// 3-way indirect partition — fallback for duplicate-heavy data.
+fn partition3WayIndirect(comptime T: type, a: [*]const T, out: [*]u32, lo: u32, hi: u32) struct { lt: u32, gt: u32 } {
+    const med = medianOfThreeIndirect(T, a, out, lo, hi);
+    const pivot_idx = out[med];
+    var lt: u32 = lo;
+    var i: u32 = lo;
+    var gt: u32 = hi;
+    while (i <= gt) {
+        if (indirectLess(T, a, out[i], pivot_idx)) {
+            swapU32(out, lt, i);
+            lt += 1;
+            i += 1;
+        } else if (indirectLess(T, a, pivot_idx, out[i])) {
+            swapU32(out, i, gt);
+            if (gt == 0) break;
+            gt -= 1;
+        } else {
+            i += 1;
+        }
+    }
+    return .{ .lt = lt, .gt = gt };
+}
+
+/// Indirect quickselect with introsort-style depth limit.
 pub fn quickselectIndirect(comptime T: type, a: [*]const T, out: [*]u32, lo_arg: u32, hi_arg: u32, kth: u32) void {
     var lo = lo_arg;
     var hi = hi_arg;
+    var depth_limit: u32 = 0;
+    {
+        var n = hi - lo + 1;
+        while (n > 1) : (n >>= 1) depth_limit += 2;
+    }
     while (lo < hi) {
+        if (depth_limit == 0) {
+            const p = partition3WayIndirect(T, a, out, lo, hi);
+            if (kth < p.lt) {
+                hi = p.lt - 1;
+            } else if (kth > p.gt) {
+                lo = p.gt + 1;
+            } else {
+                return;
+            }
+            depth_limit = 0;
+            var n = hi -| lo;
+            while (n > 1) : (n >>= 1) depth_limit += 2;
+            continue;
+        }
+        depth_limit -= 1;
         const pivot = partitionImplIndirect(T, a, out, lo, hi);
         if (pivot == kth) return;
         if (kth < pivot) {
