@@ -1888,18 +1888,22 @@ export function getBenchmarkSpecs(
     });
 
     // NPZ parsing (sync, no compression)
-    specs.push({
-      name: `parseNpzSync {a, b} [${m}x${n}]`,
-      category: 'io',
-      operation: 'parseNpzSync',
-      setup: {
-        a: { shape: [m!, n!], fill: 'arange', dtype: 'float64' },
-        b: { shape: [m!, n!], fill: 'ones', dtype: 'float64' },
-      },
-      iterations,
-      includeInQuick: true,
-      warmup,
-    });
+    // Skip for large arrays: NumPy's np.load() returns a lazy NpzFile (~7μs regardless)
+    // Once we add compression/decompression, I'll re-add this
+    if (sizeScale !== 'large') {
+      specs.push({
+        name: `parseNpzSync {a, b} [${m}x${n}]`,
+        category: 'io',
+        operation: 'parseNpzSync',
+        setup: {
+          a: { shape: [m!, n!], fill: 'arange', dtype: 'float64' },
+          b: { shape: [m!, n!], fill: 'ones', dtype: 'float64' },
+        },
+        iterations,
+        includeInQuick: true,
+        warmup,
+      });
+    }
   }
 
   // Larger IO benchmarks for non-quick mode
