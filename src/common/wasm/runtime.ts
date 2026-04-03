@@ -16,7 +16,7 @@
 
 import type { TypedArray } from '../dtype';
 import { hasFloat16 } from '../dtype';
-import { wasmConfig, wasmMemoryConfig } from './config';
+import { wasmConfig, wasmMemoryConfig, type ConfigureWasmOptions } from './config';
 
 // FinalizationRegistry is available in all target environments (Node 14+,
 // modern browsers) but not in ES2020 lib typings.
@@ -39,6 +39,10 @@ let heapInitialized = false;
 // Scratch region state
 let scratchBase = 0;
 let scratchOffset = 0;
+
+// Temp heap allocations made when scratch is too small.
+// Freed on next resetScratchAllocator() call.
+let tempHeapPtrs: number[] = [];
 
 /**
  * Get the shared WebAssembly.Memory instance.
@@ -101,6 +105,48 @@ function ensureHeapInitialized(): void {
   }
 
   scratchOffset = scratchBase;
+}
+
+// ---------------------------------------------------------------------------
+// Public configuration API
+// ---------------------------------------------------------------------------
+
+/**
+ * Configure WASM memory settings. Must be called before any array operations
+ * (i.e. before the WASM memory is initialized on first use).
+ *
+ * @example
+ * ```ts
+ * import { configureWasm } from 'numpy-ts';
+ * configureWasm({ maxMemory: 512 * 1024 * 1024 }); // 512 MiB
+ * ```
+ */
+export function configureWasm(options: ConfigureWasmOptions): void {
+  if (heapInitialized) {
+    throw new Error(
+      'configureWasm() must be called before any array operations. ' +
+        'WASM memory has already been initialized.'
+    );
+  }
+  if (options.maxMemory !== undefined) {
+    if (options.maxMemory <= 0) {
+      throw new Error('maxMemory must be a positive number of bytes.');
+    }
+    wasmMemoryConfig.maxMemoryBytes = options.maxMemory;
+    // Auto-scale scratch to 1/16 of maxMemory, capped at 32 MiB
+    if (options.scratchSize === undefined) {
+      wasmMemoryConfig.scratchBytes = Math.min(
+        Math.floor(options.maxMemory / 16),
+        32 * 1024 * 1024
+      );
+    }
+  }
+  if (options.scratchSize !== undefined) {
+    if (options.scratchSize <= 0) {
+      throw new Error('scratchSize must be a positive number of bytes.');
+    }
+    wasmMemoryConfig.scratchBytes = options.scratchSize;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,26 +246,41 @@ export function wasmFreeBytes(): number {
 /**
  * Reset the scratch bump allocator. Call before each kernel invocation
  * that may need to copy JS-fallback inputs into WASM memory.
+ * Also frees any temp heap allocations from the previous kernel call.
  */
 export function resetScratchAllocator(): void {
   ensureHeapInitialized();
   scratchOffset = scratchBase;
+  if (tempHeapPtrs.length > 0) {
+    for (const ptr of tempHeapPtrs) {
+      heap_free(ptr);
+    }
+    tempHeapPtrs = [];
+  }
 }
 
 /**
  * Bump-allocate `bytes` from the scratch region. Returns byte offset.
- * Always 8-byte aligned. Throws if scratch space is exhausted.
+ * Always 8-byte aligned. Falls back to heap if scratch space is exhausted.
  */
 export function scratchAlloc(bytes: number): number {
   ensureHeapInitialized();
   const aligned = (scratchOffset + 7) & ~7;
-  scratchOffset = aligned + bytes;
-  if (scratchOffset > wasmMemoryConfig.maxMemoryBytes) {
-    throw new Error(
-      `WASM scratch OOM: need ${scratchOffset - scratchBase} bytes, ` +
-        `have ${wasmMemoryConfig.scratchBytes}`
-    );
+  const newOffset = aligned + bytes;
+  if (newOffset > wasmMemoryConfig.maxMemoryBytes) {
+    // Scratch region too small — allocate on the persistent heap instead.
+    // The pointer is tracked and freed on the next resetScratchAllocator() call.
+    const ptr = heap_malloc(bytes);
+    if (ptr === 0) {
+      throw new Error(
+        `WASM OOM: scratch full (${wasmMemoryConfig.scratchBytes} bytes) ` +
+          `and heap malloc failed for ${bytes} bytes`
+      );
+    }
+    tempHeapPtrs.push(ptr);
+    return ptr;
   }
+  scratchOffset = newOffset;
   return aligned;
 }
 

@@ -354,6 +354,12 @@ export { Complex } from '../common/complex';
     output.push(`} from '${coreImportPath}';`);
   }
 
+  // Static exports not derived from core/ modules
+  output.push('');
+  output.push('// WASM configuration');
+  output.push(`export { wasmConfig } from '../common/wasm/config';`);
+  output.push(`export { configureWasm } from '../common/wasm/runtime';`);
+
   // Write output
   const outputContent = output.join('\n');
   fs.writeFileSync(outputFile, outputContent);

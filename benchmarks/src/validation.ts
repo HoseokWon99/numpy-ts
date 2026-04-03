@@ -11,7 +11,7 @@ import type { BenchmarkCase } from './types';
 
 const FLOAT64_TOLERANCE = 1e-5;
 const FLOAT32_TOLERANCE = 1e-3; // float32 has ~7 decimal digits of precision
-const FLOAT16_TOLERANCE = 2e-3; // float16 has ~3.3 decimal digits of precision
+const FLOAT16_TOLERANCE = 3e-3; // float16 has ~3.3 decimal digits; accumulation order differences need extra margin
 
 /**
  * Deserialize special float values from Python

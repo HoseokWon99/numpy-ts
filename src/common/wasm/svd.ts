@@ -7,7 +7,7 @@
  */
 
 import { svd_f64, svd_values_gk_f64 } from './bins/svd.wasm';
-import { wasmMalloc, resetScratchAllocator, resolveInputPtr, scratchCopyIn, scratchAlloc } from './runtime';
+import { wasmMalloc, resetScratchAllocator, getSharedMemory } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { TypedArray } from '../dtype';
 
@@ -56,24 +56,44 @@ export function wasmSvd(
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  // SVD modifies input during Householder bidiagonalization — must copy
+  // SVD modifies input during Householder bidiagonalization — allocate working copy on heap
   const aSize = m * n;
-  const aData = new Float64Array(aSize);
+  const aRegion = wasmMalloc(aSize * 8);
+  if (!aRegion) {
+    uRegion.release();
+    sRegion.release();
+    vtRegion.release();
+    return null;
+  }
+  const mem = getSharedMemory();
   if (a.dtype === 'float64' && a.isCContiguous) {
-    const src = a.data as Float64Array;
-    aData.set(src.subarray(a.offset, a.offset + aSize));
+    const aView = new Float64Array(mem.buffer, aRegion.ptr, aSize);
+    if (a.isWasmBacked) {
+      aView.set(new Float64Array(mem.buffer, a.wasmPtr + a.offset * 8, aSize));
+    } else {
+      aView.set((a.data as Float64Array).subarray(a.offset, a.offset + aSize));
+    }
   } else {
+    const aView = new Float64Array(mem.buffer, aRegion.ptr, aSize);
     for (let i = 0; i < m; i++) {
       for (let j = 0; j < n; j++) {
-        aData[i * n + j] = Number(a.get(i, j));
+        aView[i * n + j] = Number(a.get(i, j));
       }
     }
   }
-  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
   const workSize = m * n + n * n;
-  const workPtr = scratchAlloc(workSize * 8);
+  const workRegion = wasmMalloc(workSize * 8);
+  if (!workRegion) {
+    aRegion.release();
+    uRegion.release();
+    sRegion.release();
+    vtRegion.release();
+    return null;
+  }
 
-  svd_f64(aPtr, uRegion.ptr, sRegion.ptr, vtRegion.ptr, workPtr, m, n);
+  svd_f64(aRegion.ptr, uRegion.ptr, sRegion.ptr, vtRegion.ptr, workRegion.ptr, m, n);
+  aRegion.release();
+  workRegion.release();
 
   const F64Ctor = Float64Array as unknown as new (
     buffer: ArrayBuffer,
@@ -112,23 +132,37 @@ export function wasmSvdValues(a: ArrayStorage): ArrayStorage | null {
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
 
-  // Copy input to scratch as float64
+  // GK-SVD modifies input — allocate working copy on heap
   const aSize = m * n;
-  const aData = new Float64Array(aSize);
-  const data = a.data;
-  const off = a.offset;
+  const aRegion = wasmMalloc(aSize * 8);
+  if (!aRegion) {
+    sRegion.release();
+    return null;
+  }
+  const mem = getSharedMemory();
   if (a.isCContiguous && a.dtype === 'float64') {
-    aData.set((data as Float64Array).subarray(off, off + aSize));
+    const aView = new Float64Array(mem.buffer, aRegion.ptr, aSize);
+    if (a.isWasmBacked) {
+      aView.set(new Float64Array(mem.buffer, a.wasmPtr + a.offset * 8, aSize));
+    } else {
+      aView.set((a.data as Float64Array).subarray(a.offset, a.offset + aSize));
+    }
   } else {
-    for (let i = 0; i < aSize; i++) aData[i] = Number(a.iget(i));
+    const aView = new Float64Array(mem.buffer, aRegion.ptr, aSize);
+    for (let i = 0; i < aSize; i++) aView[i] = Number(a.iget(i));
+  }
+  // Workspace for GK iteration — can be large, allocate on heap
+  const workSize = m * n + 4 * k;
+  const workRegion = wasmMalloc(workSize * 8);
+  if (!workRegion) {
+    aRegion.release();
+    sRegion.release();
+    return null;
   }
 
-  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
-  // scratch: m*n (a copy) + 3*k (diag, superdiag, tau)
-  const scratchSize = m * n + 4 * k;
-  const scratchPtr = scratchAlloc(scratchSize * 8);
-
-  svd_values_gk_f64(aPtr, sRegion.ptr, scratchPtr, m, n);
+  svd_values_gk_f64(aRegion.ptr, sRegion.ptr, workRegion.ptr, m, n);
+  aRegion.release();
+  workRegion.release();
 
   const F64Ctor = Float64Array as unknown as new (
     buffer: ArrayBuffer,
