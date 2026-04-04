@@ -46,6 +46,26 @@ export fn logical_xor_scalar_f32(a: [*]const f32, out: [*]u8, N: u32, scalar: f3
     }
 }
 
+/// Float16 logical xor (array): exactly one nonzero?
+export fn logical_xor_f16(a: [*]const u16, b: [*]const u16, out: [*]u8, N: u32) void {
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        const at = a[i] & 0x7FFF != 0;
+        const bt = b[i] & 0x7FFF != 0;
+        out[i] = if (at != bt) 1 else 0;
+    }
+}
+
+export fn logical_xor_scalar_f16(a: [*]const u16, out: [*]u8, N: u32, scalar_truthy: u32) void {
+    if (scalar_truthy != 0) {
+        var i: u32 = 0;
+        while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF == 0) 1 else 0;
+    } else {
+        var i: u32 = 0;
+        while (i < N) : (i += 1) out[i] = if (a[i] & 0x7FFF != 0) 1 else 0;
+    }
+}
+
 /// Element-wise logical XOR for i64, scalar loop (no i64x2 compare in WASM SIMD).
 export fn logical_xor_i64(a: [*]const i64, b: [*]const i64, out: [*]u8, N: u32) void {
     var i: u32 = 0;
@@ -473,4 +493,34 @@ test "logical_xor_i8 mixed positive/negative" {
     try testing.expectEqual(out[1], 1); // F XOR T = 1
     try testing.expectEqual(out[2], 0); // T XOR T = 0
     try testing.expectEqual(out[3], 0); // F XOR F = 0
+}
+
+test "logical_xor_f16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 0x3C00, 0x0000, 0x3C00, 0x0000 };
+    const b = [_]u16{ 0x3C00, 0x3C00, 0x0000, 0x0000 };
+    var out: [4]u8 = undefined;
+    logical_xor_f16(&a, &b, &out, 4);
+    try testing.expectEqual(out[0], 0); // T XOR T = 0
+    try testing.expectEqual(out[1], 1); // F XOR T = 1
+    try testing.expectEqual(out[2], 1); // T XOR F = 1
+    try testing.expectEqual(out[3], 0); // F XOR F = 0
+}
+
+test "logical_xor_scalar_f16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 0x3C00, 0x0000, 0x8000, 0xBC00 };
+    var out: [4]u8 = undefined;
+    // scalar_truthy=1 -> NOT(toBool)
+    logical_xor_scalar_f16(&a, &out, 4, 1);
+    try testing.expectEqual(out[0], 0); // T XOR T = 0
+    try testing.expectEqual(out[1], 1); // F XOR T = 1
+    try testing.expectEqual(out[2], 1); // F(-0) XOR T = 1
+    try testing.expectEqual(out[3], 0); // T XOR T = 0
+    // scalar_truthy=0 -> toBool
+    logical_xor_scalar_f16(&a, &out, 4, 0);
+    try testing.expectEqual(out[0], 1); // T XOR F = 1
+    try testing.expectEqual(out[1], 0); // F XOR F = 0
+    try testing.expectEqual(out[2], 0); // F(-0) XOR F = 0
+    try testing.expectEqual(out[3], 1); // T XOR F = 1
 }

@@ -9,13 +9,13 @@
 
 import { cosh_f64, cosh_f32, cosh_i64, cosh_u64 } from './bins/cosh.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
   f16ToF32Input,
   f32ToF16Output,
+  getSharedMemory,
 } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, isBigIntDType, type DType, type TypedArray } from '../dtype';
@@ -46,26 +46,30 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
   // float16 path: convert to f32, run f32 kernel, convert back
   if (dtype === 'float16') {
     const bpe = 4;
-    ensureMemory(size * bpe * 2);
-    resetAllocator();
+    const outBytes = size * bpe;
 
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
+
+    wasmConfig.wasmCallCount++;
+
+    resetScratchAllocator();
     const aOff = a.offset;
     const aData = f16ToF32Input(a.data.subarray(aOff, aOff + size) as TypedArray, dtype);
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * bpe);
+    const aPtr = scratchCopyIn(aData);
 
-    cosh_f32(aPtr, outPtr, size);
+    cosh_f32(aPtr, outRegion.ptr, size);
 
-    const outData = copyOut(
-      outPtr,
-      size,
-      Float32Array as unknown as new (
-        buffer: ArrayBuffer,
-        byteOffset: number,
-        length: number
-      ) => TypedArray
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, size);
+    const f32Copy = new Float32Array(size);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+      Array.from(a.shape),
+      dtype
     );
-    return ArrayStorage.fromData(f32ToF16Output(outData, dtype), Array.from(a.shape), dtype);
   }
 
   // Native float path
@@ -74,36 +78,45 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
     const isF32 = dtype === 'float32';
     const bpe = isF32 ? 4 : 8;
     const Ctor = isF32 ? Float32Array : Float64Array;
+    const outBytes = size * bpe;
 
-    ensureMemory(size * bpe * 2);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aOff = a.offset;
-    const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * bpe);
+    wasmConfig.wasmCallCount++;
 
-    nativeKernel(aPtr, outPtr, size);
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-    const outData = copyOut(
-      outPtr,
+    nativeKernel(aPtr, outRegion.ptr, size);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
   }
 
   // int64 native path — avoid costly BigInt→Number conversion in JS
   if (dtype === 'int64' || dtype === 'uint64') {
-    ensureMemory(size * 16);
-    resetAllocator();
-    const aOff = a.offset;
-    const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * 8);
-    (dtype === 'int64' ? cosh_i64 : cosh_u64)(aPtr, outPtr, size);
-    const outData = copyOut(
-      outPtr,
+    const outBytes = size * 8;
+
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
+
+    wasmConfig.wasmCallCount++;
+
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 8);
+
+    (dtype === 'int64' ? cosh_i64 : cosh_u64)(aPtr, outRegion.ptr, size);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      'float64',
+      outRegion,
       size,
       Float64Array as unknown as new (
         buffer: ArrayBuffer,
@@ -111,15 +124,19 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
         length: number
       ) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
   }
 
   // Other integer path: convert to float64, run f64 kernel
   // (NumPy promotes int→float64 for cosh)
   const bpe = 8; // f64
-  ensureMemory(size * bpe * 2);
-  resetAllocator();
+  const outBytes = size * bpe;
 
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
   const aOff = a.offset;
   const src = a.data;
   const converted = new Float64Array(size);
@@ -129,13 +146,14 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
     for (let i = 0; i < size; i++) converted[i] = src[aOff + i] as number;
   }
 
-  const aPtr = copyIn(converted as unknown as TypedArray);
-  const outPtr = alloc(size * bpe);
+  const aPtr = scratchCopyIn(converted as unknown as TypedArray);
 
-  cosh_f64(aPtr, outPtr, size);
+  cosh_f64(aPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'float64',
+    outRegion,
     size,
     Float64Array as unknown as new (
       buffer: ArrayBuffer,
@@ -143,5 +161,4 @@ export function wasmCosh(a: ArrayStorage): ArrayStorage | null {
       length: number
     ) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
 }

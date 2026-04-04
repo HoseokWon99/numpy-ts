@@ -19,8 +19,10 @@ import {
   logical_and_scalar_i32,
   logical_and_scalar_i16,
   logical_and_scalar_i8,
+  logical_and_f16,
+  logical_and_scalar_f16,
 } from './bins/logical_and.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -33,6 +35,7 @@ type ScalarFn = (aPtr: number, outPtr: number, N: number, scalar: number) => voi
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: logical_and_f64,
   float32: logical_and_f32,
+  float16: logical_and_f16 as unknown as BinaryFn, // raw u16 bit check
   int64: logical_and_i64,
   uint64: logical_and_i64,
   int32: logical_and_i32,
@@ -46,6 +49,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: logical_and_scalar_f64,
   float32: logical_and_scalar_f32,
+  float16: logical_and_scalar_f16 as unknown as ScalarFn, // raw u16 bit check
   int64: logical_and_scalar_i64,
   uint64: logical_and_scalar_i64,
   int32: logical_and_scalar_i32,
@@ -60,6 +64,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const inputCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -77,37 +82,47 @@ const inputCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 export function wasmLogicalAnd(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!a.isCContiguous || !b.isCContiguous) return null;
 
+  // WASM kernel does not broadcast — sizes must match
+  if (a.size !== b.size) return null;
+
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
-  const kernel = binaryKernels[dtype];
-  const InCtor = inputCtorMap[dtype];
-  if (!kernel || !InCtor) return null;
   // Both arrays must have same dtype for WASM fast path
   if (b.dtype !== dtype) return null;
 
+  const kernel = binaryKernels[dtype];
+  const InCtor = inputCtorMap[dtype];
+  if (!kernel || !InCtor) return null;
+
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
-  const bBytes = size * bpe;
   const outBytes = size; // u8 output
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  // Allocate output in persistent WASM heap
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const bPtr = copyIn(b.data.subarray(b.offset, b.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(aPtr, bPtr, outPtr, size);
+  // Resolve input pointers (zero-copy if WASM-backed, scratch-copy if JS)
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, bPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'bool',
+    outRegion,
     size,
-    Uint8Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Uint8Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'bool');
 }
 
 /**
@@ -121,27 +136,35 @@ export function wasmLogicalAndScalar(a: ArrayStorage, scalar: number): ArrayStor
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = scalarKernels[dtype];
   const InCtor = inputCtorMap[dtype];
   if (!kernel || !InCtor) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size; // u8 output
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  // Allocate output in persistent WASM heap
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(aPtr, outPtr, size, scalar);
+  // Resolve input pointer
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, outRegion.ptr, size, scalar);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'bool',
+    outRegion,
     size,
-    Uint8Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Uint8Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'bool');
 }

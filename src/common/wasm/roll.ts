@@ -6,15 +6,7 @@
  */
 
 import { roll_f64, roll_f32, roll_i64, roll_i32, roll_i16, roll_i8 } from './bins/roll.wasm';
-import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
-  f16ToF32Input,
-  f32ToF16Output,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -34,7 +26,7 @@ const kernels: Partial<Record<DType, RollFn>> = {
   uint16: roll_i16,
   int8: roll_i8,
   uint8: roll_i8,
-  float16: roll_f32,
+  float16: roll_i16, // byte-copy: treat f16 as raw i16
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
@@ -49,7 +41,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
-  float16: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
 };
 
 /**
@@ -68,31 +60,40 @@ export function wasmRoll(a: ArrayStorage, shift: number): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
-
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
-
   const isF16 = dtype === 'float16';
-  const aOff = a.offset;
-  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  if (isF16) aData = f16ToF32Input(aData, dtype);
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  kernel(aPtr, outPtr, size, shift);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const outData = copyOut(
-    outPtr,
-    size,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
+  // Float16: use i16 kernel on raw bytes (byte-copy, no conversion needed)
+  if (isF16) {
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
+    kernel(aPtr, outRegion.ptr, size, shift);
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
+      size,
+      Float16Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
+    );
+  }
 
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  kernel(aPtr, outRegion.ptr, size, shift);
+
+  return ArrayStorage.fromWasmRegion(
     Array.from(a.shape),
-    dtype
+    dtype,
+    outRegion,
+    size,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 }

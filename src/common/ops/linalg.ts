@@ -11,7 +11,6 @@ import {
   isComplexDType,
   isBigIntDType,
   hasFloat16,
-  getTypedArrayConstructor,
   type TypedArray,
 } from '../dtype';
 import { Complex } from '../complex';
@@ -895,6 +894,7 @@ function matmul2D(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     const src = result.data as Float64Array;
     const dst = out.data;
     for (let i = 0; i < src.length; i++) (dst as Float16Array)[i] = src[i]!;
+    result.dispose();
     return out;
   }
 
@@ -977,8 +977,8 @@ function extract2DSlice(
   const isComplex = isComplexDType(a.dtype);
   const isBigInt = isBigIntDType(a.dtype);
   const factor = isComplex ? 2 : 1;
-  const Ctor = getTypedArrayConstructor(a.dtype)!;
-  const sliceData = new Ctor(sliceSize * factor);
+  const result = ArrayStorage.empty([rows, cols], a.dtype);
+  const sliceData = result.data;
 
   // Compute offset into the flat contiguous data for this batch
   if (a.isCContiguous) {
@@ -1023,7 +1023,7 @@ function extract2DSlice(
     }
   }
 
-  return ArrayStorage.fromData(sliceData, [rows, cols], a.dtype);
+  return result;
 }
 
 /**
@@ -1133,9 +1133,9 @@ export function matmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const isComplex = isComplexDType(resultDtype);
   const isBigInt = isBigIntDType(resultDtype);
   const factor = isComplex ? 2 : 1;
-  const Ctor = getTypedArrayConstructor(resultDtype)!;
-  const totalElements = batchSize * elementsPerSlice * factor;
-  const resultData = new Ctor(totalElements);
+  const outShape = [...batchShape, M, N];
+  const result = ArrayStorage.empty(outShape, resultDtype);
+  const resultData = result.data;
 
   for (let bi = 0; bi < batchSize; bi++) {
     const slice = slices[bi]!;
@@ -1151,9 +1151,6 @@ export function matmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
       for (let i = 0; i < elementsPerSlice * factor; i++) dst[dstOff + i] = src[i]!;
     }
   }
-
-  const outShape = [...batchShape, M, N];
-  const result = ArrayStorage.fromData(resultData, outShape, resultDtype);
 
   if (aWas1D && bWas1D) return shapeOps.reshape(result, [...batchShape]);
   if (aWas1D) return shapeOps.reshape(result, [...batchShape, N]);
@@ -1864,16 +1861,26 @@ export function diagonal(
   }
   outShape.push(diagLen);
 
-  // Create output array
-  const result = ArrayStorage.zeros(outShape, a.dtype);
+  // Fast path: 2D arrays — return a strided view (zero-copy)
+  if (ndim === 2 && ax1 === 0 && ax2 === 1) {
+    const startOffset = a.offset + (offset >= 0 ? offset * a.strides[1]! : -offset * a.strides[0]!);
+    const diagStride = a.strides[0]! + a.strides[1]!;
+    return ArrayStorage.fromDataShared(
+      a.data,
+      [diagLen],
+      a.dtype,
+      [diagStride],
+      startOffset,
+      a.wasmRegion
+    );
+  }
 
-  // Extract diagonal elements
-  // We need to iterate over all combinations of indices for other dimensions
+  // General N-D path: element-by-element copy
+  const result = ArrayStorage.zeros(outShape, a.dtype);
   const otherDims = shape.filter((_, i) => i !== ax1 && i !== ax2);
   const otherSize = otherDims.reduce((acc, d) => acc * d, 1);
 
   for (let otherIdx = 0; otherIdx < otherSize; otherIdx++) {
-    // Convert flat index to multi-dimensional indices for "other" dimensions
     let temp = otherIdx;
     const otherIndices: number[] = [];
     for (let i = otherDims.length - 1; i >= 0; i--) {
@@ -1881,9 +1888,7 @@ export function diagonal(
       temp = Math.floor(temp / otherDims[i]!);
     }
 
-    // Extract diagonal for this slice
     for (let d = 0; d < diagLen; d++) {
-      // Build source indices
       const srcIndices: number[] = new Array(ndim);
       let otherIdx2 = 0;
       for (let i = 0; i < ndim; i++) {
@@ -1896,10 +1901,7 @@ export function diagonal(
         }
       }
 
-      // Build destination indices
       const dstIndices = [...otherIndices, d];
-
-      // Copy element
       const value = a.get(...srcIndices);
       result.set(dstIndices, value);
     }
@@ -2858,7 +2860,8 @@ export function matrix_norm(
     const m2 = x.shape[x.ndim - 2]!;
     const n2 = x.shape[x.ndim - 1]!;
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize);
+    const result = ArrayStorage.empty(batchShape, 'float64');
+    const resultData = result.data as Float64Array;
     const xData = toContiguousFloat64(x);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * m2 * n2;
@@ -2867,10 +2870,9 @@ export function matrix_norm(
     }
     if (keepdims) {
       const onesShape = [...batchShape, 1, 1] as number[];
-      const out = ArrayStorage.fromData(resultData, batchShape, 'float64');
-      return shapeOps.reshape(out, onesShape);
+      return shapeOps.reshape(result, onesShape);
     }
-    return ArrayStorage.fromData(resultData, batchShape, 'float64');
+    return result;
   }
 
   const [m, n] = x.shape;
@@ -3083,6 +3085,9 @@ export function qr(
         for (let j = 0; j < qCols; j++) qOut.set([...bIdx, i, j], Number(res.q.get(i, j)));
       for (let i = 0; i < qCols; i++)
         for (let j = 0; j < n; j++) rOut.set([...bIdx, i, j], Number(res.r.get(i, j)));
+      slice.dispose();
+      res.q.dispose();
+      res.r.dispose();
     }
     return { q: qOut, r: rOut };
   }
@@ -3169,6 +3174,7 @@ export function qr(
         h.set([i, j], Number(R.get(i, j)));
       }
     }
+    R.dispose();
     const tauArr = ArrayStorage.zeros([k], 'float64');
     for (let i = 0; i < k; i++) {
       tauArr.set([i], tau[i]!);
@@ -3184,6 +3190,7 @@ export function qr(
         rResult.set([i, j], Number(R.get(i, j)));
       }
     }
+    R.dispose();
     return rResult;
   }
 
@@ -3222,6 +3229,7 @@ export function qr(
       qResult.set([i, j], Number(Q.get(i, j)));
     }
   }
+  Q.dispose();
 
   const rRows = mode === 'complete' ? m! : k;
   const rResult = ArrayStorage.zeros([rRows, n!], 'float64');
@@ -3232,6 +3240,7 @@ export function qr(
       }
     }
   }
+  R.dispose();
 
   return { q: qResult, r: rResult };
 }
@@ -3257,15 +3266,18 @@ export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage 
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`cholesky: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize * n * n);
+    const result = ArrayStorage.empty([...batchShape, n, n], 'float64');
+    const resultData = result.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
       const slice = ArrayStorage.fromData(aData.slice(off, off + n * n), [n, n], 'float64');
       const r = cholesky(slice, upper);
       resultData.set(toContiguousFloat64(r), off);
+      slice.dispose();
+      r.dispose();
     }
-    return ArrayStorage.fromData(resultData, [...batchShape, n, n], 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -3285,6 +3297,7 @@ export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage 
           U.set([i, j], Number(wasmResult.get(j, i)));
         }
       }
+      wasmResult.dispose();
       return U;
     }
     return wasmResult;
@@ -3373,6 +3386,7 @@ function svdFull(a: ArrayStorage): { u: ArrayStorage; s: ArrayStorage; vt: Array
 
   // Get eigendecomposition of A^T @ A
   const { values: eigVals, vectors: V } = eigSymmetric(ATA);
+  ATA.dispose();
 
   // Sort eigenvalues in descending order
   const indices = Array.from({ length: n! }, (_, i) => i);
@@ -3574,8 +3588,12 @@ export function svd(
         const slice = ArrayStorage.zeros([m, n], 'float64');
         for (let i = 0; i < m; i++)
           for (let j = 0; j < n; j++) slice.set([i, j], Number(a.get(...bIdx, i, j)));
-        const { s } = svdFull(slice);
+        const { u, s, vt } = svdFull(slice);
         for (let i = 0; i < k; i++) sOut.set([...bIdx, i], Number(s.get(i)));
+        slice.dispose();
+        u.dispose();
+        s.dispose();
+        vt.dispose();
       }
       return sOut;
     }
@@ -3601,6 +3619,10 @@ export function svd(
       for (let i = 0; i < k; i++) sOut.set([...bIdx, i], Number(res.s.get(i)));
       for (let i = 0; i < vtRows; i++)
         for (let j = 0; j < n; j++) vtOut.set([...bIdx, i, j], Number(res.vt.get(i, j)));
+      slice.dispose();
+      res.u.dispose();
+      res.s.dispose();
+      res.vt.dispose();
     }
     return { u: uOut, s: sOut, vt: vtOut };
   }
@@ -3608,6 +3630,8 @@ export function svd(
   const result = svdFull(a);
 
   if (!compute_uv) {
+    result.u.dispose();
+    result.vt.dispose();
     return result.s;
   }
 
@@ -3622,6 +3646,7 @@ export function svd(
         uReduced.set([i, j], Number(result.u.get(i, j)));
       }
     }
+    result.u.dispose();
 
     // Reduced V^T: k x n
     const vtReduced = ArrayStorage.zeros([k, n!], 'float64');
@@ -3630,6 +3655,7 @@ export function svd(
         vtReduced.set([i, j], Number(result.vt.get(i, j)));
       }
     }
+    result.vt.dispose();
 
     return { u: uReduced, s: result.s, vt: vtReduced };
   }
@@ -3659,15 +3685,20 @@ export function det(a: ArrayStorage): number | ArrayStorage {
       throw new Error(`det: last 2 dimensions must be square, got ${m2}x${n}`);
     }
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize);
+    const result = ArrayStorage.empty(batchShape, 'float64');
+    const resultData = result.data as Float64Array;
     const aData = toContiguousFloat64(a);
 
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
       const slice = ArrayStorage.fromData(aData.slice(off, off + n * n), [n, n], 'float64');
-      resultData[bi] = det(slice) as number;
+      try {
+        resultData[bi] = det(slice) as number;
+      } finally {
+        slice.dispose();
+      }
     }
-    return ArrayStorage.fromData(resultData, batchShape, 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -3694,15 +3725,19 @@ export function det(a: ArrayStorage): number | ArrayStorage {
   // LU decomposition with partial pivoting
   const { lu, sign } = luDecomposition(a);
 
-  // Determinant is product of diagonal of U times sign from pivoting
-  // Use direct array access for speed
-  const luData = lu.data as Float64Array;
-  let result = sign;
-  for (let i = 0; i < size; i++) {
-    result *= luData[i * size + i]!;
-  }
+  try {
+    // Determinant is product of diagonal of U times sign from pivoting
+    // Use direct array access for speed
+    const luData = lu.data as Float64Array;
+    let result = sign;
+    for (let i = 0; i < size; i++) {
+      result *= luData[i * size + i]!;
+    }
 
-  return result;
+    return result;
+  } finally {
+    lu.dispose();
+  }
 }
 
 /**
@@ -3792,7 +3827,8 @@ export function inv(a: ArrayStorage): ArrayStorage {
     }
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
     const aData = toContiguousFloat64(a);
-    const resultData = new Float64Array(batchSize * n * n);
+    const result = ArrayStorage.empty(Array.from(a.shape), 'float64');
+    const resultData = result.data as Float64Array;
 
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -3802,8 +3838,10 @@ export function inv(a: ArrayStorage): ArrayStorage {
       for (let i = 0; i < n * n; i++) {
         resultData[off + i] = invData[i]!;
       }
+      slice.dispose();
+      invSlice.dispose();
     }
-    return ArrayStorage.fromData(resultData, Array.from(a.shape), 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
@@ -3848,6 +3886,7 @@ export function inv(a: ArrayStorage): ArrayStorage {
     }
   }
 
+  lu.dispose();
   return result;
 }
 
@@ -3864,41 +3903,45 @@ function solveVector(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
 
   // LU decomposition
   const { lu, piv } = luDecomposition(a);
-  const luData = lu.data as Float64Array;
-  const bData = b.data;
+  try {
+    const luData = lu.data as Float64Array;
+    const bData = b.data;
 
-  // Apply permutation to b - direct array access
-  const pb = new Float64Array(size);
-  for (let i = 0; i < size; i++) {
-    pb[i] = Number(bData[piv[i]!]);
-  }
-
-  // Forward substitution (L @ y = Pb) - direct array access
-  const y = new Float64Array(size);
-  for (let i = 0; i < size; i++) {
-    let sum = pb[i]!;
-    for (let j = 0; j < i; j++) {
-      sum -= luData[i * size + j]! * y[j]!;
+    // Apply permutation to b - direct array access
+    const pb = new Float64Array(size);
+    for (let i = 0; i < size; i++) {
+      pb[i] = Number(bData[piv[i]!]);
     }
-    y[i] = sum;
-  }
 
-  // Back substitution (U @ x = y) - direct array access
-  const x = ArrayStorage.zeros([size], 'float64');
-  const xData = x.data as Float64Array;
-  for (let i = size - 1; i >= 0; i--) {
-    let sum = y[i]!;
-    for (let j = i + 1; j < size; j++) {
-      sum -= luData[i * size + j]! * xData[j]!;
+    // Forward substitution (L @ y = Pb) - direct array access
+    const y = new Float64Array(size);
+    for (let i = 0; i < size; i++) {
+      let sum = pb[i]!;
+      for (let j = 0; j < i; j++) {
+        sum -= luData[i * size + j]! * y[j]!;
+      }
+      y[i] = sum;
     }
-    const diag = luData[i * size + i]!;
-    if (Math.abs(diag) < 1e-15) {
-      throw new Error('solve: singular matrix');
-    }
-    xData[i] = sum / diag;
-  }
 
-  return x;
+    // Back substitution (U @ x = y) - direct array access
+    const x = ArrayStorage.zeros([size], 'float64');
+    const xData = x.data as Float64Array;
+    for (let i = size - 1; i >= 0; i--) {
+      let sum = y[i]!;
+      for (let j = i + 1; j < size; j++) {
+        sum -= luData[i * size + j]! * xData[j]!;
+      }
+      const diag = luData[i * size + i]!;
+      if (Math.abs(diag) < 1e-15) {
+        throw new Error('solve: singular matrix');
+      }
+      xData[i] = sum / diag;
+    }
+
+    return x;
+  } finally {
+    lu.dispose();
+  }
 }
 
 /**
@@ -3950,6 +3993,9 @@ export function solve(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
       for (let i = 0; i < size; i++) {
         result.set([i, j], Number(xCol.get(i)));
       }
+
+      bCol.dispose();
+      xCol.dispose();
     }
 
     return result;
@@ -3988,70 +4034,82 @@ export function lstsq(
 
   // SVD for singular values, rank, and x computation
   const { u, s, vt } = svdFull(a);
-  const sData = s.data as Float64Array;
-  const uData = u.data as Float64Array;
-  const vtData = vt.data as Float64Array;
+  try {
+    const sData = s.data as Float64Array;
+    const uData = u.data as Float64Array;
+    const vtData = vt.data as Float64Array;
 
-  // Determine rcond and rank
-  const threshold = rcond ?? Math.max(m!, n!) * Number.EPSILON;
-  const maxSigma = sData[0]!;
-  const cutoff = maxSigma * threshold;
-  let rank = 0;
-  for (let i = 0; i < k; i++) {
-    if (sData[i]! > cutoff) rank++;
-  }
+    // Determine rcond and rank
+    const threshold = rcond ?? Math.max(m!, n!) * Number.EPSILON;
+    const maxSigma = sData[0]!;
+    const cutoff = maxSigma * threshold;
+    let rank = 0;
+    for (let i = 0; i < k; i++) {
+      if (sData[i]! > cutoff) rank++;
+    }
 
-  // Compute x = V @ S^+ @ U^T @ b using WASM matmul
-  // Build (V @ S^+) as n×k matrix, U^T as k×m, then matmul chains
-  const vsInvData = new Float64Array(n! * k);
-  for (let l = 0; l < k; l++) {
-    const sigma = sData[l]!;
-    if (sigma > cutoff) {
-      const invSigma = 1.0 / sigma;
-      for (let i = 0; i < n!; i++) {
-        vsInvData[i * k + l] = vtData[l * n! + i]! * invSigma;
+    // Compute x = V @ S^+ @ U^T @ b using WASM matmul
+    // Build (V @ S^+) as n×k matrix, U^T as k×m, then matmul chains
+    const vsInv = ArrayStorage.zeros([n!, k], 'float64');
+    const vsInvData = vsInv.data as Float64Array;
+    for (let l = 0; l < k; l++) {
+      const sigma = sData[l]!;
+      if (sigma > cutoff) {
+        const invSigma = 1.0 / sigma;
+        for (let i = 0; i < n!; i++) {
+          vsInvData[i * k + l] = vtData[l * n! + i]! * invSigma;
+        }
       }
     }
-  }
 
-  // U^T truncated: k × m
-  const utData = new Float64Array(k * m!);
-  for (let l = 0; l < k; l++) {
-    for (let j = 0; j < m!; j++) {
-      utData[l * m! + j] = uData[j * m! + l]!;
-    }
-  }
-
-  // x = (V @ S^+) @ (U^T @ b) via two WASM matmuls
-  const vsInv = ArrayStorage.fromData(vsInvData, [n!, k], 'float64');
-  const ut = ArrayStorage.fromData(utData, [k, m!], 'float64');
-  const utb = wasmMatmul(ut, b2D) ?? matmul2D(ut, b2D); // k × nrhs
-  let x: ArrayStorage = wasmMatmul(vsInv, utb) ?? matmul2D(vsInv, utb); // n × nrhs
-
-  // Compute residuals if m > n (overdetermined) and full rank
-  let residuals: ArrayStorage;
-  if (m! > n! && rank === n!) {
-    const resArr = new Float64Array(nrhs);
-    const xForMul = b.ndim === 1 ? shapeOps.reshape(x, [n!, 1]) : x;
-    const ax = wasmMatmul(a, xForMul) ?? matmul2D(a, xForMul);
-    const axData = ax.data as Float64Array;
-    for (let j = 0; j < nrhs; j++) {
-      let resSum = 0;
-      for (let i = 0; i < m!; i++) {
-        const diff = axData[i * nrhs + j]! - Number(b2D.iget(i * nrhs + j));
-        resSum += diff * diff;
+    // U^T truncated: k × m
+    const ut = ArrayStorage.empty([k, m!], 'float64');
+    const utData = ut.data as Float64Array;
+    for (let l = 0; l < k; l++) {
+      for (let j = 0; j < m!; j++) {
+        utData[l * m! + j] = uData[j * m! + l]!;
       }
-      resArr[j] = resSum;
     }
-    residuals = ArrayStorage.fromData(resArr, [nrhs], 'float64');
-  } else {
-    residuals = ArrayStorage.zeros([0], 'float64');
+
+    // x = (V @ S^+) @ (U^T @ b) via two WASM matmuls
+    const utb = wasmMatmul(ut, b2D) ?? matmul2D(ut, b2D); // k × nrhs
+    let x: ArrayStorage = wasmMatmul(vsInv, utb) ?? matmul2D(vsInv, utb); // n × nrhs
+    vsInv.dispose();
+    ut.dispose();
+    utb.dispose();
+
+    // Compute residuals if m > n (overdetermined) and full rank
+    let residuals: ArrayStorage;
+    if (m! > n! && rank === n!) {
+      residuals = ArrayStorage.empty([nrhs], 'float64');
+      const resArr = residuals.data as Float64Array;
+      const xForMul = b.ndim === 1 ? shapeOps.reshape(x, [n!, 1]) : x;
+      const ax = wasmMatmul(a, xForMul) ?? matmul2D(a, xForMul);
+      if (xForMul !== x) xForMul.dispose();
+      const axData = ax.data as Float64Array;
+      for (let j = 0; j < nrhs; j++) {
+        let resSum = 0;
+        for (let i = 0; i < m!; i++) {
+          const diff = axData[i * nrhs + j]! - Number(b2D.iget(i * nrhs + j));
+          resSum += diff * diff;
+        }
+        resArr[j] = resSum;
+      }
+      ax.dispose();
+    } else {
+      residuals = ArrayStorage.zeros([0], 'float64');
+    }
+
+    // Reshape x if b was 1D
+    const xResult = b.ndim === 1 ? shapeOps.reshape(x, [n!]) : x;
+    if (xResult !== x) x.dispose();
+
+    if (b2D !== b) b2D.dispose();
+    return { x: xResult, residuals, rank, s };
+  } finally {
+    u.dispose();
+    vt.dispose();
   }
-
-  // Reshape x if b was 1D
-  const xResult = b.ndim === 1 ? shapeOps.reshape(x, [n!]) : x;
-
-  return { x: xResult, residuals, rank, s };
 }
 
 /**
@@ -4070,15 +4128,21 @@ export function cond(a: ArrayStorage, p: number | 'fro' | 'nuc' = 2): number {
 
   if (p === 2 || p === -2) {
     // Condition number from singular values
-    const { s } = svdFull(a);
-    const k = Math.min(m!, n!);
-    const maxS = Number(s.get(0));
-    const minS = Number(s.get(k - 1));
+    const { u, s, vt } = svdFull(a);
+    try {
+      const k = Math.min(m!, n!);
+      const maxS = Number(s.get(0));
+      const minS = Number(s.get(k - 1));
 
-    if (p === 2) {
-      return minS > 0 ? maxS / minS : Infinity;
-    } else {
-      return maxS > 0 ? minS / maxS : 0;
+      if (p === 2) {
+        return minS > 0 ? maxS / minS : Infinity;
+      } else {
+        return maxS > 0 ? minS / maxS : 0;
+      }
+    } finally {
+      u.dispose();
+      s.dispose();
+      vt.dispose();
     }
   }
 
@@ -4089,9 +4153,12 @@ export function cond(a: ArrayStorage, p: number | 'fro' | 'nuc' = 2): number {
 
   const normA = matrix_norm(a, p as 'fro' | number) as number;
   const invA = inv(a);
-  const normInvA = matrix_norm(invA, p as 'fro' | number) as number;
-
-  return normA * normInvA;
+  try {
+    const normInvA = matrix_norm(invA, p as 'fro' | number) as number;
+    return normA * normInvA;
+  } finally {
+    invA.dispose();
+  }
 }
 
 /**
@@ -4117,20 +4184,26 @@ export function matrix_rank(a: ArrayStorage, tol?: number): number {
     throw new Error(`matrix_rank: input must be at most 2D, got ${a.ndim}D`);
   }
 
-  const { s } = svdFull(a);
-  const maxS = Number(s.get(0));
+  const { u, s, vt } = svdFull(a);
+  try {
+    const maxS = Number(s.get(0));
 
-  // Default tolerance
-  const threshold = tol ?? maxS * Math.max(a.shape[0]!, a.shape[1]!) * Number.EPSILON;
+    // Default tolerance
+    const threshold = tol ?? maxS * Math.max(a.shape[0]!, a.shape[1]!) * Number.EPSILON;
 
-  let rank = 0;
-  for (let i = 0; i < s.size; i++) {
-    if (Number(s.get(i)) > threshold) {
-      rank++;
+    let rank = 0;
+    for (let i = 0; i < s.size; i++) {
+      if (Number(s.get(i)) > threshold) {
+        rank++;
+      }
     }
-  }
 
-  return rank;
+    return rank;
+  } finally {
+    u.dispose();
+    s.dispose();
+    vt.dispose();
+  }
 }
 
 /**
@@ -4199,15 +4272,26 @@ export function matrix_power(a: ArrayStorage, n: number): ArrayStorage {
     }
   }
 
-  while (power > 0) {
-    if (power & 1) {
-      result = matmul(result, current);
+  try {
+    while (power > 0) {
+      if (power & 1) {
+        const oldResult = result;
+        result = matmul(result, current);
+        oldResult.dispose();
+      }
+      power >>= 1;
+      if (power) {
+        const oldCurrent = current;
+        current = matmul(current, current);
+        oldCurrent.dispose();
+      }
     }
-    current = matmul(current, current);
-    power >>= 1;
-  }
 
-  return result;
+    return result;
+  } finally {
+    current.dispose();
+    if (n < 0) base.dispose(); // base was created by inv()
+  }
 }
 
 /**
@@ -4227,56 +4311,70 @@ export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
     const m2 = a.shape[a.ndim - 2]!;
     const n2 = a.shape[a.ndim - 1]!;
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const resultData = new Float64Array(batchSize * n2 * m2);
+    const result = ArrayStorage.empty([...batchShape, n2, m2], 'float64');
+    const resultData = result.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * m2 * n2;
       const slice = ArrayStorage.fromData(aData.slice(off, off + m2 * n2), [m2, n2], 'float64');
       const r = pinv(slice, rcond);
-      resultData.set(toContiguousFloat64(r), bi * n2 * m2);
+      try {
+        resultData.set(toContiguousFloat64(r), bi * n2 * m2);
+      } finally {
+        slice.dispose();
+        r.dispose();
+      }
     }
-    return ArrayStorage.fromData(resultData, [...batchShape, n2, m2], 'float64');
+    return result;
   }
 
   const [m, n] = a.shape;
   const { u, s, vt } = svdFull(a);
-  const k = Math.min(m!, n!);
-  const sData = s.data as Float64Array;
+  try {
+    const k = Math.min(m!, n!);
+    const sData = s.data as Float64Array;
 
-  // Determine cutoff
-  const maxS = sData[0]!;
-  const cutoff = maxS * rcond;
+    // Determine cutoff
+    const maxS = sData[0]!;
+    const cutoff = maxS * rcond;
 
-  // Compute pinv = V^T^T @ S^+ @ U^T = (V^T transposed with S^+ scaling) @ U^T
-  // Step 1: Build S^+ @ V^T → each row l of vt scaled by 1/s[l] (or 0)
-  // Result is k × n, but we want V @ S^+ which is n × k (= vt^T with scaling)
-  const vsInvData = new Float64Array(n! * k);
-  for (let l = 0; l < k; l++) {
-    const sigma = sData[l]!;
-    if (sigma > cutoff) {
-      const invSigma = 1.0 / sigma;
-      for (let i = 0; i < n!; i++) {
-        // V @ S^+ : column l of V (= row l of vt) scaled by 1/sigma
-        vsInvData[i * k + l] = (vt.data as Float64Array)[l * n! + i]! * invSigma;
+    // Compute pinv = V^T^T @ S^+ @ U^T = (V^T transposed with S^+ scaling) @ U^T
+    // Step 1: Build S^+ @ V^T → each row l of vt scaled by 1/s[l] (or 0)
+    // Result is k × n, but we want V @ S^+ which is n × k (= vt^T with scaling)
+    const vsInv = ArrayStorage.zeros([n!, k], 'float64');
+    const vsInvData = vsInv.data as Float64Array;
+    for (let l = 0; l < k; l++) {
+      const sigma = sData[l]!;
+      if (sigma > cutoff) {
+        const invSigma = 1.0 / sigma;
+        for (let i = 0; i < n!; i++) {
+          // V @ S^+ : column l of V (= row l of vt) scaled by 1/sigma
+          vsInvData[i * k + l] = (vt.data as Float64Array)[l * n! + i]! * invSigma;
+        }
+      }
+      // else: column stays 0 (already zero-initialized)
+    }
+
+    // Step 2: Build U^T (k × m) — take first k rows of u^T (= first k columns of u, transposed)
+    const ut = ArrayStorage.empty([k, m!], 'float64');
+    const utData = ut.data as Float64Array;
+    const uData = u.data as Float64Array;
+    for (let l = 0; l < k; l++) {
+      for (let j = 0; j < m!; j++) {
+        utData[l * m! + j] = uData[j * m! + l]!;
       }
     }
-    // else: column stays 0 (already zero-initialized)
-  }
-  const vsInv = ArrayStorage.fromData(vsInvData, [n!, k], 'float64');
 
-  // Step 2: Build U^T (k × m) — take first k rows of u^T (= first k columns of u, transposed)
-  const utData = new Float64Array(k * m!);
-  const uData = u.data as Float64Array;
-  for (let l = 0; l < k; l++) {
-    for (let j = 0; j < m!; j++) {
-      utData[l * m! + j] = uData[j * m! + l]!;
-    }
+    // Step 3: pinv = vsInv @ ut via WASM matmul (n × k) @ (k × m) → (n × m)
+    const result = wasmMatmul(vsInv, ut) ?? matmul2D(vsInv, ut);
+    vsInv.dispose();
+    ut.dispose();
+    return result;
+  } finally {
+    u.dispose();
+    s.dispose();
+    vt.dispose();
   }
-  const ut = ArrayStorage.fromData(utData, [k, m!], 'float64');
-
-  // Step 3: pinv = vsInv @ ut via WASM matmul (n × k) @ (k × m) → (n × m)
-  const result = wasmMatmul(vsInv, ut) ?? matmul2D(vsInv, ut);
-  return result;
 }
 
 /**
@@ -4304,8 +4402,10 @@ export function eig(a: ArrayStorage): { w: ArrayStorage; v: ArrayStorage } {
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`eig: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const wData = new Float64Array(batchSize * n);
-    const vData = new Float64Array(batchSize * n * n);
+    const wResult = ArrayStorage.empty([...batchShape, n], 'float64');
+    const vResult = ArrayStorage.empty([...batchShape, n, n], 'float64');
+    const wData = wResult.data as Float64Array;
+    const vData = vResult.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -4315,8 +4415,8 @@ export function eig(a: ArrayStorage): { w: ArrayStorage; v: ArrayStorage } {
       vData.set(toContiguousFloat64(v), off);
     }
     return {
-      w: ArrayStorage.fromData(wData, [...batchShape, n], 'float64'),
-      v: ArrayStorage.fromData(vData, [...batchShape, n, n], 'float64'),
+      w: wResult,
+      v: vResult,
     };
   }
 
@@ -4491,8 +4591,10 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`eigh: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const wData = new Float64Array(batchSize * n);
-    const vData = new Float64Array(batchSize * n * n);
+    const wResult = ArrayStorage.empty([...batchShape, n], 'float64');
+    const vResult = ArrayStorage.empty([...batchShape, n, n], 'float64');
+    const wData = wResult.data as Float64Array;
+    const vData = vResult.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
@@ -4500,10 +4602,13 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
       const { w, v } = eigh(slice, UPLO);
       wData.set(toContiguousFloat64(w), bi * n);
       vData.set(toContiguousFloat64(v), off);
+      slice.dispose();
+      w.dispose();
+      v.dispose();
     }
     return {
-      w: ArrayStorage.fromData(wData, [...batchShape, n], 'float64'),
-      v: ArrayStorage.fromData(vData, [...batchShape, n, n], 'float64'),
+      w: wResult,
+      v: vResult,
     };
   }
 
@@ -4534,6 +4639,7 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
 
   // Use symmetric eigendecomposition
   const { values, vectors } = eigSymmetric(sym);
+  sym.dispose();
 
   // Sort by eigenvalue (ascending)
   const indices = Array.from({ length: size }, (_, i) => i);
@@ -4598,6 +4704,20 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
   const aFlat = shapeOps.flatten(a);
   const bFlat = shapeOps.flatten(b);
 
+  try {
+    return vdotImpl(aFlat, bFlat, a.dtype, b.dtype);
+  } finally {
+    aFlat.dispose();
+    bFlat.dispose();
+  }
+}
+
+function vdotImpl(
+  aFlat: ArrayStorage,
+  bFlat: ArrayStorage,
+  aDtype: DType,
+  bDtype: DType
+): number | bigint | Complex {
   const aSize = aFlat.shape[0]!;
   const bSize = bFlat.shape[0]!;
 
@@ -4605,7 +4725,7 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
     throw new Error(`vdot: arrays must have same number of elements, got ${aSize} and ${bSize}`);
   }
 
-  const isComplex = isComplexDType(a.dtype) || isComplexDType(b.dtype);
+  const isComplex = isComplexDType(aDtype) || isComplexDType(bDtype);
 
   // WASM path: real/integer types use dot kernel, complex uses conjugate kernel
   if (!isComplex) {
@@ -4638,7 +4758,7 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
   }
 
   // Real case
-  const vdotResultDtype = promoteDTypes(a.dtype, b.dtype);
+  const vdotResultDtype = promoteDTypes(aDtype, bDtype);
   const vdotAcc = getIntAcc(vdotResultDtype);
   if (vdotAcc) {
     vdotAcc[0] = 0;
@@ -5159,19 +5279,25 @@ export function slogdet(a: ArrayStorage): {
     const m2 = a.shape[a.ndim - 2]!;
     if (m2 !== n) throw new Error(`slogdet: last 2 dimensions must be square, got ${m2}x${n}`);
     const batchSize = batchShape.reduce((acc, d) => acc * d, 1);
-    const signData = new Float64Array(batchSize);
-    const logData = new Float64Array(batchSize);
+    const signResult = ArrayStorage.empty(batchShape, 'float64');
+    const logResult = ArrayStorage.empty(batchShape, 'float64');
+    const signData = signResult.data as Float64Array;
+    const logData = logResult.data as Float64Array;
     const aData = toContiguousFloat64(a);
     for (let bi = 0; bi < batchSize; bi++) {
       const off = bi * n * n;
       const slice = ArrayStorage.fromData(aData.slice(off, off + n * n), [n, n], 'float64');
-      const { sign, logabsdet } = slogdet(slice) as { sign: number; logabsdet: number };
-      signData[bi] = sign;
-      logData[bi] = logabsdet;
+      try {
+        const { sign, logabsdet } = slogdet(slice) as { sign: number; logabsdet: number };
+        signData[bi] = sign;
+        logData[bi] = logabsdet;
+      } finally {
+        slice.dispose();
+      }
     }
     return {
-      sign: ArrayStorage.fromData(signData, batchShape, 'float64'),
-      logabsdet: ArrayStorage.fromData(logData, batchShape, 'float64'),
+      sign: signResult,
+      logabsdet: logResult,
     };
   }
 
@@ -5189,23 +5315,27 @@ export function slogdet(a: ArrayStorage): {
   // LU decomposition with partial pivoting
   const { lu, sign: pivotSign } = luDecomposition(a);
 
-  // Compute log|det| = sum of log|diag(U)| and sign
-  const luData = lu.data as Float64Array;
-  let logAbsDet = 0;
-  let sign = pivotSign;
+  try {
+    // Compute log|det| = sum of log|diag(U)| and sign
+    const luData = lu.data as Float64Array;
+    let logAbsDet = 0;
+    let sign = pivotSign;
 
-  for (let i = 0; i < size; i++) {
-    const diagVal = luData[i * size + i]!;
-    if (diagVal === 0) {
-      return { sign: 0, logabsdet: -Infinity };
+    for (let i = 0; i < size; i++) {
+      const diagVal = luData[i * size + i]!;
+      if (diagVal === 0) {
+        return { sign: 0, logabsdet: -Infinity };
+      }
+      if (diagVal < 0) {
+        sign = -sign;
+      }
+      logAbsDet += Math.log(Math.abs(diagVal));
     }
-    if (diagVal < 0) {
-      sign = -sign;
-    }
-    logAbsDet += Math.log(Math.abs(diagVal));
+
+    return { sign, logabsdet: logAbsDet };
+  } finally {
+    lu.dispose();
   }
-
-  return { sign, logabsdet: logAbsDet };
 }
 
 /**
@@ -5245,9 +5375,11 @@ export function multi_dot(arrays: ArrayStorage[]): ArrayStorage {
   // For simplicity, use left-to-right order
   // A proper implementation would use dynamic programming to find optimal order
   // But for now, left-to-right is correct and reasonably efficient
-  let result = arrays[0]!;
-  for (let i = 1; i < arrays.length; i++) {
+  let result = matmul(arrays[0]!, arrays[1]!);
+  for (let i = 2; i < arrays.length; i++) {
+    const oldResult = result;
     result = matmul(result, arrays[i]!);
+    oldResult.dispose();
   }
 
   return result;

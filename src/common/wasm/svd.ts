@@ -7,8 +7,9 @@
  */
 
 import { svd_f64 } from './bins/svd.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, scratchCopyIn, scratchAlloc } from './runtime';
 import { ArrayStorage } from '../storage';
+import type { TypedArray } from '../dtype';
 
 import { wasmConfig } from './config';
 
@@ -33,19 +34,30 @@ export function wasmSvd(
 
   const k = Math.min(m, n);
 
-  // Memory layout: a[m*n] + u[m*m] + s[k] + vt[n*n] + work[m*n + n*n]
-  const aSize = m * n;
   const uSize = m * m;
   const sSize = k;
   const vtSize = n * n;
-  const workSize = m * n + n * n;
-  const totalF64 = aSize + uSize + sSize + vtSize + workSize;
-  const totalBytes = totalF64 * 8; // f64 = 8 bytes
 
-  ensureMemory(totalBytes);
-  resetAllocator();
+  // Allocate persistent output for U, S, Vt
+  const uRegion = wasmMalloc(uSize * 8);
+  if (!uRegion) return null;
+  const sRegion = wasmMalloc(sSize * 8);
+  if (!sRegion) {
+    uRegion.release();
+    return null;
+  }
+  const vtRegion = wasmMalloc(vtSize * 8);
+  if (!vtRegion) {
+    uRegion.release();
+    sRegion.release();
+    return null;
+  }
 
-  // Copy input matrix to WASM memory (converting to float64)
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  // Copy input matrix to WASM scratch (converting to float64)
+  const aSize = m * n;
   const aData = new Float64Array(aSize);
   for (let i = 0; i < m; i++) {
     for (let j = 0; j < n; j++) {
@@ -53,21 +65,21 @@ export function wasmSvd(
     }
   }
 
-  const aPtr = copyIn(aData);
-  const uPtr = alloc(uSize * 8);
-  const sPtr = alloc(sSize * 8);
-  const vtPtr = alloc(vtSize * 8);
-  const workPtr = alloc(workSize * 8);
+  const aPtr = scratchCopyIn(aData as unknown as TypedArray);
+  const workSize = m * n + n * n;
+  const workPtr = scratchAlloc(workSize * 8);
 
-  svd_f64(aPtr, uPtr, sPtr, vtPtr, workPtr, m, n);
+  svd_f64(aPtr, uRegion.ptr, sRegion.ptr, vtRegion.ptr, workPtr, m, n);
 
-  const uData = copyOut(uPtr, uSize, Float64Array);
-  const sData = copyOut(sPtr, sSize, Float64Array);
-  const vtData = copyOut(vtPtr, vtSize, Float64Array);
+  const F64Ctor = Float64Array as unknown as new (
+    buffer: ArrayBuffer,
+    byteOffset: number,
+    length: number
+  ) => TypedArray;
 
-  const uStorage = ArrayStorage.fromData(uData, [m, m], 'float64');
-  const sStorage = ArrayStorage.fromData(sData, [k], 'float64');
-  const vtStorage = ArrayStorage.fromData(vtData, [n, n], 'float64');
+  const uStorage = ArrayStorage.fromWasmRegion([m, m], 'float64', uRegion, uSize, F64Ctor);
+  const sStorage = ArrayStorage.fromWasmRegion([k], 'float64', sRegion, sSize, F64Ctor);
+  const vtStorage = ArrayStorage.fromWasmRegion([n, n], 'float64', vtRegion, vtSize, F64Ctor);
 
   return { u: uStorage, s: sStorage, vt: vtStorage };
 }

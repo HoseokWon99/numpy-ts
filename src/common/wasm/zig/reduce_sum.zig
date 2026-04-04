@@ -200,7 +200,7 @@ export fn reduce_sum_strided_u32(a: [*]const u32, out: [*]f64, outer: u32, axis:
     }
 }
 
-/// Strided sum for i16 input → f64 output.
+/// Strided sum for i16 input → i64 output.
 export fn reduce_sum_strided_i16(a: [*]const i16, out: [*]f64, outer: u32, axis: u32, inner: u32) void {
     const O = @as(usize, outer);
     const A = @as(usize, axis);
@@ -262,6 +262,46 @@ export fn reduce_sum_strided_u8(a: [*]const u8, out: [*]f64, outer: u32, axis: u
             for (0..I) |i| out[ob + i] += @as(f64, @floatFromInt(a[base + ax * I + i]));
         }
     }
+}
+
+/// Sum i8 array, accumulate in i64 to avoid overflow.
+export fn reduce_sum_i8_to_i64(a: [*]const i8, N: u32) i64 {
+    var sum: i64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        sum += @as(i64, a[i]);
+    }
+    return sum;
+}
+
+/// Sum i16 array, accumulate in i64 to avoid overflow.
+export fn reduce_sum_i16_to_i64(a: [*]const i16, N: u32) i64 {
+    var sum: i64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        sum += @as(i64, a[i]);
+    }
+    return sum;
+}
+
+/// Sum u8 array, accumulate in u64 to avoid overflow.
+export fn reduce_sum_u8_to_u64(a: [*]const u8, N: u32) u64 {
+    var sum: u64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        sum += @as(u64, a[i]);
+    }
+    return sum;
+}
+
+/// Sum u16 array, accumulate in u64 to avoid overflow.
+export fn reduce_sum_u16_to_u64(a: [*]const u16, N: u32) u64 {
+    var sum: u64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        sum += @as(u64, a[i]);
+    }
+    return sum;
 }
 
 // --- Tests ---

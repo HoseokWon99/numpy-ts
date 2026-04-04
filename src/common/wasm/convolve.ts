@@ -7,7 +7,7 @@
  */
 
 import { convolve_f64, convolve_f32 } from './bins/convolve.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
+import { wasmMalloc, resetScratchAllocator, scratchCopyIn, f16ToF32Input } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -57,12 +57,13 @@ export function wasmConvolve(a: ArrayStorage, v: ArrayStorage): ArrayStorage | n
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = aLen * bpe;
-  const vBytes = vLen * bpe;
   const outBytes = outLen * bpe;
 
-  ensureMemory(aBytes + vBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const aOff = a.offset;
   const vOff = v.offset;
@@ -91,17 +92,17 @@ export function wasmConvolve(a: ArrayStorage, v: ArrayStorage): ArrayStorage | n
     vData = tmp;
   }
 
-  const aPtr = copyIn(aData);
-  const vPtr = copyIn(vData);
-  const outPtr = alloc(outBytes);
+  // For convolve, inputs may have been type-converted, so always scratchCopyIn
+  const aPtr = scratchCopyIn(aData);
+  const vPtr = scratchCopyIn(vData);
 
-  kernel(aPtr, aLen, vPtr, vLen, outPtr, outLen);
+  kernel(aPtr, aLen, vPtr, vLen, outRegion.ptr, outLen);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    [outLen],
+    dtype,
+    outRegion,
     outLen,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, [outLen], dtype);
 }

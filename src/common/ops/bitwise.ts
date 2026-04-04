@@ -76,7 +76,7 @@ export function bitwise_and(a: ArrayStorage, b: ArrayStorage | number): ArraySto
  */
 function bitwiseAndArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -128,7 +128,7 @@ function bitwiseAndScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -204,7 +204,7 @@ export function bitwise_or(a: ArrayStorage, b: ArrayStorage | number): ArrayStor
  */
 function bitwiseOrArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -256,7 +256,7 @@ function bitwiseOrScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -332,7 +332,7 @@ export function bitwise_xor(a: ArrayStorage, b: ArrayStorage | number): ArraySto
  */
 function bitwiseXorArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -384,7 +384,7 @@ function bitwiseXorScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -447,7 +447,7 @@ export function bitwise_not(a: ArrayStorage): ArrayStorage {
   const size = a.size;
   const contiguous = a.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -540,7 +540,7 @@ export function left_shift(a: ArrayStorage, b: ArrayStorage | number): ArrayStor
  */
 function leftShiftArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -582,7 +582,7 @@ function leftShiftScalar(storage: ArrayStorage, shift: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -666,7 +666,7 @@ export function right_shift(a: ArrayStorage, b: ArrayStorage | number): ArraySto
  */
 function rightShiftArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -708,7 +708,7 @@ function rightShiftScalar(storage: ArrayStorage, shift: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -786,7 +786,7 @@ export function packbits(
   const outShape = [...shape];
   outShape[axis] = packedAxisSize;
 
-  const result = ArrayStorage.zeros(outShape, 'uint8');
+  const result = ArrayStorage.empty(outShape, 'uint8');
   const resultData = result.data as Uint8Array;
 
   const aOff = a.offset;
@@ -1076,7 +1076,7 @@ export function bitwise_count(x: ArrayStorage): ArrayStorage {
   const contiguous = x.isCContiguous;
 
   // Output is always uint8 (max popcount is 64 for uint64)
-  const result = ArrayStorage.zeros(shape, 'uint8');
+  const result = ArrayStorage.empty(shape, 'uint8');
   const resultData = result.data as Uint8Array;
 
   // NumPy's bitwise_count counts bits of abs(value) for signed types,

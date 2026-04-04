@@ -12,8 +12,10 @@ import {
   isBigIntDType,
   isComplexDType,
   type DType,
+  type TypedArray,
 } from '../../common/dtype';
 import { float16BytesToTypedArray } from '../../common/float16-conv';
+import { wasmMalloc, getSharedMemory } from '../../common/wasm/runtime';
 import {
   NPY_MAGIC,
   parseDescriptor,
@@ -116,29 +118,43 @@ export function parseNpyData(bytes: Uint8Array, metadata: NpyMetadata): NDArrayC
     );
   }
 
-  // Extract data buffer - create a copy to ensure we have a plain ArrayBuffer
+  const shape = header.shape;
+  const isComplex = isComplexDType(dtype);
+  const arrayLength = isComplex ? numElements * 2 : numElements;
+  const isFortran = header.fortran_order && shape.length > 1;
+
+  // Fast path: no byte swap, not fortran, standard dtype — copy directly into WASM
+  const canFastPath = !needsByteSwap && !isFortran && !(dtype === 'float16' && !hasFloat16);
+
+  if (canFastPath) {
+    const Constructor = getTypedArrayConstructor(dtype) as
+      | (new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray)
+      | undefined;
+    if (Constructor) {
+      const region = wasmMalloc(expectedBytes);
+      if (region) {
+        const mem = getSharedMemory();
+        new Uint8Array(mem.buffer, region.ptr, expectedBytes).set(
+          bytes.subarray(dataOffset, dataOffset + expectedBytes)
+        );
+        return new NDArrayCore(
+          ArrayStorage.fromWasmRegion([...shape], dtype, region, arrayLength, Constructor)
+        );
+      }
+    }
+  }
+
+  // Slow path: byte swap, fortran order, or WASM OOM — go through JS buffer
   const dataBuffer = new ArrayBuffer(expectedBytes);
   const dataView = new Uint8Array(dataBuffer);
   dataView.set(bytes.subarray(dataOffset, dataOffset + expectedBytes));
 
-  // Create typed array from data
   const typedData = createTypedArray(dataBuffer, dtype, numElements, needsByteSwap, itemsize);
 
-  // Handle Fortran order (column-major)
-  // NumPy stores data in row-major (C order) by default
-  // If fortran_order is true, we need to adjust
-  const shape = header.shape;
   let storage: ArrayStorage;
-
-  if (header.fortran_order && shape.length > 1) {
-    // For Fortran order, we can either:
-    // 1. Transpose the shape and data (requires copy)
-    // 2. Use column-major strides (creates a view)
-    // We'll transpose to convert to C-order for consistency
+  if (isFortran) {
     const reversedShape = [...shape].reverse();
     const tempStorage = ArrayStorage.fromData(typedData, reversedShape, dtype);
-
-    // Transpose to get correct C-order layout
     storage = transposeStorage(tempStorage, reversedShape);
   } else {
     storage = ArrayStorage.fromData(typedData, [...shape], dtype);

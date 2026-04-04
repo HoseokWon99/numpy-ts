@@ -5,7 +5,7 @@
  * Scalar: out[i] = log(exp(a[i]) + exp(scalar))
  * Returns null if WASM can't handle this case.
  * Float types use native kernels; int64/uint64 use native i64 kernels
- * that convert to f64 in WASM (avoiding JS BigInt→Number overhead).
+ * that convert to f64 in WASM (avoiding JS BigInt->Number overhead).
  */
 
 import {
@@ -31,10 +31,10 @@ import {
   logaddexp_scalar_u8,
 } from './bins/logaddexp.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
   copyOut,
   f16ToF32Input,
   f32ToF16Output,
@@ -104,6 +104,9 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 export function wasmLogaddexp(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!a.isCContiguous || !b.isCContiguous) return null;
 
+  // WASM kernel does not broadcast — sizes must match
+  if (a.size !== b.size) return null;
+
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
@@ -114,49 +117,81 @@ export function wasmLogaddexp(a: ArrayStorage, b: ArrayStorage): ArrayStorage | 
   if (floatKernel) {
     const Ctor = ctorMap[dtype]!;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+    const outBytes = size * bpe;
 
-    ensureMemory(size * bpe * 3);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype);
-    const bData = f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype);
+    wasmConfig.wasmCallCount++;
 
-    const aPtr = copyIn(aData);
-    const bPtr = copyIn(bData);
-    const outPtr = alloc(size * bpe);
+    resetScratchAllocator();
 
-    floatKernel(aPtr, bPtr, outPtr, size);
+    let aPtr: number;
+    let bPtr: number;
+    if (dtype === 'float16') {
+      const aData = f16ToF32Input(
+        a.data.subarray(a.offset, a.offset + size) as TypedArray,
+        a.dtype
+      );
+      const bData = f16ToF32Input(
+        b.data.subarray(b.offset, b.offset + size) as TypedArray,
+        b.dtype
+      );
+      aPtr = scratchCopyIn(aData);
+      bPtr = scratchCopyIn(bData);
+    } else {
+      aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+      bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, bpe);
+    }
 
-    const outData = copyOut(
-      outPtr,
+    floatKernel(aPtr, bPtr, outRegion.ptr, size);
+
+    if (dtype === 'float16') {
+      const outData = copyOut(
+        outRegion.ptr,
+        size,
+        Ctor as unknown as new (
+          buffer: ArrayBuffer,
+          byteOffset: number,
+          length: number
+        ) => TypedArray
+      );
+      outRegion.release();
+      const finalOut = f32ToF16Output(outData, dtype);
+      return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
+    }
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    const finalOut = f32ToF16Output(outData, dtype);
-    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
   }
 
-  // Int64 path
+  // Int path
   const intKernel = intBinaryKernels[dtype];
   if (intKernel) {
     const InputCtor = ctorMap[dtype]!;
     const inputBpe = (InputCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    const outBpe = 8;
+    const outBytes = size * 8;
 
-    ensureMemory(size * inputBpe * 2 + size * outBpe);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    const bData = b.data.subarray(b.offset, b.offset + size) as TypedArray;
+    wasmConfig.wasmCallCount++;
 
-    const aPtr = copyIn(aData);
-    const bPtr = copyIn(bData);
-    const outPtr = alloc(size * outBpe);
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, inputBpe);
+    const bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, inputBpe);
 
-    intKernel(aPtr, bPtr, outPtr, size);
+    intKernel(aPtr, bPtr, outRegion.ptr, size);
 
-    const outData = copyOut(
-      outPtr,
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      'float64',
+      outRegion,
       size,
       Float64Array as unknown as new (
         buffer: ArrayBuffer,
@@ -164,7 +199,6 @@ export function wasmLogaddexp(a: ArrayStorage, b: ArrayStorage): ArrayStorage | 
         length: number
       ) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
   }
 
   return null;
@@ -187,43 +221,70 @@ export function wasmLogaddexpScalar(a: ArrayStorage, scalar: number): ArrayStora
   if (floatKernel) {
     const Ctor = ctorMap[dtype]!;
     const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+    const outBytes = size * bpe;
 
-    ensureMemory(size * bpe * 2);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * bpe);
+    wasmConfig.wasmCallCount++;
 
-    floatKernel(aPtr, outPtr, size, scalar);
+    resetScratchAllocator();
 
-    const outData = copyOut(
-      outPtr,
+    let aPtr: number;
+    if (dtype === 'float16') {
+      const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
+      aPtr = scratchCopyIn(aData);
+    } else {
+      aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+    }
+
+    floatKernel(aPtr, outRegion.ptr, size, scalar);
+
+    if (dtype === 'float16') {
+      const outData = copyOut(
+        outRegion.ptr,
+        size,
+        Ctor as unknown as new (
+          buffer: ArrayBuffer,
+          byteOffset: number,
+          length: number
+        ) => TypedArray
+      );
+      outRegion.release();
+      const finalOut = f32ToF16Output(outData, dtype);
+      return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
+    }
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      dtype,
+      outRegion,
       size,
       Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
-    const finalOut = f32ToF16Output(outData, dtype);
-    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
   }
 
-  // Int64 path
+  // Int path
   const intKernel = intScalarKernels[dtype];
   if (intKernel) {
     const InputCtor = ctorMap[dtype]!;
     const inputBpe = (InputCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-    const outBpe = 8;
+    const outBytes = size * 8;
 
-    ensureMemory(size * inputBpe + size * outBpe);
-    resetAllocator();
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
 
-    const aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
-    const aPtr = copyIn(aData);
-    const outPtr = alloc(size * outBpe);
+    wasmConfig.wasmCallCount++;
 
-    intKernel(aPtr, outPtr, size, scalar);
+    resetScratchAllocator();
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, inputBpe);
 
-    const outData = copyOut(
-      outPtr,
+    intKernel(aPtr, outRegion.ptr, size, scalar);
+
+    return ArrayStorage.fromWasmRegion(
+      Array.from(a.shape),
+      'float64',
+      outRegion,
       size,
       Float64Array as unknown as new (
         buffer: ArrayBuffer,
@@ -231,7 +292,6 @@ export function wasmLogaddexpScalar(a: ArrayStorage, scalar: number): ArrayStora
         length: number
       ) => TypedArray
     );
-    return ArrayStorage.fromData(outData, Array.from(a.shape), 'float64');
   }
 
   return null;

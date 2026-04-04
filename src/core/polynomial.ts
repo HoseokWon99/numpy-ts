@@ -337,7 +337,8 @@ export function polyval(
   const xData = xArr.data;
   const n = xArr.size;
   const deg = poly.size;
-  const resultData = new Float64Array(n);
+  const resultStorage = ArrayStorage.empty(Array.from(xArr.shape), 'float64');
+  const resultData = resultStorage.data as Float64Array;
 
   for (let j = 0; j < n; j++) {
     const xVal = Number(xData[j]);
@@ -348,7 +349,7 @@ export function polyval(
     resultData[j] = result;
   }
 
-  return new NDArrayCore(ArrayStorage.fromData(resultData, Array.from(xArr.shape), 'float64'));
+  return new NDArrayCore(resultStorage);
 }
 
 /**
@@ -437,12 +438,12 @@ export function roots(p: NDArrayCore | number[]): NDArrayCore {
  */
 function _makeComplex128Array(realParts: number[], imagParts: number[]): NDArrayCore {
   const n = realParts.length;
-  const data = new Float64Array(2 * n);
+  const storage = ArrayStorage.empty([n], 'complex128');
+  const data = storage.data as Float64Array;
   for (let i = 0; i < n; i++) {
     data[2 * i] = realParts[i]!;
     data[2 * i + 1] = imagParts[i]!;
   }
-  const storage = ArrayStorage.fromData(data, [n], 'complex128');
   return new NDArrayCore(storage);
 }
 

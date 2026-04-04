@@ -42,10 +42,12 @@ const BINS_DIR = join(ROOT, 'src/common/wasm/bins');
 const TMP_DIR = join(ROOT, '.wasm-tmp');
 
 // --safe flag: compile with ReleaseSafe (bounds checks, overflow detection)
+// --small flag: compile with ReleaseSmall (optimized for binary size)
 const SAFE_MODE = process.argv.includes('--safe');
+const SMALL_MODE = process.argv.includes('--small');
 const FORCE_BUILD = process.argv.includes('--force');
-const ZIG_OPT = SAFE_MODE ? 'ReleaseSafe' : 'ReleaseFast';
-const MODE_KEY = SAFE_MODE ? 'safe' : 'fast';
+const ZIG_OPT = SAFE_MODE ? 'ReleaseSafe' : SMALL_MODE ? 'ReleaseSmall' : 'ReleaseFast';
+const MODE_KEY = SAFE_MODE ? 'safe' : SMALL_MODE ? 'small' : 'fast';
 
 // Per-mode cache directories
 const CACHE_DIR = join(ROOT, '.wasm-cache', MODE_KEY);
@@ -230,11 +232,14 @@ async function testKernel(file: string): Promise<{ name: string; error?: string 
 async function compileKernel(
   file: string,
   sharedSources: Map<string, string>,
-  hashes: Hashes
+  hashes: Hashes,
+  globalBase?: number
 ): Promise<{ name: string; skipped: boolean; error?: string }> {
   const name = file.replace('.zig', '');
   const zigPath = join(ZIG_DIR, file);
-  const hash = computeHash(zigPath, sharedSources);
+  // Include globalBase in hash so reassignment triggers rebuild
+  const baseHash = computeHash(zigPath, sharedSources);
+  const hash = globalBase !== undefined ? `${baseHash}:gb=${globalBase}` : baseHash;
   const tsPath = join(BINS_DIR, `${name}.wasm.ts`);
   const cachePath = join(CACHE_DIR, `${name}.wasm.ts`);
 
@@ -260,7 +265,12 @@ async function compileKernel(
     `--import-memory`,
     `-femit-bin=${wasmPath}`,
   ];
-  if (!SAFE_MODE) zigArgs.push('-fstrip');
+  // Give each module a unique global base to prevent data-segment collisions
+  // in shared linear memory
+  if (globalBase !== undefined) {
+    zigArgs.push(`--global-base=${globalBase}`);
+  }
+  if (!SAFE_MODE) zigArgs.push('-fstrip'); // strip for both ReleaseFast and ReleaseSmall
 
   try {
     await execFileAsync('zig', zigArgs, { cwd: ZIG_DIR });
@@ -303,6 +313,16 @@ async function main() {
     (f) => f.endsWith('.zig') && !SHARED_MODULES.has(f)
   );
 
+  // Assign each kernel a unique global-base offset to prevent data-segment
+  // collisions when all WASM modules share the same linear memory.
+  // Stride of 64 KiB per module is enough for even the largest (rng ≈ 16 KiB).
+  const MODULE_STRIDE = 65536; // 64 KiB per module
+  const sortedFiles = [...zigFiles].sort();
+  const globalBaseMap = new Map<string, number>();
+  for (let i = 0; i < sortedFiles.length; i++) {
+    globalBaseMap.set(sortedFiles[i]!, i * MODULE_STRIDE);
+  }
+
   const hashes = loadHashes();
 
   // Read shared module sources for hash computation
@@ -315,7 +335,9 @@ async function main() {
   // Determine which kernels need recompilation
   const stale = zigFiles.filter((file) => {
     const name = file.replace('.zig', '');
-    const hash = computeHash(join(ZIG_DIR, file), sharedSources);
+    const baseHash = computeHash(join(ZIG_DIR, file), sharedSources);
+    const gb = globalBaseMap.get(file);
+    const hash = gb !== undefined ? `${baseHash}:gb=${gb}` : baseHash;
     const cachePath = join(CACHE_DIR, `${name}.wasm.ts`);
     return !(hashes[name] === hash && existsSync(cachePath));
   });
@@ -361,7 +383,7 @@ async function main() {
   // Phase 2: Compile stale kernels + copy cached kernels, all in parallel
   console.log('Compiling...\n');
   const buildResults = await Promise.all(
-    zigFiles.map((file) => compileKernel(file, sharedSources, hashes))
+    zigFiles.map((file) => compileKernel(file, sharedSources, hashes, globalBaseMap.get(file)))
   );
 
   // Report results

@@ -247,7 +247,24 @@ export fn reduce_max_u8(a: [*]const u8, N: u32) u8 {
     return result;
 }
 
-// Note: no f64 strided max as it's faster in JS.
+/// Returns the maximum f64 element along the axis, strided. Output is pre-allocated.
+export fn reduce_max_strided_f64(a: [*]const f64, out: [*]f64, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| out[ob + i] = a[base + i];
+        for (1..A) |ax| {
+            for (0..I) |i| {
+                const v = a[base + ax * I + i];
+                if (v > out[ob + i]) out[ob + i] = v;
+            }
+        }
+    }
+}
 
 /// Returns the maximum f32 element along the axis, strided. Output is pre-allocated.
 export fn reduce_max_strided_f32(a: [*]const f32, out: [*]f32, outer: u32, axis: u32, inner: u32) void {

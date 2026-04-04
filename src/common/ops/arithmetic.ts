@@ -106,7 +106,7 @@ export function add(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
  */
 function addArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -224,7 +224,7 @@ export function subtract(a: ArrayStorage, b: ArrayStorage | number): ArrayStorag
  */
 function subtractArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -341,7 +341,7 @@ export function multiply(a: ArrayStorage, b: ArrayStorage | number): ArrayStorag
  */
 function multiplyArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const dtype = promoteDTypes(a.dtype, b.dtype);
-  const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const size = a.size;
   const aData = a.data;
   const bData = b.data;
@@ -463,7 +463,7 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
       if (wasmResult) return wasmResult;
     }
 
-    const result = ArrayStorage.zeros(Array.from(a.shape), dtype);
+    const result = ArrayStorage.empty(Array.from(a.shape), dtype);
     const resultData = result.data as Float64Array | Float32Array;
     const size = a.size;
     const aData = a.data;
@@ -511,12 +511,17 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
   const aFloat = a.dtype === targetDtype ? a : convertToFloatDType(a, targetDtype);
   const bFloat = b.dtype === targetDtype ? b : convertToFloatDType(b, targetDtype);
 
-  if (canUseFastPath(aFloat, bFloat)) {
-    const wasmResult = wasmDiv(aFloat, bFloat);
-    if (wasmResult) return wasmResult;
-  }
+  try {
+    if (canUseFastPath(aFloat, bFloat)) {
+      const wasmResult = wasmDiv(aFloat, bFloat);
+      if (wasmResult) return wasmResult;
+    }
 
-  return elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
+    return elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
+  } finally {
+    if (aFloat !== a) aFloat.dispose();
+    if (bFloat !== b) bFloat.dispose();
+  }
 }
 
 /**
@@ -527,7 +532,7 @@ function convertToFloatDType(
   storage: ArrayStorage,
   targetDtype: 'float32' | 'float64'
 ): ArrayStorage {
-  const result = ArrayStorage.zeros(Array.from(storage.shape), targetDtype);
+  const result = ArrayStorage.empty(Array.from(storage.shape), targetDtype);
   const size = storage.size;
   const dstData = result.data;
 
@@ -563,7 +568,7 @@ function addScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const contiguous = storage.isCContiguous;
 
   // Create result with same dtype
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isComplexDType(dtype)) {
@@ -635,7 +640,7 @@ function subtractScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const contiguous = storage.isCContiguous;
 
   // Create result with same dtype
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isComplexDType(dtype)) {
@@ -698,7 +703,7 @@ function multiplyScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const contiguous = storage.isCContiguous;
 
   // Create result with same dtype
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isComplexDType(dtype)) {
@@ -767,7 +772,7 @@ function divideScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
     const off = storage.offset;
     const contiguous = storage.isCContiguous;
 
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
     if (contiguous) {
       const srcData = data as Float64Array | Float32Array;
@@ -794,25 +799,29 @@ function divideScalar(storage: ArrayStorage, scalar: number): ArrayStorage {
   const isFloat = dtype === 'float16' || dtype === 'float32' || dtype === 'float64';
   const promoted = isFloat ? storage : convertToFloatDType(storage, 'float64');
 
-  // JS fallback
-  const shape = Array.from(promoted.shape);
-  const size = promoted.size;
-  const result = ArrayStorage.zeros(shape, promoted.dtype);
-  const resultData = result.data;
-  const data = promoted.data;
-  const off = promoted.offset;
+  try {
+    // JS fallback
+    const shape = Array.from(promoted.shape);
+    const size = promoted.size;
+    const result = ArrayStorage.empty(shape, promoted.dtype);
+    const resultData = result.data;
+    const data = promoted.data;
+    const off = promoted.offset;
 
-  if (promoted.isCContiguous) {
-    for (let i = 0; i < size; i++) {
-      resultData[i] = (data[off + i] as number) / scalar;
+    if (promoted.isCContiguous) {
+      for (let i = 0; i < size; i++) {
+        resultData[i] = (data[off + i] as number) / scalar;
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        resultData[i] = Number(promoted.iget(i)) / scalar;
+      }
     }
-  } else {
-    for (let i = 0; i < size; i++) {
-      resultData[i] = Number(promoted.iget(i)) / scalar;
-    }
+
+    return result;
+  } finally {
+    if (promoted !== storage) promoted.dispose();
   }
-
-  return result;
 }
 
 /**
@@ -837,7 +846,7 @@ export function absolute(a: ArrayStorage): ArrayStorage {
   // For complex types, result is the component dtype (magnitude is real)
   if (isComplexDType(dtype)) {
     const resultDtype = getComplexComponentDType(dtype);
-    const result = ArrayStorage.zeros(shape, resultDtype);
+    const result = ArrayStorage.empty(shape, resultDtype);
     const resultData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -860,7 +869,7 @@ export function absolute(a: ArrayStorage): ArrayStorage {
   }
 
   // Create result with same dtype for non-complex
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -917,7 +926,7 @@ export function negative(a: ArrayStorage): ArrayStorage {
   const contiguous = a.isCContiguous;
 
   // Create result with same dtype
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isComplexDType(dtype)) {
@@ -990,7 +999,7 @@ export function sign(a: ArrayStorage): ArrayStorage {
   const contiguous = a.isCContiguous;
 
   // Create result with same dtype
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -1058,7 +1067,7 @@ function modScalar(storage: ArrayStorage, divisor: number): ArrayStorage {
   const off = storage.offset;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -1124,7 +1133,7 @@ function floorDivideScalar(storage: ArrayStorage, divisor: number): ArrayStorage
   const off = storage.offset;
   const contiguous = storage.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isBigIntDType(dtype)) {
@@ -1171,7 +1180,7 @@ export function positive(a: ArrayStorage): ArrayStorage {
   const off = a.offset;
   const contiguous = a.isCContiguous;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isComplexDType(dtype)) {
@@ -1223,7 +1232,7 @@ export function reciprocal(a: ArrayStorage): ArrayStorage {
 
   // Handle complex types
   if (isComplexDType(dtype)) {
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const dstData = result.data as Float64Array | Float32Array;
 
     if (contiguous) {
@@ -1253,7 +1262,7 @@ export function reciprocal(a: ArrayStorage): ArrayStorage {
   const isIntegerType = dtype !== 'float32' && dtype !== 'float64';
   const resultDtype = isIntegerType ? 'float64' : dtype;
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
 
   if (contiguous) {
@@ -1293,7 +1302,7 @@ export function cbrt(a: ArrayStorage): ArrayStorage {
   const isIntegerType = dtype !== 'float32' && dtype !== 'float64';
   const resultDtype = isIntegerType ? 'float64' : dtype;
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
 
   if (a.isCContiguous) {
@@ -1326,7 +1335,7 @@ export function fabs(a: ArrayStorage): ArrayStorage {
 
   const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
 
   if (a.isCContiguous) {
@@ -1380,7 +1389,7 @@ export function square(a: ArrayStorage): ArrayStorage {
   const data = a.data;
   const size = a.size;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   if (isComplexDType(dtype)) {
@@ -1457,71 +1466,80 @@ export function heaviside(x1: ArrayStorage, x2: ArrayStorage | number): ArraySto
 
   // Extract scalar from size-1 array
   if (typeof x2 !== 'number' && x2.size === 1) {
+    if (x1Float !== x1) x1Float.dispose();
     return heaviside(x1, Number(x2.iget(0)));
   }
 
-  if (typeof x2 === 'number') {
-    // Try WASM scalar path
-    const wasmResult = wasmHeavisideScalar(x1Float, x2, resultDtype);
-    if (wasmResult) return wasmResult;
-
-    // Scalar x2 — use direct data access for contiguous
-    const result = ArrayStorage.zeros(shape, resultDtype);
-    const resultData = result.data;
-    if (x1Float.isCContiguous) {
-      const srcData = x1Float.data;
-      const off = x1Float.offset;
-      for (let i = 0; i < size; i++) {
-        const val = srcData[off + i] as number;
-        resultData[i] = val < 0 ? 0 : val === 0 ? x2 : 1;
-      }
-    } else {
-      for (let i = 0; i < size; i++) {
-        const val = Number(x1.iget(i));
-        resultData[i] = val < 0 ? 0 : val === 0 ? x2 : 1;
-      }
-    }
-    return result;
-  } else {
-    // Array x2 - needs to broadcast
-    const x2Shape = x2.shape;
-    const x2Float = x2.dtype === resultDtype ? x2 : convertToFloatDType(x2, resultDtype);
-
-    // Simple case: same shape
-    if (shape.every((d, i) => d === x2Shape[i])) {
-      // Try WASM binary path
-      const wasmResult = wasmHeaviside(x1Float, x2Float, resultDtype);
+  try {
+    if (typeof x2 === 'number') {
+      // Try WASM scalar path
+      const wasmResult = wasmHeavisideScalar(x1Float, x2, resultDtype);
       if (wasmResult) return wasmResult;
 
-      const result = ArrayStorage.zeros(shape, resultDtype);
+      // Scalar x2 — use direct data access for contiguous
+      const result = ArrayStorage.empty(shape, resultDtype);
       const resultData = result.data;
-      if (x1Float.isCContiguous && x2Float.isCContiguous) {
-        const x1Data = x1Float.data;
-        const x1Off = x1Float.offset;
-        const x2Data = x2Float.data;
-        const x2Off = x2Float.offset;
+      if (x1Float.isCContiguous) {
+        const srcData = x1Float.data;
+        const off = x1Float.offset;
         for (let i = 0; i < size; i++) {
-          const val = x1Data[x1Off + i] as number;
-          resultData[i] = val < 0 ? 0 : val === 0 ? (x2Data[x2Off + i] as number) : 1;
+          const val = srcData[off + i] as number;
+          resultData[i] = val < 0 ? 0 : val === 0 ? x2 : 1;
         }
       } else {
         for (let i = 0; i < size; i++) {
           const val = Number(x1.iget(i));
-          resultData[i] = val < 0 ? 0 : val === 0 ? Number(x2.iget(i)) : 1;
+          resultData[i] = val < 0 ? 0 : val === 0 ? x2 : 1;
         }
       }
       return result;
     } else {
-      // Broadcasting case
-      const result = ArrayStorage.zeros(shape, resultDtype);
-      const resultData = result.data;
-      for (let i = 0; i < size; i++) {
-        const val = Number(x1.iget(i));
-        const x2Idx = i % x2.size;
-        resultData[i] = val < 0 ? 0 : val === 0 ? Number(x2.iget(x2Idx)) : 1;
+      // Array x2 - needs to broadcast
+      const x2Shape = x2.shape;
+      const x2Float = x2.dtype === resultDtype ? x2 : convertToFloatDType(x2, resultDtype);
+
+      try {
+        // Simple case: same shape
+        if (shape.every((d, i) => d === x2Shape[i])) {
+          // Try WASM binary path
+          const wasmResult = wasmHeaviside(x1Float, x2Float, resultDtype);
+          if (wasmResult) return wasmResult;
+
+          const result = ArrayStorage.empty(shape, resultDtype);
+          const resultData = result.data;
+          if (x1Float.isCContiguous && x2Float.isCContiguous) {
+            const x1Data = x1Float.data;
+            const x1Off = x1Float.offset;
+            const x2Data = x2Float.data;
+            const x2Off = x2Float.offset;
+            for (let i = 0; i < size; i++) {
+              const val = x1Data[x1Off + i] as number;
+              resultData[i] = val < 0 ? 0 : val === 0 ? (x2Data[x2Off + i] as number) : 1;
+            }
+          } else {
+            for (let i = 0; i < size; i++) {
+              const val = Number(x1.iget(i));
+              resultData[i] = val < 0 ? 0 : val === 0 ? Number(x2.iget(i)) : 1;
+            }
+          }
+          return result;
+        } else {
+          // Broadcasting case
+          const result = ArrayStorage.empty(shape, resultDtype);
+          const resultData = result.data;
+          for (let i = 0; i < size; i++) {
+            const val = Number(x1.iget(i));
+            const x2Idx = i % x2.size;
+            resultData[i] = val < 0 ? 0 : val === 0 ? Number(x2.iget(x2Idx)) : 1;
+          }
+          return result;
+        }
+      } finally {
+        if (x2Float !== x2) x2Float.dispose();
       }
-      return result;
     }
+  } finally {
+    if (x1Float !== x1) x1Float.dispose();
   }
 }
 
@@ -1537,7 +1555,7 @@ export function float_power(x1: ArrayStorage, x2: ArrayStorage | number): ArrayS
   // Complex float_power: z1^z2 = exp(z2 * log(z1))
   if (isComplexDType(dtype1)) {
     const size = x1.size;
-    const result = ArrayStorage.zeros(Array.from(x1.shape), dtype1);
+    const result = ArrayStorage.empty(Array.from(x1.shape), dtype1);
     const resultData = result.data as Float64Array | Float32Array;
 
     if (typeof x2 === 'number') {
@@ -1642,7 +1660,7 @@ export function float_power(x1: ArrayStorage, x2: ArrayStorage | number): ArrayS
   }
 
   if (typeof x2 === 'number') {
-    const result = ArrayStorage.zeros(Array.from(x1.shape), 'float64');
+    const result = ArrayStorage.empty(Array.from(x1.shape), 'float64');
     const resultData = result.data as Float64Array;
     const size = x1.size;
 
@@ -1705,8 +1723,8 @@ export function frexp(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
   const wasmResult = wasmFrexp(x);
   if (wasmResult) return wasmResult;
 
-  const mantissa = ArrayStorage.zeros(Array.from(x.shape), 'float64');
-  const exponent = ArrayStorage.zeros(Array.from(x.shape), 'int32');
+  const mantissa = ArrayStorage.empty(Array.from(x.shape), 'float64');
+  const exponent = ArrayStorage.empty(Array.from(x.shape), 'int32');
   const mantissaData = mantissa.data as Float64Array;
   const exponentData = exponent.data as Int32Array;
   const size = x.size;
@@ -1770,7 +1788,7 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
     const wasmResult = wasmGcdScalar(x1, x2);
     if (wasmResult) return wasmResult;
 
-    const result = ArrayStorage.zeros(Array.from(x1.shape), 'int32');
+    const result = ArrayStorage.empty(Array.from(x1.shape), 'int32');
     const resultData = result.data as Int32Array;
     const size = x1.size;
     const x2Int = Math.abs(Math.trunc(x2));
@@ -1807,7 +1825,7 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   const tempResult = elementwiseBinaryOp(x1, x2, gcdSingle, 'gcd');
 
   // Convert result to int32
-  const result = ArrayStorage.zeros(Array.from(tempResult.shape), 'int32');
+  const result = ArrayStorage.empty(Array.from(tempResult.shape), 'int32');
   const resultData = result.data as Int32Array;
   const tempSize = tempResult.size;
 
@@ -1856,7 +1874,7 @@ export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   };
 
   if (typeof x2 === 'number') {
-    const result = ArrayStorage.zeros(Array.from(x1.shape), 'int32');
+    const result = ArrayStorage.empty(Array.from(x1.shape), 'int32');
     const resultData = result.data as Int32Array;
     const size = x1.size;
     const x2Int = Math.abs(Math.trunc(x2));
@@ -1879,24 +1897,28 @@ export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   // Array case - use elementwiseBinaryOp then convert to int32
   const tempResult = elementwiseBinaryOp(x1, x2, lcmSingle, 'lcm');
 
-  // Convert result to int32
-  const result = ArrayStorage.zeros(Array.from(tempResult.shape), 'int32');
-  const resultData = result.data as Int32Array;
-  const tempSize = tempResult.size;
+  try {
+    // Convert result to int32
+    const result = ArrayStorage.empty(Array.from(tempResult.shape), 'int32');
+    const resultData = result.data as Int32Array;
+    const tempSize = tempResult.size;
 
-  if (tempResult.isCContiguous) {
-    const tempData = tempResult.data;
-    const tempOff = tempResult.offset;
-    for (let i = 0; i < tempSize; i++) {
-      resultData[i] = Math.round(Number(tempData[tempOff + i]!));
+    if (tempResult.isCContiguous) {
+      const tempData = tempResult.data;
+      const tempOff = tempResult.offset;
+      for (let i = 0; i < tempSize; i++) {
+        resultData[i] = Math.round(Number(tempData[tempOff + i]!));
+      }
+    } else {
+      for (let i = 0; i < tempSize; i++) {
+        resultData[i] = Math.round(Number(tempResult.iget(i)));
+      }
     }
-  } else {
-    for (let i = 0; i < tempSize; i++) {
-      resultData[i] = Math.round(Number(tempResult.iget(i)));
-    }
+
+    return result;
+  } finally {
+    tempResult.dispose();
   }
-
-  return result;
 }
 
 /**
@@ -1919,28 +1941,32 @@ export function ldexp(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
     const resultDtype = x1.dtype === 'float32' ? 'float32' : 'float64';
     const x1Float = x1.dtype === resultDtype ? x1 : convertToFloatDType(x1, resultDtype);
 
-    // Try WASM scalar path
-    const wasmResult = wasmLdexpScalar(x1Float, x2);
-    if (wasmResult) return wasmResult;
+    try {
+      // Try WASM scalar path
+      const wasmResult = wasmLdexpScalar(x1Float, x2);
+      if (wasmResult) return wasmResult;
 
-    const result = ArrayStorage.zeros(Array.from(x1.shape), 'float64');
-    const resultData = result.data as Float64Array;
-    const size = x1.size;
-    const multiplier = Math.pow(2, x2);
+      const result = ArrayStorage.empty(Array.from(x1.shape), 'float64');
+      const resultData = result.data as Float64Array;
+      const size = x1.size;
+      const multiplier = Math.pow(2, x2);
 
-    if (x1.isCContiguous) {
-      const data = x1.data;
-      const off = x1.offset;
-      for (let i = 0; i < size; i++) {
-        resultData[i] = Number(data[off + i]!) * multiplier;
+      if (x1.isCContiguous) {
+        const data = x1.data;
+        const off = x1.offset;
+        for (let i = 0; i < size; i++) {
+          resultData[i] = Number(data[off + i]!) * multiplier;
+        }
+      } else {
+        for (let i = 0; i < size; i++) {
+          resultData[i] = Number(x1.iget(i)) * multiplier;
+        }
       }
-    } else {
-      for (let i = 0; i < size; i++) {
-        resultData[i] = Number(x1.iget(i)) * multiplier;
-      }
+
+      return result;
+    } finally {
+      if (x1Float !== x1) x1Float.dispose();
     }
-
-    return result;
   }
 
   return elementwiseBinaryOp(x1, x2, (a, b) => a * Math.pow(2, b), 'ldexp');
@@ -1953,8 +1979,8 @@ export function ldexp(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
  */
 export function modf(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
   throwIfComplex(x.dtype, 'modf', 'modf is not defined for complex numbers.');
-  const fractional = ArrayStorage.zeros(Array.from(x.shape), 'float64');
-  const integral = ArrayStorage.zeros(Array.from(x.shape), 'float64');
+  const fractional = ArrayStorage.empty(Array.from(x.shape), 'float64');
+  const integral = ArrayStorage.empty(Array.from(x.shape), 'float64');
   const fractionalData = fractional.data as Float64Array;
   const integralData = integral.data as Float64Array;
   const size = x.size;
@@ -2000,7 +2026,7 @@ export function clip(
   const shape = Array.from(a.shape);
   const size = a.size;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
 
   // Handle scalar min/max values
@@ -2130,7 +2156,7 @@ export function maximum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStora
     const dtype = x1.dtype;
     const shape = Array.from(x1.shape);
     const size = x1.size;
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const resultData = result.data;
     const x1Data = x1.data;
 
@@ -2188,7 +2214,7 @@ export function minimum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStora
     const dtype = x1.dtype;
     const shape = Array.from(x1.shape);
     const size = x1.size;
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const resultData = result.data;
     const x1Data = x1.data;
 
@@ -2246,7 +2272,7 @@ export function fmax(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage 
     const dtype = x1.dtype;
     const shape = Array.from(x1.shape);
     const size = x1.size;
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const resultData = result.data;
     const x1Data = x1.data;
 
@@ -2314,7 +2340,7 @@ export function fmin(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage 
     const dtype = x1.dtype;
     const shape = Array.from(x1.shape);
     const size = x1.size;
-    const result = ArrayStorage.zeros(shape, dtype);
+    const result = ArrayStorage.empty(shape, dtype);
     const resultData = result.data;
     const x1Data = x1.data;
 
@@ -2377,7 +2403,7 @@ export function nan_to_num(
   const posinfVal = posinf !== undefined ? posinf : Number.MAX_VALUE;
   const neginfVal = neginf !== undefined ? neginf : -Number.MAX_VALUE;
 
-  const result = ArrayStorage.zeros(shape, dtype);
+  const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
   const xData = x.data;
 
@@ -2429,7 +2455,7 @@ export function interp(
 
   const shape = Array.from(x.shape);
   const size = x.size;
-  const result = ArrayStorage.zeros(shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
   const resultData = result.data as Float64Array;
   const xData = x.data;
   const xpData = xp.data;
@@ -2509,7 +2535,7 @@ export function unwrap(
   // For 1D arrays, simple implementation
   if (ndim === 1) {
     const size = p.size;
-    const result = ArrayStorage.zeros(shape, 'float64');
+    const result = ArrayStorage.empty(shape, 'float64');
     const resultData = result.data as Float64Array;
     const pData = p.data;
 
@@ -2542,7 +2568,7 @@ export function unwrap(
 
   // For multi-dimensional arrays, we need to process along the axis
   // This is a simplified implementation for 2D case
-  const result = ArrayStorage.zeros(shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
   const resultData = result.data as Float64Array;
   const pData = p.data;
 
@@ -2621,7 +2647,7 @@ export function sinc(x: ArrayStorage): ArrayStorage {
 
   const shape = Array.from(x.shape);
   const size = x.size;
-  const result = ArrayStorage.zeros(shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
   const resultData = result.data as Float64Array;
   const xData = x.data;
 
@@ -2651,7 +2677,7 @@ export function i0(x: ArrayStorage): ArrayStorage {
 
   const shape = Array.from(x.shape);
   const size = x.size;
-  const result = ArrayStorage.zeros(shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
   const resultData = result.data as Float64Array;
   const xData = x.data;
 

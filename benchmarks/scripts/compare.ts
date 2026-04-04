@@ -204,8 +204,9 @@ if (removed.length > 0) {
 
 // Summary — use all local benchmarks for "new" side; overlapping only for "old" side
 const allNewRatios = [...newMap.values()].map(r => r.ratio);
-const avgOld = rows.reduce((s, r) => s + r.oldR, 0) / rows.length;
-const avgNew = allNewRatios.reduce((s, v) => s + v, 0) / allNewRatios.length;
+const geoMean = (arr: number[]) => Math.exp(arr.reduce((s, r) => s + Math.log(r), 0) / arr.length);
+const geoOld = geoMean(rows.map(r => r.oldR));
+const geoNew = geoMean(allNewRatios);
 const medOld = rows.map(r => r.oldR).sort((a, b) => a - b)[Math.floor(rows.length / 2)]!;
 const medNew = [...allNewRatios].sort((a, b) => a - b)[Math.floor(allNewRatios.length / 2)]!;
 
@@ -213,7 +214,7 @@ const wasmBoth    = rows.filter(r => oldMap.get(r.name)?.wasmUsed && newMap.get(
 const wasmAdded   = rows.filter(r => !oldMap.get(r.name)?.wasmUsed && newMap.get(r.name)?.wasmUsed).length;
 const wasmRemoved = rows.filter(r => oldMap.get(r.name)?.wasmUsed && !newMap.get(r.name)?.wasmUsed).length;
 console.log('SUMMARY:');
-console.log(`  Mean ratio:   ${fmt(avgOld)}x → ${fmt(avgNew)}x  (local: all ${allNewRatios.length} benchmarks)`);
+console.log(`  Geo mean:     ${fmt(geoOld)}x → ${fmt(geoNew)}x  (local: all ${allNewRatios.length} benchmarks)`);
 console.log(`  Median ratio: ${fmt(medOld)}x → ${fmt(medNew)}x`);
 console.log(`  Improved:     ${improved.length}  |  Regressed: ${regressed.length}  |  Unchanged: ${unchanged.length}`);
 console.log(`  >10x slower:  ${slow.length}  (overlapping only)`);

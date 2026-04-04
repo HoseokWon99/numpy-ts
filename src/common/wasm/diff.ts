@@ -21,11 +21,11 @@ import {
   diff_2d_i8,
 } from './bins/diff.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  getSharedMemory,
   f16ToF32Input,
   f32ToF16Output,
 } from './runtime';
@@ -112,41 +112,74 @@ export function wasmDiff(a: ArrayStorage, axis: number): ArrayStorage | null {
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const numRows = size / axisLen;
   const outSize = numRows * outAxisLen;
-  const aBytes = size * bpe;
   const outBytes = outSize * bpe;
-
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
-
   const isF16 = dtype === 'float16';
-  const aOff = a.offset;
-  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  if (isF16) aData = f16ToF32Input(aData, dtype);
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const resultShape = Array.from(shape);
   resultShape[normalizedAxis] = outAxisLen;
 
-  if (ndim === 1) {
-    const kernel = kernels1D[dtype];
-    if (!kernel) return null;
-    kernel(aPtr, outPtr, outAxisLen);
-  } else {
-    const kernel = kernels2D[dtype];
-    if (!kernel) return null;
-    kernel(aPtr, outPtr, numRows, axisLen);
+  if (isF16) {
+    let aData = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    aData = f16ToF32Input(aData, dtype);
+    const aPtr = scratchCopyIn(aData);
+
+    if (ndim === 1) {
+      const kernel = kernels1D[dtype];
+      if (!kernel) {
+        outRegion.release();
+        return null;
+      }
+      kernel(aPtr, outRegion.ptr, outAxisLen);
+    } else {
+      const kernel = kernels2D[dtype];
+      if (!kernel) {
+        outRegion.release();
+        return null;
+      }
+      kernel(aPtr, outRegion.ptr, numRows, axisLen);
+    }
+
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, outSize);
+    const f32Copy = new Float32Array(outSize);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+      resultShape,
+      dtype
+    );
   }
 
-  const outData = copyOut(
-    outPtr,
-    outSize,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
+  if (ndim === 1) {
+    const kernel = kernels1D[dtype];
+    if (!kernel) {
+      outRegion.release();
+      return null;
+    }
+    kernel(aPtr, outRegion.ptr, outAxisLen);
+  } else {
+    const kernel = kernels2D[dtype];
+    if (!kernel) {
+      outRegion.release();
+      return null;
+    }
+    kernel(aPtr, outRegion.ptr, numRows, axisLen);
+  }
+
+  return ArrayStorage.fromWasmRegion(
     resultShape,
-    dtype
+    dtype,
+    outRegion,
+    outSize,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 }

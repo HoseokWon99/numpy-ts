@@ -31,6 +31,18 @@ export fn neg_f32(a: [*]const f32, out: [*]f32, N: u32) void {
     }
 }
 
+/// Float16 negation via bit manipulation: flip sign bit.
+export fn neg_f16(a: [*]const u16, out: [*]u16, N: u32) void {
+    const mask: @Vector(8, u16) = @splat(0x8000);
+    const n8 = N & ~@as(u32, 7);
+    var i: u32 = 0;
+    while (i < n8) : (i += 8) {
+        const v = @as(*align(1) const @Vector(8, u16), @ptrCast(a + i)).*;
+        @as(*align(1) @Vector(8, u16), @ptrCast(out + i)).* = v ^ mask;
+    }
+    while (i < N) : (i += 1) out[i] = a[i] ^ 0x8000;
+}
+
 /// Element-wise negate for complex128 using 2-wide f64 SIMD.
 /// N = number of complex elements (each = 2 f64s).
 export fn neg_c128(a: [*]const f64, out: [*]f64, N: u32) void {
@@ -227,4 +239,15 @@ test "neg_c128 multiple" {
     try testing.expectApproxEqAbs(out[1], -2.0, 1e-10);
     try testing.expectApproxEqAbs(out[4], 0.0, 1e-10);
     try testing.expectApproxEqAbs(out[5], 0.0, 1e-10);
+}
+
+test "neg_f16 basic" {
+    const testing = @import("std").testing;
+    // 1.0=0x3C00, -1.0=0xBC00, 0.0=0x0000, -0.0=0x8000
+    const a = [_]u16{ 0x3C00, 0xBC00, 0x0000 };
+    var out: [3]u16 = undefined;
+    neg_f16(&a, &out, 3);
+    try testing.expectEqual(out[0], 0xBC00); // -1.0
+    try testing.expectEqual(out[1], 0x3C00); // 1.0
+    try testing.expectEqual(out[2], 0x8000); // -0.0
 }

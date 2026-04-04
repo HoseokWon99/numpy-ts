@@ -7,7 +7,7 @@
  */
 
 import { vdot_c128, vdot_c64 } from './bins/vdot.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { resetScratchAllocator, resolveInputPtr, scratchAlloc, getSharedMemory } from './runtime';
 import { ArrayStorage } from '../storage';
 import { promoteDTypes, type DType, type TypedArray } from '../dtype';
 import { Complex } from '../complex';
@@ -47,27 +47,38 @@ export function wasmVdotComplex(a: ArrayStorage, b: ArrayStorage): Complex | nul
   if (!kernel || !Ctor) return null;
 
   const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = K * 2 * bytesPerElement;
-  const bBytes = K * 2 * bytesPerElement;
   const outBytes = 2 * bytesPerElement;
 
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const aData = a.data.subarray(a.offset * 2, a.offset * 2 + K * 2) as TypedArray;
-  const bData = b.data.subarray(b.offset * 2, b.offset * 2 + K * 2) as TypedArray;
-
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * 2,
+    K * 2,
+    bytesPerElement
+  );
+  const bPtr = resolveInputPtr(
+    b.data,
+    b.isWasmBacked,
+    b.wasmPtr,
+    b.offset * 2,
+    K * 2,
+    bytesPerElement
+  );
+  const outPtr = scratchAlloc(outBytes);
 
   kernel(aPtr, bPtr, outPtr, K);
 
-  const outData = copyOut(
-    outPtr,
-    2,
-    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
+  // Read scalar result directly from WASM memory
+  const mem = getSharedMemory();
+  const outView = new (Ctor as unknown as new (
+    buffer: ArrayBuffer,
+    byteOffset: number,
+    length: number
+  ) => TypedArray)(mem.buffer, outPtr, 2);
 
-  return new Complex(Number(outData[0]!), Number(outData[1]!));
+  return new Complex(Number(outView[0]!), Number(outView[1]!));
 }

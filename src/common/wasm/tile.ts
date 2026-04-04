@@ -13,15 +13,7 @@ import {
   tile_2d_i16,
   tile_2d_i8,
 } from './bins/tile.wasm';
-import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
-  f16ToF32Input,
-  f32ToF16Output,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -88,31 +80,40 @@ export function wasmTile2D(a: ArrayStorage, repRows: number, repCols: number): A
   const outSize = rows * repRows * cols * repCols;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = outSize * bpe;
-
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
-
   const isF16 = dtype === 'float16';
-  const aOff = a.offset;
-  let aData = a.data.subarray(aOff, aOff + size) as TypedArray;
-  if (isF16) aData = f16ToF32Input(aData, dtype);
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  kernel(aPtr, outPtr, rows, cols, repRows, repCols);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const outData = copyOut(
-    outPtr,
-    outSize,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
+  // Float16: tile as raw i16 bytes (same 2-byte layout, no conversion needed)
+  if (isF16) {
+    const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, 2);
+    tile_2d_i16(aPtr, outRegion.ptr, rows, cols, repRows, repCols);
+    return ArrayStorage.fromWasmRegion(
+      [rows * repRows, cols * repCols],
+      dtype,
+      outRegion,
+      outSize,
+      Float16Array as unknown as new (
+        buffer: ArrayBuffer,
+        byteOffset: number,
+        length: number
+      ) => TypedArray
+    );
+  }
 
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  kernel(aPtr, outRegion.ptr, rows, cols, repRows, repCols);
+
+  return ArrayStorage.fromWasmRegion(
     [rows * repRows, cols * repCols],
-    dtype
+    dtype,
+    outRegion,
+    outSize,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 }

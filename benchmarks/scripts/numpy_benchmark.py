@@ -9,6 +9,7 @@ Improved benchmarking approach:
 - Uses multiple samples for statistical robustness
 """
 
+import gc
 import json
 import sys
 import time
@@ -1033,6 +1034,7 @@ def main():
         )
 
         for i, spec in enumerate(specs, 1):
+            gc.collect()  # Free unreferenced objects between specs
             result = run_benchmark(spec)
             results.append(result)
 

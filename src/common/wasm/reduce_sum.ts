@@ -11,6 +11,10 @@ import {
   reduce_sum_f32,
   reduce_sum_i64,
   reduce_sum_i32,
+  reduce_sum_i8_to_i64,
+  reduce_sum_i16_to_i64,
+  reduce_sum_u8_to_u64,
+  reduce_sum_u16_to_u64,
   reduce_sum_strided_f64,
   reduce_sum_strided_f32,
   reduce_sum_strided_i64,
@@ -22,7 +26,14 @@ import {
   reduce_sum_strided_u16,
   reduce_sum_strided_u8,
 } from './bins/reduce_sum.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import {
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  f16ToF32Input,
+  alloc,
+  copyOut,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -34,18 +45,22 @@ type ReduceFn = (aPtr: number, N: number) => number | bigint;
 const kernels: Partial<Record<DType, ReduceFn>> = {
   float64: reduce_sum_f64,
   float32: reduce_sum_f32,
+  // float16 excluded: must accumulate in f16 precision to match NumPy overflow behavior
   int64: reduce_sum_i64,
   uint64: reduce_sum_i64,
   int32: reduce_sum_i32,
   uint32: reduce_sum_i32,
-  // int8/int16/uint8/uint16 excluded: WASM accumulates in native type which
-  // overflows for large arrays. JS fallback promotes to int64 (matches NumPy).
+  int16: reduce_sum_i16_to_i64,
+  uint16: reduce_sum_u16_to_u64,
+  int8: reduce_sum_i8_to_i64,
+  uint8: reduce_sum_u8_to_u64,
 };
 
 type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float32Array, // f16 converted to f32 before kernel call
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -71,15 +86,18 @@ export function wasmReduceSum(a: ArrayStorage): number | null {
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
 
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  // Float16: convert to f32 before passing to f32 kernel
+  if (dtype === 'float16') {
+    const aData = f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype);
+    const aPtr = scratchCopyIn(aData);
+    return Number(kernel(aPtr, size));
+  }
+
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-
-  ensureMemory(size * bpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aPtr = copyIn(aRaw);
-
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
   return Number(kernel(aPtr, size));
 }
 
@@ -90,6 +108,7 @@ type StridedFn = (aPtr: number, outPtr: number, outer: number, axis: number, inn
 const stridedKernels: Partial<Record<DType, StridedFn>> = {
   float64: reduce_sum_strided_f64,
   float32: reduce_sum_strided_f32,
+  float16: reduce_sum_strided_f32,
   int64: reduce_sum_strided_i64,
   uint64: reduce_sum_strided_u64,
   int32: reduce_sum_strided_i32,
@@ -124,12 +143,15 @@ export function wasmReduceSumStrided(
   const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const outSize = outerSize * innerSize;
 
-  ensureMemory(totalSize * inBpe + outSize * 8);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + totalSize) as TypedArray;
-  const inPtr = copyIn(aRaw);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  let inPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + totalSize) as TypedArray;
+    inPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    inPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, totalSize, inBpe);
+  }
   const outPtr = alloc(outSize * 8);
 
   kernel(inPtr, outPtr, outerSize, axisSize, innerSize);

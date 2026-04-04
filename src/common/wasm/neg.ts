@@ -12,10 +12,11 @@ import {
   neg_i32,
   neg_i16,
   neg_i8,
+  neg_f16,
   neg_c128,
   neg_c64,
 } from './bins/neg.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -27,6 +28,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: neg_f64,
   float32: neg_f32,
+  float16: neg_f16,
   int64: neg_i64,
   uint64: neg_i64,
   int32: neg_i32,
@@ -43,6 +45,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   complex128: Float64Array,
   complex64: Float32Array,
   int64: BigInt64Array,
@@ -71,6 +74,7 @@ export function wasmNeg(a: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
@@ -78,25 +82,30 @@ export function wasmNeg(a: ArrayStorage): ArrayStorage | null {
   const factor = complexFactor[dtype] ?? 1;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const totalElements = size * factor;
-  const aBytes = totalElements * bpe;
   const outBytes = totalElements * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset * factor;
-  const aData = a.data.subarray(aOff, aOff + totalElements) as TypedArray;
+  wasmConfig.wasmCallCount++;
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * factor,
+    totalElements,
+    bpe
+  );
 
-  kernel(aPtr, outPtr, size);
+  kernel(aPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     totalElements,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

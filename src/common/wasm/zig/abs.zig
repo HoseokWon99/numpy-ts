@@ -36,6 +36,19 @@ export fn abs_f32(a: [*]const f32, out: [*]f32, N: u32) void {
     }
 }
 
+/// Float16 absolute value via bit manipulation: clear sign bit.
+/// Uses V8u16 SIMD (8 float16 values per v128 instruction).
+export fn abs_f16(a: [*]const u16, out: [*]u16, N: u32) void {
+    const mask: @Vector(8, u16) = @splat(0x7FFF);
+    const n8 = N & ~@as(u32, 7);
+    var i: u32 = 0;
+    while (i < n8) : (i += 8) {
+        const v = @as(*align(1) const @Vector(8, u16), @ptrCast(a + i)).*;
+        @as(*align(1) @Vector(8, u16), @ptrCast(out + i)).* = v & mask;
+    }
+    while (i < N) : (i += 1) out[i] = a[i] & 0x7FFF;
+}
+
 /// Element-wise absolute value for i64, scalar loop.
 /// No i64x2 compare in WASM SIMD, so no vectorization.
 export fn abs_i64(a: [*]const i64, out: [*]i64, N: u32) void {
@@ -189,4 +202,16 @@ test "abs_i16 SIMD boundary N=9" {
         const expected: i16 = @intCast(i + 1);
         try testing.expectEqual(out[i], expected);
     }
+}
+
+test "abs_f16 basic" {
+    const testing = @import("std").testing;
+    // -1.0=0xBC00, 1.0=0x3C00, -0.0=0x8000, 0.0=0x0000
+    const a = [_]u16{ 0xBC00, 0x3C00, 0x8000, 0x0000 };
+    var out: [4]u16 = undefined;
+    abs_f16(&a, &out, 4);
+    try testing.expectEqual(out[0], 0x3C00); // |-1| = 1
+    try testing.expectEqual(out[1], 0x3C00); // |1| = 1
+    try testing.expectEqual(out[2], 0x0000); // |-0| = 0
+    try testing.expectEqual(out[3], 0x0000); // |0| = 0
 }

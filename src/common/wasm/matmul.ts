@@ -20,11 +20,11 @@ import {
   matmul_i8,
 } from './bins/matmul.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  scratchCopyIn,
+  scratchAlloc,
+  getSharedMemory,
   f16ToF32Input,
   f32ToF16Output,
 } from './runtime';
@@ -107,75 +107,46 @@ const complexFactor: Partial<Record<DType, number>> = {
 
 /**
  * Run a single 2D matmul via WASM (real / integer types).
+ * Writes result into outPtr (must be pre-allocated in persistent or scratch space).
  */
-function wasmMatmul2D(
+function wasmMatmul2DInto(
   kernel: WasmMatmulFn,
-  Ctor: AnyTypedArrayCtor,
   aData: TypedArray,
   bData: TypedArray,
+  outPtr: number,
   M: number,
   K: number,
-  N: number,
-  factor: number = 1
-): TypedArray {
-  const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = M * K * factor * bytesPerElement;
-  const bBytes = K * N * factor * bytesPerElement;
-  const outBytes = M * N * factor * bytesPerElement;
-
-  ensureMemory(aBytes + bBytes + outBytes);
-  resetAllocator();
-
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
-
+  N: number
+): void {
+  resetScratchAllocator();
+  const aPtr = scratchCopyIn(aData);
+  const bPtr = scratchCopyIn(bData);
   kernel(aPtr, bPtr, outPtr, M, N, K);
-
-  return copyOut(
-    outPtr,
-    M * N * factor,
-    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
 }
 
 /**
  * Run a single 2D complex matmul via Gauss-trick WASM kernel.
- * Allocates scratch space for deinterleaved data and intermediate products:
- *   2*M*K + 2*K*N + 3*M*N elements.
+ * Writes result into outPtr. Uses scratch for intermediates.
  */
-function wasmMatmul2DComplex(
+function wasmMatmul2DComplexInto(
   kernel: WasmComplexMatmulFn,
   Ctor: AnyTypedArrayCtor,
   aData: TypedArray,
   bData: TypedArray,
+  outPtr: number,
   M: number,
   K: number,
   N: number
-): TypedArray {
-  const factor = 2; // complex
-  const bytesPerElement = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = M * K * factor * bytesPerElement;
-  const bBytes = K * N * factor * bytesPerElement;
-  const outBytes = M * N * factor * bytesPerElement;
+): void {
+  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const scratchElements = 2 * M * K + 2 * K * N + 3 * M * N;
-  const scratchBytes = scratchElements * bytesPerElement;
+  const scratchBytes = scratchElements * bpe;
 
-  ensureMemory(aBytes + bBytes + outBytes + scratchBytes);
-  resetAllocator();
-
-  const aPtr = copyIn(aData);
-  const bPtr = copyIn(bData);
-  const outPtr = alloc(outBytes);
-  const scratchPtr = alloc(scratchBytes);
-
+  resetScratchAllocator();
+  const aPtr = scratchCopyIn(aData);
+  const bPtr = scratchCopyIn(bData);
+  const scratchPtr = scratchAlloc(scratchBytes);
   kernel(aPtr, bPtr, outPtr, M, N, K, scratchPtr);
-
-  return copyOut(
-    outPtr,
-    M * N * factor,
-    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
-  );
 }
 
 /**
@@ -206,6 +177,7 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
 
   // Complex types store 2 floats per element; real types store 1
   const factor = complexFactor[workDtype] ?? 1;
+  const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
   // Handle 1D promotion (same as core matmul)
   const aWas1D = a.ndim === 1;
@@ -241,19 +213,54 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
 
   // --- Pure 2D case ---
   if (aNdim === 2 && bNdim === 2) {
-    const outData = gaussKernel
-      ? wasmMatmul2DComplex(gaussKernel, Ctor, aData, bData, M, K, N)
-      : wasmMatmul2D(kernel!, Ctor, aData, bData, M, K, N, factor);
+    const outElements = M * N * factor;
+    const outBytes = outElements * bpe;
+    const outRegion = wasmMalloc(outBytes);
+    if (!outRegion) return null;
+
+    wasmConfig.wasmCallCount++;
+
+    if (gaussKernel) {
+      wasmMatmul2DComplexInto(gaussKernel, Ctor, aData, bData, outRegion.ptr, M, K, N);
+    } else {
+      wasmMatmul2DInto(kernel!, aData, bData, outRegion.ptr, M, K, N);
+    }
+
+    if (isF16) {
+      // Read f32 from WASM, convert to f16, return as fromData
+      const mem = getSharedMemory();
+      const f32View = new Float32Array(mem.buffer, outRegion.ptr, outElements);
+      const f32Copy = new Float32Array(outElements);
+      f32Copy.set(f32View);
+      outRegion.release();
+      const f16Data = f32ToF16Output(f32Copy as unknown as TypedArray, workDtype);
+      let outShape: number[];
+      if (aWas1D && bWas1D) outShape = [];
+      else if (aWas1D) outShape = [N];
+      else if (bWas1D) outShape = [M];
+      else outShape = [M, N];
+      return ArrayStorage.fromData(f16Data, outShape, workDtype);
+    }
+
     let outShape: number[];
     if (aWas1D && bWas1D) outShape = [];
     else if (aWas1D) outShape = [N];
     else if (bWas1D) outShape = [M];
     else outShape = [M, N];
-    return ArrayStorage.fromData(
-      isF16 ? f32ToF16Output(outData, workDtype) : outData,
-      outShape,
-      workDtype
+
+    const result = ArrayStorage.fromWasmRegion(
+      outShape.length === 0 ? [M, N] : outShape,
+      workDtype,
+      outRegion,
+      outElements,
+      Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
     );
+
+    // For scalar/1D results, reshape
+    if (aWas1D && bWas1D) return reshapeStorage(result, []);
+    if (aWas1D) return reshapeStorage(result, [N]);
+    if (bWas1D) return reshapeStorage(result, [M]);
+    return result;
   }
 
   // --- Batched ND case ---
@@ -265,7 +272,13 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
   const sliceA = M * K * factor;
   const sliceB = K * N * factor;
   const sliceOut = M * N * factor;
-  const resultData = new Ctor(batchSize * sliceOut);
+  const totalOut = batchSize * sliceOut;
+  const outBytes = totalOut * bpe;
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
 
   for (let bi = 0; bi < batchSize; bi++) {
     const batchIdx = flatToBatchMultiIndex(bi, batchShape);
@@ -278,28 +291,37 @@ export function wasmMatmul(a: ArrayStorage, b: ArrayStorage): ArrayStorage | nul
     const aSliceData = aData.subarray(aOff, aOff + sliceA) as TypedArray;
     const bSliceData = bData.subarray(bOff, bOff + sliceB) as TypedArray;
 
-    const sliceResult = gaussKernel
-      ? wasmMatmul2DComplex(gaussKernel, Ctor, aSliceData, bSliceData, M, K, N)
-      : wasmMatmul2D(kernel!, Ctor, aSliceData, bSliceData, M, K, N, factor);
+    const sliceOutPtr = outRegion.ptr + bi * sliceOut * bpe;
 
-    new Uint8Array(
-      (resultData as TypedArray).buffer,
-      bi * sliceOut * (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT,
-      (sliceResult as TypedArray).byteLength
-    ).set(
-      new Uint8Array(
-        (sliceResult as TypedArray).buffer,
-        (sliceResult as TypedArray).byteOffset,
-        (sliceResult as TypedArray).byteLength
-      )
-    );
+    if (gaussKernel) {
+      wasmMatmul2DComplexInto(gaussKernel, Ctor, aSliceData, bSliceData, sliceOutPtr, M, K, N);
+    } else {
+      wasmMatmul2DInto(kernel!, aSliceData, bSliceData, sliceOutPtr, M, K, N);
+    }
   }
 
   const outShape = [...batchShape, M, N];
-  const result = ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(resultData as TypedArray, workDtype) : (resultData as TypedArray),
+
+  if (isF16) {
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, totalOut);
+    const f32Copy = new Float32Array(totalOut);
+    f32Copy.set(f32View);
+    outRegion.release();
+    const f16Data = f32ToF16Output(f32Copy as unknown as TypedArray, workDtype);
+    const result = ArrayStorage.fromData(f16Data, outShape, workDtype);
+    if (aWas1D && bWas1D) return reshapeStorage(result, [...batchShape]);
+    if (aWas1D) return reshapeStorage(result, [...batchShape, N]);
+    if (bWas1D) return reshapeStorage(result, [...batchShape, M]);
+    return result;
+  }
+
+  const result = ArrayStorage.fromWasmRegion(
     outShape,
-    workDtype
+    workDtype,
+    outRegion,
+    totalOut,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 
   if (aWas1D && bWas1D) return reshapeStorage(result, [...batchShape]);
@@ -335,7 +357,21 @@ function getContiguousData(storage: ArrayStorage, targetDtype: DType, factor: nu
 }
 
 function reshapeStorage(storage: ArrayStorage, newShape: number[]): ArrayStorage {
-  return ArrayStorage.fromData(storage.data, newShape, storage.dtype);
+  // Compute C-contiguous strides for the new shape
+  const strides = new Array(newShape.length);
+  let stride = 1;
+  for (let i = newShape.length - 1; i >= 0; i--) {
+    strides[i] = stride;
+    stride *= newShape[i]!;
+  }
+  return ArrayStorage.fromDataShared(
+    storage.data,
+    newShape,
+    storage.dtype,
+    strides,
+    0,
+    storage.wasmRegion
+  );
 }
 
 function broadcastBatchShapes(a: number[], b: number[]): number[] {

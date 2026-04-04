@@ -6,21 +6,19 @@
  */
 
 import { flip_f64, flip_f32, flip_i64, flip_i32, flip_i16, flip_i8 } from './bins/flip.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
-import { hasFloat16, type DType, type TypedArray } from '../dtype';
+import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
 
 const BASE_THRESHOLD = 64;
 
 type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 
-// Flip is pure memory reversal — kernel just needs to match element width.
-// float16: native Float16Array (2 bytes) → flip_i16; polyfill Float32Array (4 bytes) → flip_f32
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: flip_f64,
   float32: flip_f32,
-  float16: hasFloat16 ? flip_i16 : flip_f32,
+  float16: flip_i16, // byte-copy: treat f16 as raw i16
   int64: flip_i64,
   uint64: flip_i64,
   int32: flip_i32,
@@ -35,7 +33,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
-  float16: hasFloat16 ? (Float16Array as unknown as AnyTypedArrayCtor) : Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -62,25 +60,22 @@ export function wasmFlip(a: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size * bpe;
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aOff = a.offset;
-  const aData = a.data.subarray(aOff, aOff + size) as TypedArray;
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  const aPtr = copyIn(aData);
-  const outPtr = alloc(outBytes);
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  kernel(aPtr, outRegion.ptr, size);
 
-  kernel(aPtr, outPtr, size);
-
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
 }

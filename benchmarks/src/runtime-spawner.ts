@@ -53,9 +53,9 @@ export async function detectRuntimes(): Promise<RuntimeInfo[]> {
 function getRuntimeArgs(runtime: RuntimeName): { cmd: string; args: string[] } {
   switch (runtime) {
     case 'node':
-      return { cmd: 'node', args: [RUNNER_PATH] };
+      return { cmd: 'node', args: ['--expose-gc', RUNNER_PATH] };
     case 'deno':
-      return { cmd: 'deno', args: ['run', '--allow-read', '--allow-env', RUNNER_PATH] };
+      return { cmd: 'deno', args: ['run', '--allow-read', '--allow-env', '--v8-flags=--expose-gc', RUNNER_PATH] };
     case 'bun':
       return { cmd: 'bun', args: ['run', RUNNER_PATH] };
   }

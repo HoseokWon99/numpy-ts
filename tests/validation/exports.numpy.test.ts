@@ -506,6 +506,8 @@ describe('NumPy API Comparison', () => {
         'iset',
         // Deprecated in NumPy 1.25+, removed in NumPy 2.0
         'ptp',
+        // WASM memory management — no NumPy equivalent
+        'dispose',
       ];
 
       const invalidAttrs: string[] = [];

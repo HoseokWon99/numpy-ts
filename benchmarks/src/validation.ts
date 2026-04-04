@@ -1317,8 +1317,9 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
           const spec = specs[i]!;
           const numpyResult = numpyResults[i];
 
+          let numpytsResult: any;
           try {
-            const numpytsResult = runNumpyTsOperation(spec);
+            numpytsResult = runNumpyTsOperation(spec);
 
             // Convert numpy-ts result to comparable format
             let tsValue: any;
@@ -1440,6 +1441,10 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
                 const partitionedData = applyIndices(origNested, tsValue.data);
                 isValid = checkPartitionProperty(partitionedData, kth, tsValue.shape);
               }
+            } else if (spec.operation === 'empty' || spec.operation === 'empty_like') {
+              // empty returns uninitialized data — only check shape/dtype match
+              isValid = tsValue.shape !== undefined &&
+                JSON.stringify(tsValue.shape) === JSON.stringify(numpyResult.shape);
             } else {
               // Standard comparison for other operations
               // Use looser tolerance for lower-precision dtypes
@@ -1473,6 +1478,8 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
             failed++;
             console.error(`  ❌ ${spec.name}: Error - ${err}`);
           }
+          // Eagerly free WASM-backed memory to prevent heap exhaustion
+          (numpytsResult as any)?.dispose?.();
         }
 
         if (failed > 0) {

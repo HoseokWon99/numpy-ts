@@ -15,7 +15,7 @@ import {
   square_c128,
   square_c64,
 } from './bins/square.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -27,6 +27,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: square_f64,
   float32: square_f32,
+  // float16 excluded: f16→f32 conversion overhead makes JS path faster
   complex128: square_c128,
   complex64: square_c64,
   int64: square_i64,
@@ -65,6 +66,7 @@ export function wasmSquare(a: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = kernels[dtype];
   const Ctor = ctorMap[dtype];
   if (!kernel || !Ctor) return null;
@@ -72,20 +74,31 @@ export function wasmSquare(a: ArrayStorage): ArrayStorage | null {
   // Complex: interleaved re/im pairs, so data length = size * 2
   const complexFactor = isComplexDType(dtype) ? 2 : 1;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const dataLen = size * complexFactor;
-  ensureMemory(dataLen * bpe * 2);
-  resetAllocator();
+  const totalElements = size * complexFactor;
+  const outBytes = totalElements * bpe;
 
-  const aPtr = copyIn(
-    a.data.subarray(a.offset * complexFactor, (a.offset + size) * complexFactor) as TypedArray
-  );
-  const outPtr = alloc(dataLen * bpe);
-  kernel(aPtr, outPtr, size);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const outData = copyOut(
-    outPtr,
-    dataLen,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(
+    a.data,
+    a.isWasmBacked,
+    a.wasmPtr,
+    a.offset * complexFactor,
+    totalElements,
+    bpe
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), dtype);
+
+  kernel(aPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
+    totalElements,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
+  );
 }

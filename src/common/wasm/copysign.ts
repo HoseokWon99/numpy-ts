@@ -27,8 +27,10 @@ import {
   copysign_scalar_u32,
   copysign_scalar_u16,
   copysign_scalar_u8,
+  copysign_f16,
+  copysign_scalar_f16,
 } from './bins/copysign.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -41,6 +43,7 @@ type ScalarFn = (x1Ptr: number, outPtr: number, N: number, scalar: number) => vo
 const binaryKernels: Partial<Record<DType, BinaryFn>> = {
   float64: copysign_f64,
   float32: copysign_f32,
+  float16: copysign_f16,
   int64: copysign_i64,
   uint64: copysign_u64,
   int32: copysign_i32,
@@ -54,6 +57,7 @@ const binaryKernels: Partial<Record<DType, BinaryFn>> = {
 const scalarKernels: Partial<Record<DType, ScalarFn>> = {
   float64: copysign_scalar_f64,
   float32: copysign_scalar_f32,
+  float16: copysign_scalar_f16,
   int64: copysign_scalar_i64,
   uint64: copysign_scalar_u64,
   int32: copysign_scalar_i32,
@@ -68,6 +72,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const inputCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -76,6 +81,48 @@ const inputCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   uint16: Uint16Array,
   int8: Int8Array,
   uint8: Uint8Array,
+};
+
+// Output dtype: floats preserve dtype, ints promote to f64 (matches NumPy)
+const outDtypeMap: Partial<Record<DType, DType>> = {
+  float64: 'float64',
+  float32: 'float32',
+  float16: 'float16',
+  int64: 'float64',
+  uint64: 'float64',
+  int32: 'float64',
+  uint32: 'float64',
+  int16: 'float64',
+  uint16: 'float64',
+  int8: 'float64',
+  uint8: 'float64',
+};
+const outCtorMap: Partial<
+  Record<DType, new (buf: ArrayBuffer, off: number, len: number) => TypedArray>
+> = {
+  float64: Float64Array as unknown as new (
+    buf: ArrayBuffer,
+    off: number,
+    len: number
+  ) => TypedArray,
+  float32: Float32Array as unknown as new (
+    buf: ArrayBuffer,
+    off: number,
+    len: number
+  ) => TypedArray,
+  float16: Float16Array as unknown as new (
+    buf: ArrayBuffer,
+    off: number,
+    len: number
+  ) => TypedArray,
+  int64: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  uint64: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  int32: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  uint32: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  int16: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  uint16: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  int8: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  uint8: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
 };
 
 /**
@@ -89,31 +136,29 @@ export function wasmCopysign(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage |
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = x1.dtype;
+  if (x2.dtype !== dtype) return null;
+
   const kernel = binaryKernels[dtype];
   const InCtor = inputCtorMap[dtype];
   if (!kernel || !InCtor) return null;
-  if (x2.dtype !== dtype) return null;
 
-  const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const inBytes = size * bpe;
-  const outBytes = size * 8; // f64 output
+  const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+  const outDtype = outDtypeMap[dtype]!;
+  const OutCtor = outCtorMap[dtype]!;
+  const outBpe = (OutCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(inBytes * 2 + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(size * outBpe);
+  if (!outRegion) return null;
 
-  const x1Ptr = copyIn(x1.data.subarray(x1.offset, x1.offset + size) as TypedArray);
-  const x2Ptr = copyIn(x2.data.subarray(x2.offset, x2.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
-  kernel(x1Ptr, x2Ptr, outPtr, size);
+  const x1Ptr = resolveInputPtr(x1.data, x1.isWasmBacked, x1.wasmPtr, x1.offset, size, inBpe);
+  const x2Ptr = resolveInputPtr(x2.data, x2.isWasmBacked, x2.wasmPtr, x2.offset, size, inBpe);
 
-  const outData = copyOut(
-    outPtr,
-    size,
-    Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
+  kernel(x1Ptr, x2Ptr, outRegion.ptr, size);
 
-  return ArrayStorage.fromData(outData, Array.from(x1.shape), 'float64');
+  return ArrayStorage.fromWasmRegion(Array.from(x1.shape), outDtype, outRegion, size, OutCtor);
 }
 
 /**
@@ -127,27 +172,29 @@ export function wasmCopysignScalar(x1: ArrayStorage, scalar: number): ArrayStora
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = x1.dtype;
+
   const kernel = scalarKernels[dtype];
   const InCtor = inputCtorMap[dtype];
   if (!kernel || !InCtor) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const inBytes = size * bpe;
-  const outBytes = size * 8; // f64 output
+  const outDtype = outDtypeMap[dtype]!;
+  const OutCtor = outCtorMap[dtype]!;
+  const outBpe = (OutCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(inBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(size * outBpe);
+  if (!outRegion) return null;
 
-  const x1Ptr = copyIn(x1.data.subarray(x1.offset, x1.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  const x1Ptr = resolveInputPtr(x1.data, x1.isWasmBacked, x1.wasmPtr, x1.offset, size, bpe);
 
-  kernel(x1Ptr, outPtr, size, scalar);
+  // Float16 scalar: pass sign flag (0 or 1) instead of raw scalar
+  if (dtype === 'float16') {
+    kernel(x1Ptr, outRegion.ptr, size, scalar < 0 || Object.is(scalar, -0) ? 1 : 0);
+  } else {
+    kernel(x1Ptr, outRegion.ptr, size, scalar);
+  }
 
-  const outData = copyOut(
-    outPtr,
-    size,
-    Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
-
-  return ArrayStorage.fromData(outData, Array.from(x1.shape), 'float64');
+  return ArrayStorage.fromWasmRegion(Array.from(x1.shape), outDtype, outRegion, size, OutCtor);
 }

@@ -7,7 +7,7 @@
  */
 
 import { gcd_scalar_i32, gcd_i32 } from './bins/gcd.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, scratchCopyIn } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -16,6 +16,7 @@ const BASE_THRESHOLD = 64;
 
 export function wasmGcdScalar(a: ArrayStorage, scalar: number): ArrayStorage | null {
   if (!a.isCContiguous) return null;
+
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
@@ -31,24 +32,30 @@ export function wasmGcdScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
     return null;
 
   const bpe = 4; // i32
-  ensureMemory(size * bpe * 2);
-  resetAllocator();
+  const outBytes = size * bpe;
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
 
   // Convert input to i32 for the kernel
   const srcData = a.data.subarray(a.offset, a.offset + size);
   const i32Data = new Int32Array(size);
   for (let i = 0; i < size; i++) i32Data[i] = Number(srcData[i]!);
 
-  const aPtr = copyIn(i32Data as unknown as TypedArray);
-  const outPtr = alloc(size * bpe);
-  gcd_scalar_i32(aPtr, outPtr, size, Math.abs(Math.trunc(scalar)));
+  const aPtr = scratchCopyIn(i32Data as unknown as TypedArray);
+  gcd_scalar_i32(aPtr, outRegion.ptr, size, Math.abs(Math.trunc(scalar)));
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'int32',
+    outRegion,
     size,
     Int32Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'int32');
 }
 
 export function wasmGcd(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
@@ -63,8 +70,14 @@ export function wasmGcd(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!validTypes.includes(aDtype) || !validTypes.includes(bDtype)) return null;
 
   const bpe = 4; // i32
-  ensureMemory(size * bpe * 3);
-  resetAllocator();
+  const outBytes = size * bpe;
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
 
   // Convert both inputs to i32
   const aSrc = a.data.subarray(a.offset, a.offset + size);
@@ -76,15 +89,15 @@ export function wasmGcd(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
     bI32[i] = Number(bSrc[i]!);
   }
 
-  const aPtr = copyIn(aI32 as unknown as TypedArray);
-  const bPtr = copyIn(bI32 as unknown as TypedArray);
-  const outPtr = alloc(size * bpe);
-  gcd_i32(aPtr, bPtr, outPtr, size);
+  const aPtr = scratchCopyIn(aI32 as unknown as TypedArray);
+  const bPtr = scratchCopyIn(bI32 as unknown as TypedArray);
+  gcd_i32(aPtr, bPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'int32',
+    outRegion,
     size,
     Int32Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'int32');
 }

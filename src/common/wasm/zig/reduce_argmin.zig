@@ -156,6 +156,200 @@ export fn reduce_argmin_u8(a: [*]const u8, N: u32) u32 {
     return idx;
 }
 
+// --- Strided axis reduction (output is always i32 indices) ---
+
+/// Returns the index of the minimum f64 element along the axis, strided.
+export fn reduce_argmin_strided_f64(a: [*]const f64, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum f32 element along the axis, strided.
+export fn reduce_argmin_strided_f32(a: [*]const f32, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum i32 element along the axis, strided.
+export fn reduce_argmin_strided_i32(a: [*]const i32, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum u32 element along the axis, strided.
+export fn reduce_argmin_strided_u32(a: [*]const u32, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum i16 element along the axis, strided.
+export fn reduce_argmin_strided_i16(a: [*]const i16, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum u16 element along the axis, strided.
+export fn reduce_argmin_strided_u16(a: [*]const u16, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum i8 element along the axis, strided.
+export fn reduce_argmin_strided_i8(a: [*]const i8, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
+/// Returns the index of the minimum u8 element along the axis, strided.
+export fn reduce_argmin_strided_u8(a: [*]const u8, out: [*]i32, outer: u32, axis: u32, inner: u32) void {
+    const O = @as(usize, outer);
+    const A = @as(usize, axis);
+    const I = @as(usize, inner);
+    const S = A * I;
+    for (0..O) |o| {
+        const base = o * S;
+        const ob = o * I;
+        for (0..I) |i| {
+            var best = a[base + i];
+            var bestIdx: i32 = 0;
+            for (1..A) |ax| {
+                const val = a[base + ax * I + i];
+                if (val < best) {
+                    best = val;
+                    bestIdx = @intCast(ax);
+                }
+            }
+            out[ob + i] = bestIdx;
+        }
+    }
+}
+
 // --- Tests ---
 
 test "reduce_argmin_f64 basic" {

@@ -35,11 +35,11 @@ import {
   where_u8,
 } from './bins/gather.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
-  copyOut,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  getSharedMemory,
   f16ToF32Input,
   f32ToF16Output,
 } from './runtime';
@@ -105,6 +105,10 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
  * WASM-accelerated extract (conditional gather).
  * condition must be flattened int32, data must be contiguous.
  * Returns ArrayStorage or null.
+ *
+ * Note: extract output size is unknown until kernel runs, so we use
+ * wasmMalloc for worst-case, then trim. For the actual result we need
+ * to know the count, so we read from the persistent region.
  */
 export function wasmExtract(condition: ArrayStorage, storage: ArrayStorage): ArrayStorage | null {
   if (!condition.isCContiguous || !storage.isCContiguous) return null;
@@ -133,7 +137,6 @@ export function wasmExtract(condition: ArrayStorage, storage: ArrayStorage): Arr
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  // First: count nonzero in condition to know output size
   // Convert condition to i32 for the WASM kernel
   const condOff = condition.offset;
   const condData = condition.data;
@@ -142,32 +145,60 @@ export function wasmExtract(condition: ArrayStorage, storage: ArrayStorage): Arr
     condI32[i] = condData[condOff + i] ? 1 : 0;
   }
 
-  const condBytes = size * 4;
-  const dataBytes = size * bpe;
   const outMaxBytes = size * bpe; // worst case: all selected
 
-  ensureMemory(condBytes + dataBytes + outMaxBytes);
-  resetAllocator();
+  // Use wasmMalloc for output (worst case)
+  const outRegion = wasmMalloc(outMaxBytes);
+  if (!outRegion) return null;
 
-  const condPtr = copyIn(condI32);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  const condPtr = scratchCopyIn(condI32 as unknown as TypedArray);
 
   const isF16 = dtype === 'float16';
   const dataOff = storage.offset;
-  let dataSlice = storage.data.subarray(dataOff, dataOff + size) as TypedArray;
-  if (isF16) dataSlice = f16ToF32Input(dataSlice, dtype);
-  const dataPtr = copyIn(dataSlice);
 
-  const outPtr = alloc(outMaxBytes);
+  let dataPtr: number;
+  if (isF16) {
+    let dataSlice = storage.data.subarray(dataOff, dataOff + size) as TypedArray;
+    dataSlice = f16ToF32Input(dataSlice, dtype);
+    dataPtr = scratchCopyIn(dataSlice);
+  } else {
+    dataPtr = resolveInputPtr(
+      storage.data,
+      storage.isWasmBacked,
+      storage.wasmPtr,
+      dataOff,
+      size,
+      bpe
+    );
+  }
 
-  const count = kernel(condPtr, dataPtr, outPtr, size);
+  const count = kernel(condPtr, dataPtr, outRegion.ptr, size);
 
-  const outData = copyOut(
-    outPtr,
+  if (isF16) {
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, count);
+    const f32Copy = new Float32Array(count);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+      [count],
+      dtype
+    );
+  }
+
+  // The output region may be larger than needed. We create a view of just the count elements.
+  // Since fromWasmRegion creates a view, the extra bytes are wasted but harmless.
+  return ArrayStorage.fromWasmRegion(
+    [count],
+    dtype,
+    outRegion,
     count,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
-
-  return ArrayStorage.fromData(isF16 ? f32ToF16Output(outData, dtype) : outData, [count], dtype);
 }
 
 /**
@@ -193,18 +224,31 @@ export function wasmTakeAlongAxis2D(
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const dataBytes = totalSize * bpe;
-  const idxBytes = totalSize * 4; // i32 indices
   const outBytes = totalSize * bpe;
-
-  ensureMemory(dataBytes + idxBytes + outBytes);
-  resetAllocator();
-
   const isF16 = dtype === 'float16';
-  const dataOff = storage.offset;
-  let dataSlice = storage.data.subarray(dataOff, dataOff + totalSize) as TypedArray;
-  if (isF16) dataSlice = f16ToF32Input(dataSlice, dtype);
-  const dataPtr = copyIn(dataSlice);
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+
+  let dataPtr: number;
+  if (isF16) {
+    const dataOff = storage.offset;
+    let dataSlice = storage.data.subarray(dataOff, dataOff + totalSize) as TypedArray;
+    dataSlice = f16ToF32Input(dataSlice, dtype);
+    dataPtr = scratchCopyIn(dataSlice);
+  } else {
+    dataPtr = resolveInputPtr(
+      storage.data,
+      storage.isWasmBacked,
+      storage.wasmPtr,
+      storage.offset,
+      totalSize,
+      bpe
+    );
+  }
 
   // Convert indices to i32
   const idxOff = indices.offset;
@@ -213,22 +257,29 @@ export function wasmTakeAlongAxis2D(
   for (let i = 0; i < totalSize; i++) {
     idxI32[i] = Number(idxData[idxOff + i]);
   }
-  const idxPtr = copyIn(idxI32);
+  const idxPtr = scratchCopyIn(idxI32 as unknown as TypedArray);
 
-  const outPtr = alloc(outBytes);
+  kernel(dataPtr, idxPtr, outRegion.ptr, rows!, cols!);
 
-  kernel(dataPtr, idxPtr, outPtr, rows!, cols!);
+  if (isF16) {
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, totalSize);
+    const f32Copy = new Float32Array(totalSize);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+      Array.from(indices.shape),
+      dtype
+    );
+  }
 
-  const outData = copyOut(
-    outPtr,
-    totalSize,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
-
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
+  return ArrayStorage.fromWasmRegion(
     Array.from(indices.shape),
-    dtype
+    dtype,
+    outRegion,
+    totalSize,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 }
 
@@ -275,11 +326,14 @@ export function wasmWhere(
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const condBytes = size * 4; // i32
   const dataBytes = size * bpe;
+  const isF16 = dtype === 'float16';
 
-  ensureMemory(condBytes + dataBytes * 2 + dataBytes); // cond + x + y + out
-  resetAllocator();
+  const outRegion = wasmMalloc(dataBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   // Convert condition to i32
   const condOff = condition.offset;
@@ -288,32 +342,43 @@ export function wasmWhere(
   for (let i = 0; i < size; i++) {
     condI32[i] = condData[condOff + i] ? 1 : 0;
   }
-  const condPtr = copyIn(condI32);
+  const condPtr = scratchCopyIn(condI32 as unknown as TypedArray);
 
-  const isF16 = dtype === 'float16';
-  const xOff = x.offset;
-  let xSlice = x.data.subarray(xOff, xOff + size) as TypedArray;
-  if (isF16) xSlice = f16ToF32Input(xSlice, dtype);
-  const xPtr = copyIn(xSlice);
+  let xPtr: number;
+  let yPtr: number;
 
-  const yOff = y.offset;
-  let ySlice = y.data.subarray(yOff, yOff + size) as TypedArray;
-  if (isF16) ySlice = f16ToF32Input(ySlice, dtype);
-  const yPtr = copyIn(ySlice);
+  if (isF16) {
+    let xSlice = x.data.subarray(x.offset, x.offset + size) as TypedArray;
+    xSlice = f16ToF32Input(xSlice, dtype);
+    xPtr = scratchCopyIn(xSlice);
+    let ySlice = y.data.subarray(y.offset, y.offset + size) as TypedArray;
+    ySlice = f16ToF32Input(ySlice, dtype);
+    yPtr = scratchCopyIn(ySlice);
+  } else {
+    xPtr = resolveInputPtr(x.data, x.isWasmBacked, x.wasmPtr, x.offset, size, bpe);
+    yPtr = resolveInputPtr(y.data, y.isWasmBacked, y.wasmPtr, y.offset, size, bpe);
+  }
 
-  const outPtr = alloc(dataBytes);
+  kernel(condPtr, xPtr, yPtr, outRegion.ptr, size);
 
-  kernel(condPtr, xPtr, yPtr, outPtr, size);
+  if (isF16) {
+    const mem = getSharedMemory();
+    const f32View = new Float32Array(mem.buffer, outRegion.ptr, size);
+    const f32Copy = new Float32Array(size);
+    f32Copy.set(f32View);
+    outRegion.release();
+    return ArrayStorage.fromData(
+      f32ToF16Output(f32Copy as unknown as TypedArray, dtype),
+      Array.from(x.shape),
+      dtype
+    );
+  }
 
-  const outData = copyOut(
-    outPtr,
-    size,
-    Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
-  );
-
-  return ArrayStorage.fromData(
-    isF16 ? f32ToF16Output(outData, dtype) : outData,
+  return ArrayStorage.fromWasmRegion(
     Array.from(x.shape),
-    dtype
+    dtype,
+    outRegion,
+    size,
+    Ctor as unknown as new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray
   );
 }

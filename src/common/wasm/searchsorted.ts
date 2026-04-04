@@ -26,7 +26,13 @@ import {
   searchsorted_left_u8,
   searchsorted_right_u8,
 } from './bins/searchsorted.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut, f16ToF32Input } from './runtime';
+import {
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -97,7 +103,6 @@ export function wasmSearchsorted(
 
   const n = sorted.size;
   const m = values.size;
-  // Use total work (n * log(n) * m) as threshold proxy; for simplicity use m
   if (m < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = sorted.dtype;
@@ -110,37 +115,59 @@ export function wasmSearchsorted(
   if (values.dtype !== dtype) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const sortedBytes = n * bpe;
-  const valuesBytes = m * bpe;
   const outBytes = m * 4; // u32 indices
 
-  ensureMemory(sortedBytes + valuesBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
 
   const isF16 = dtype === 'float16';
-  const sOff = sorted.offset;
-  let sData = sorted.data.subarray(sOff, sOff + n) as TypedArray;
-  if (isF16) sData = f16ToF32Input(sData, dtype);
-  const sortedPtr = copyIn(sData);
 
-  const vOff = values.offset;
-  let vData = values.data.subarray(vOff, vOff + m) as TypedArray;
-  if (isF16) vData = f16ToF32Input(vData, dtype);
-  const valuesPtr = copyIn(vData);
+  let sortedPtr: number;
+  let valuesPtr: number;
 
-  const outPtr = alloc(outBytes);
+  if (isF16) {
+    const sOff = sorted.offset;
+    let sData = sorted.data.subarray(sOff, sOff + n) as TypedArray;
+    sData = f16ToF32Input(sData, dtype);
+    sortedPtr = scratchCopyIn(sData);
 
-  kernel(sortedPtr, n, valuesPtr, outPtr, m);
+    const vOff = values.offset;
+    let vData = values.data.subarray(vOff, vOff + m) as TypedArray;
+    vData = f16ToF32Input(vData, dtype);
+    valuesPtr = scratchCopyIn(vData);
+  } else {
+    sortedPtr = resolveInputPtr(
+      sorted.data,
+      sorted.isWasmBacked,
+      sorted.wasmPtr,
+      sorted.offset,
+      n,
+      bpe
+    );
+    valuesPtr = resolveInputPtr(
+      values.data,
+      values.isWasmBacked,
+      values.wasmPtr,
+      values.offset,
+      m,
+      bpe
+    );
+  }
 
-  const outData = copyOut(
-    outPtr,
+  kernel(sortedPtr, n, valuesPtr, outRegion.ptr, m);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(values.shape),
+    'int32',
+    outRegion,
     m,
     Int32Array as unknown as new (
       buffer: ArrayBuffer,
       byteOffset: number,
       length: number
-    ) => Int32Array
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(values.shape), 'int32');
 }

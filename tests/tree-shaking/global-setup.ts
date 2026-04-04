@@ -1,13 +1,13 @@
 /**
- * Rebuilds the project with production (ReleaseFast) WASM before tree-shaking
- * tests run, so bundle sizes reflect real output.
+ * Global setup for tree-shaking tests.
+ * Only responsibility: clear stale sentinel files from a previous run so the
+ * per-worker setup (setup.ts) always performs a fresh build.
  */
-import { execSync } from 'child_process';
+import { rmSync } from 'fs';
 import { resolve } from 'path';
 
 export function setup() {
   const root = resolve(__dirname, '../..');
-  console.log('[tree-shaking] Running production build (ReleaseFast)...');
-  execSync('npm run build', { cwd: root, stdio: 'inherit' });
-  console.log('[tree-shaking] Production build complete.');
+  rmSync(resolve(root, '.tree-shaking-build.lock'), { force: true });
+  rmSync(resolve(root, '.tree-shaking-build.done'), { force: true });
 }

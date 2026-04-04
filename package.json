@@ -38,8 +38,9 @@
     "build": "npm run build:clean && npm run generate && npm run build:wasm && tsx build.ts && npm run build:types",
     "build:clean": "rm -rf dist",
     "build:types": "tsc --emitDeclarationOnly --outDir dist/types",
-    "test": "npm run build:test && vitest run --project=unit --project=validation --project=runtime-io --project=bundle-esm --project=tree-shaking",
+    "test": "npm run build:test && vitest run --project=unit --project=validation --project=runtime-io --project=bundle-esm --project=wasm-memory --project=tree-shaking",
     "test:unit": "vitest run --project=unit",
+    "test:wasm-memory": "vitest run --project=wasm-memory",
     "test:validation": "vitest run --project=validation",
     "test:io": "vitest run --project=runtime-io",
     "test:bundles": "npm run build:test && vitest run --project=bundle-esm --project=bundle-browser",
@@ -76,6 +77,7 @@
     "bench:pyodide": "npm run bench:build && node benchmarks/dist/bench.cjs --pyodide",
     "bench:full:pyodide": "npm run bench:build && node benchmarks/dist/bench.cjs --full --pyodide --runtime node",
     "bench:compare": "tsx benchmarks/scripts/compare.ts latest",
+    "test:leaks": "vitest run --project leaks",
     "bench:full:compare": "tsx benchmarks/scripts/compare.ts latest-full",
     "bench:view": "open benchmarks/results/plots/latest.html || xdg-open benchmarks/results/plots/latest.html",
     "bench:full:view": "open benchmarks/results/plots/latest-full.html || xdg-open benchmarks/results/plots/latest-full.html",
@@ -85,6 +87,7 @@
     "wasm:size": "tsx scripts/wasm-size.ts",
     "build:wasm": "tsx scripts/build-wasm.ts",
     "build:wasm:safe": "tsx scripts/build-wasm.ts --safe",
+    "build:wasm:small": "tsx scripts/build-wasm.ts --small",
     "build:test": "npm run build:clean && npm run generate && npm run build:wasm:safe && tsx build.ts --skip-wasm && npm run build:types"
   },
   "keywords": [

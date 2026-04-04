@@ -29,10 +29,10 @@ import {
   min_scalar_u8,
 } from './bins/min.wasm';
 import {
-  ensureMemory,
-  resetAllocator,
-  copyIn,
-  alloc,
+  wasmMalloc,
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
   copyOut,
   f16ToF32Input,
   f32ToF16Output,
@@ -91,6 +91,9 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 
 export function wasmMin(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!a.isCContiguous || !b.isCContiguous) return null;
+  // WASM kernel does not broadcast — sizes must match
+  if (a.size !== b.size) return null;
+
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
@@ -100,26 +103,50 @@ export function wasmMin(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  ensureMemory(size * bpe * 3);
-  resetAllocator();
+  const outBytes = size * bpe;
+
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
+
+  wasmConfig.wasmCallCount++;
 
   const originalDtype = dtype;
-  const aPtr = copyIn(
-    f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype)
-  );
-  const bPtr = copyIn(
-    f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype)
-  );
-  const outPtr = alloc(size * bpe);
-  kernel(aPtr, bPtr, outPtr, size);
+  resetScratchAllocator();
 
-  const outData = copyOut(
-    outPtr,
+  let aPtr: number;
+  let bPtr: number;
+  if (dtype === 'float16') {
+    aPtr = scratchCopyIn(
+      f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, a.dtype)
+    );
+    bPtr = scratchCopyIn(
+      f16ToF32Input(b.data.subarray(b.offset, b.offset + size) as TypedArray, b.dtype)
+    );
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+    bPtr = resolveInputPtr(b.data, b.isWasmBacked, b.wasmPtr, b.offset, size, bpe);
+  }
+
+  kernel(aPtr, bPtr, outRegion.ptr, size);
+
+  if (originalDtype === 'float16') {
+    const outData = copyOut(
+      outRegion.ptr,
+      size,
+      Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    );
+    outRegion.release();
+    const finalOut = f32ToF16Output(outData, originalDtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), originalDtype);
+  }
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  const finalOut = f32ToF16Output(outData, originalDtype);
-  return ArrayStorage.fromData(finalOut, Array.from(a.shape), originalDtype);
 }
 
 export function wasmMinScalar(a: ArrayStorage, scalar: number): ArrayStorage | null {
@@ -133,20 +160,42 @@ export function wasmMinScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
   if (!kernel || !Ctor) return null;
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  ensureMemory(size * bpe * 2);
-  resetAllocator();
+  const outBytes = size * bpe;
 
-  const aPtr = copyIn(
-    f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype)
-  );
-  const outPtr = alloc(size * bpe);
-  kernel(aPtr, outPtr, size, scalar);
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const outData = copyOut(
-    outPtr,
+  wasmConfig.wasmCallCount++;
+
+  resetScratchAllocator();
+
+  let aPtr: number;
+  if (dtype === 'float16') {
+    aPtr = scratchCopyIn(
+      f16ToF32Input(a.data.subarray(a.offset, a.offset + size) as TypedArray, dtype)
+    );
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  }
+
+  kernel(aPtr, outRegion.ptr, size, scalar);
+
+  if (dtype === 'float16') {
+    const outData = copyOut(
+      outRegion.ptr,
+      size,
+      Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    );
+    outRegion.release();
+    const finalOut = f32ToF16Output(outData, dtype);
+    return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
+  }
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    dtype,
+    outRegion,
     size,
     Ctor as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
   );
-  const finalOut = f32ToF16Output(outData, dtype);
-  return ArrayStorage.fromData(finalOut, Array.from(a.shape), dtype);
 }

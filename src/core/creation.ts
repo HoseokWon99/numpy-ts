@@ -64,10 +64,10 @@ export function ones(shape: number[], dtype: DType = DEFAULT_DTYPE): NDArrayCore
 }
 
 /**
- * Create an uninitialized array (zeros in JS)
+ * Create an uninitialized array
  */
 export function empty(shape: number[], dtype: DType = DEFAULT_DTYPE): NDArrayCore {
-  return zeros(shape, dtype);
+  return new NDArrayCore(ArrayStorage.empty(shape, dtype));
 }
 
 /**
@@ -91,12 +91,8 @@ export function full(
     }
   }
 
-  const Constructor = getTypedArrayConstructor(actualDtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create full array with dtype ${actualDtype}`);
-  }
-  const size = shape.reduce((a, b) => a * b, 1);
-  const data = new Constructor(size);
+  const storage = ArrayStorage.empty(shape, actualDtype);
+  const data = storage.data;
 
   if (isBigIntDType(actualDtype)) {
     const bigintValue =
@@ -108,7 +104,6 @@ export function full(
     (data as Exclude<TypedArray, BigInt64Array | BigUint64Array>).fill(Number(fill_value));
   }
 
-  const storage = ArrayStorage.fromData(data, shape, actualDtype);
   return new NDArrayCore(storage);
 }
 
@@ -182,13 +177,8 @@ export function array(data: unknown, dtype?: DType): NDArrayCore {
 
   const isComplex = isComplexDType(actualDtype);
 
-  const Constructor = getTypedArrayConstructor(actualDtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create array with dtype ${actualDtype}`);
-  }
-
-  const physicalSize = isComplex ? size * 2 : size;
-  const typedData = new Constructor(physicalSize);
+  const storage = ArrayStorage.empty(shape, actualDtype);
+  const typedData = storage.data;
   const flatData = flattenKeepBigInt(data);
 
   if (isBigIntDType(actualDtype)) {
@@ -230,7 +220,6 @@ export function array(data: unknown, dtype?: DType): NDArrayCore {
     }
   }
 
-  const storage = ArrayStorage.fromData(typedData, shape, actualDtype);
   return new NDArrayCore(storage);
 }
 
@@ -257,12 +246,8 @@ export function arange(
 
   const length = Math.max(0, Math.ceil((actualStop - actualStart) / step));
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create arange array with dtype ${dtype}`);
-  }
-
-  const data = new Constructor(length);
+  const storage = ArrayStorage.empty([length], dtype);
+  const data = storage.data;
 
   if (isBigIntDType(dtype)) {
     for (let i = 0; i < length; i++) {
@@ -278,7 +263,6 @@ export function arange(
     }
   }
 
-  const storage = ArrayStorage.fromData(data, [length], dtype);
   return new NDArrayCore(storage);
 }
 
@@ -303,12 +287,8 @@ export function linspace(
     return array([start], dtype);
   }
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create linspace array with dtype ${dtype}`);
-  }
-
-  const data = new Constructor(num);
+  const storage = ArrayStorage.empty([num], dtype);
+  const data = storage.data;
   const step = (stop - start) / (num - 1);
 
   if (isBigIntDType(dtype)) {
@@ -325,7 +305,6 @@ export function linspace(
     }
   }
 
-  const storage = ArrayStorage.fromData(data, [num], dtype);
   return new NDArrayCore(storage);
 }
 
@@ -351,12 +330,8 @@ export function logspace(
     return array([Math.pow(base, start)], dtype);
   }
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create logspace array with dtype ${dtype}`);
-  }
-
-  const data = new Constructor(num);
+  const storage = ArrayStorage.empty([num], dtype);
+  const data = storage.data;
   const step = (stop - start) / (num - 1);
 
   if (isBigIntDType(dtype)) {
@@ -376,7 +351,6 @@ export function logspace(
     }
   }
 
-  const storage = ArrayStorage.fromData(data, [num], dtype);
   return new NDArrayCore(storage);
 }
 
@@ -412,12 +386,8 @@ export function geomspace(
     throw new Error('Geometric sequence cannot contain both positive and negative values');
   }
 
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Cannot create geomspace array with dtype ${dtype}`);
-  }
-
-  const data = new Constructor(num);
+  const storage = ArrayStorage.empty([num], dtype);
+  const data = storage.data;
   const logStart = Math.log(Math.abs(start));
   const logStop = Math.log(Math.abs(stop));
   const step = (logStop - logStart) / (num - 1);
@@ -439,7 +409,6 @@ export function geomspace(
     }
   }
 
-  const storage = ArrayStorage.fromData(data, [num], dtype);
   return new NDArrayCore(storage);
 }
 
@@ -614,11 +583,11 @@ export function require(
 
 // Helper: flatten an NDArrayCore to 1D
 function flattenCore(a: NDArrayCore): NDArrayCore {
-  const data = a.data;
-  const storage = ArrayStorage.fromData(
-    data.slice() as typeof data,
-    [data.length],
-    a.dtype as DType
+  const srcData = a.data;
+  const storage = ArrayStorage.empty([srcData.length], a.dtype as DType);
+  const data = storage.data;
+  (data as unknown as { set(src: ArrayLike<number | bigint>): void }).set(
+    srcData as unknown as ArrayLike<number | bigint>
   );
   return fromStorage(storage);
 }
@@ -812,12 +781,9 @@ export function fromfunction(
   dtype: DType = DEFAULT_DTYPE
 ): NDArrayCore {
   const size = shape.reduce((a, b) => a * b, 1);
-  const Constructor = getTypedArrayConstructor(dtype);
-  if (!Constructor) {
-    throw new Error(`Unsupported dtype: ${dtype}`);
-  }
+  const storage = ArrayStorage.empty(shape, dtype);
+  const data = storage.data;
 
-  const data = new Constructor(size);
   const strides: number[] = [];
   let strideVal = 1;
   for (let i = shape.length - 1; i >= 0; i--) {
@@ -835,7 +801,6 @@ export function fromfunction(
     (data as Float64Array)[flatIdx] = func(...indices);
   }
 
-  const storage = ArrayStorage.fromData(data, shape, dtype);
   return fromStorage(storage);
 }
 

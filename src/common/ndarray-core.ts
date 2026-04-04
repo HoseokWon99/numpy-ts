@@ -573,13 +573,38 @@ export class NDArrayCore {
     if (this._storage.isCContiguous) {
       const data = this._storage.data;
       const bytesPerElement = data.BYTES_PER_ELEMENT;
-      const offset = this._storage.offset * bytesPerElement;
+      const offset = data.byteOffset + this._storage.offset * bytesPerElement;
       const length = this.size * bytesPerElement;
       return data.buffer.slice(offset, offset + length) as ArrayBuffer;
     }
     const copy = this.copy();
     const data = copy._storage.data;
-    return data.buffer.slice(0, this.size * data.BYTES_PER_ELEMENT) as ArrayBuffer;
+    return data.buffer.slice(
+      data.byteOffset,
+      data.byteOffset + this.size * data.BYTES_PER_ELEMENT
+    ) as ArrayBuffer;
+  }
+
+  /**
+   * Eagerly free the WASM memory backing this array.
+   *
+   * In normal usage, WASM memory is freed automatically when the array is
+   * garbage collected. Call dispose() to free immediately in tight loops,
+   * benchmarks, or resource-sensitive contexts.
+   *
+   * Also available as `[Symbol.dispose]` on supported runtimes, enabling
+   * the `using` keyword for automatic scope-based cleanup:
+   * ```ts
+   * {
+   *   using result = np.add(a, b);
+   *   // use result...
+   * } // automatically freed here
+   * ```
+   * Safari does not yet support `Symbol.dispose` — use `.dispose()` directly
+   * for cross-browser compatibility.
+   */
+  dispose(): void {
+    this._storage.dispose();
   }
 
   /**
@@ -601,6 +626,15 @@ export class NDArrayCore {
     }
     return this.get(args);
   }
+  // Symbol.dispose declaration for TypeScript (conditionally defined below)
+  [Symbol.dispose]?: () => void;
+}
+
+// Symbol.dispose support for the `using` keyword (automatic scope-based cleanup).
+// Safari does not yet support Symbol.dispose, so we define it conditionally.
+// Users on Safari can call .dispose() directly instead.
+if (typeof Symbol.dispose !== 'undefined') {
+  NDArrayCore.prototype[Symbol.dispose] = NDArrayCore.prototype.dispose;
 }
 
 // Re-export types

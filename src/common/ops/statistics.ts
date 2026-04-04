@@ -16,6 +16,7 @@ import {
 } from '../dtype';
 import { wasmCorrelate } from '../wasm/correlate';
 import { wasmConvolve } from '../wasm/convolve';
+import { wasmMatmul } from '../wasm/matmul';
 
 /**
  * Count number of occurrences of each value in array of non-negative ints.
@@ -54,24 +55,26 @@ export function bincount(
       throw new Error('weights array must have same length as x');
     }
     const weightsData = weights.data;
-    const resultData = new Float64Array(outputSize);
+    const result = ArrayStorage.empty([outputSize], 'float64');
+    const resultData = result.data as Float64Array;
 
     for (let i = 0; i < size; i++) {
       const idx = Number(xData[i]);
       resultData[idx]! += Number(weightsData[i]);
     }
 
-    return ArrayStorage.fromData(resultData, [outputSize], 'float64');
+    return result;
   } else {
     // Unweighted bincount
-    const resultData = new Float64Array(outputSize);
+    const result = ArrayStorage.empty([outputSize], 'float64');
+    const resultData = result.data as Float64Array;
 
     for (let i = 0; i < size; i++) {
       const idx = Number(xData[i]);
       resultData[idx]!++;
     }
 
-    return ArrayStorage.fromData(resultData, [outputSize], 'float64');
+    return result;
   }
 }
 
@@ -95,7 +98,8 @@ export function digitize(
   const xSize = x.size;
   const numBins = bins.size;
 
-  const resultData = new Float64Array(xSize);
+  const result = ArrayStorage.empty([...x.shape], 'float64');
+  const resultData = result.data as Float64Array;
 
   // Check if bins is monotonically increasing or decreasing
   let increasing = true;
@@ -141,7 +145,7 @@ export function digitize(
     resultData[i] = idx;
   }
 
-  return ArrayStorage.fromData(resultData, [...x.shape], 'float64');
+  return result;
 }
 
 // Binary search helpers
@@ -253,7 +257,8 @@ export function histogram(
   }
 
   const numBins = binEdges.length - 1;
-  const hist = new Float64Array(numBins);
+  const histStorage = ArrayStorage.zeros([numBins], 'float64');
+  const hist = histStorage.data as Float64Array;
 
   // Compute histogram
   const weightsData = weights?.data;
@@ -297,7 +302,7 @@ export function histogram(
   }
 
   return {
-    hist: ArrayStorage.fromData(hist, [numBins], 'float64'),
+    hist: histStorage,
     bin_edges: ArrayStorage.fromData(new Float64Array(binEdges), [binEdges.length], 'float64'),
   };
 }
@@ -441,7 +446,8 @@ export function histogram2d(
 
   const nx = xEdges.length - 1;
   const ny = yEdges.length - 1;
-  const hist = new Float64Array(nx * ny);
+  const histStorage = ArrayStorage.zeros([nx, ny], 'float64');
+  const hist = histStorage.data as Float64Array;
 
   // Compute histogram
   const weightsData = weights?.data;
@@ -492,7 +498,7 @@ export function histogram2d(
   }
 
   return {
-    hist: ArrayStorage.fromData(hist, [nx, ny], 'float64'),
+    hist: histStorage,
     x_edges: ArrayStorage.fromData(new Float64Array(xEdges), [xEdges.length], 'float64'),
     y_edges: ArrayStorage.fromData(new Float64Array(yEdges), [yEdges.length], 'float64'),
   };
@@ -577,7 +583,8 @@ export function histogramdd(
   // Compute histogram shape
   const histShape = binCounts.slice();
   const histSize = histShape.reduce((a, b) => a * b, 1);
-  const hist = new Float64Array(histSize);
+  const histStorage = ArrayStorage.zeros(histShape, 'float64');
+  const hist = histStorage.data as Float64Array;
 
   // Compute strides for indexing into histogram
   const strides: number[] = new Array(D);
@@ -649,7 +656,7 @@ export function histogramdd(
   );
 
   return {
-    hist: ArrayStorage.fromData(hist, histShape, 'float64'),
+    hist: histStorage,
     edges: edgeStorages,
   };
 }
@@ -722,12 +729,13 @@ export function correlate(
 
     // Pack into interleaved format and return based on mode
     const packResult = (re: Float64Array, im: Float64Array, len: number, start: number = 0) => {
-      const result = new Float64Array(len * 2);
+      const storage = ArrayStorage.empty([len], 'complex128');
+      const result = storage.data as Float64Array;
       for (let i = 0; i < len; i++) {
         result[i * 2] = re[start + i]!;
         result[i * 2 + 1] = im[start + i]!;
       }
-      return ArrayStorage.fromData(result, [len], 'complex128');
+      return storage;
     };
 
     if (mode === 'full') {
@@ -749,20 +757,23 @@ export function correlate(
     const wasmData = wasmFull.data;
     if (mode === 'same') {
       const start = Math.floor((fullLen - aLen) / 2);
-      const result = new Float64Array(aLen);
+      const sameResult = ArrayStorage.empty([aLen], wasmFull.dtype);
+      const result = sameResult.data as Float64Array;
       for (let i = 0; i < aLen; i++) result[i] = wasmData[start + i] as number;
-      return ArrayStorage.fromData(result, [aLen], wasmFull.dtype);
+      return sameResult;
     } else {
       const validLen = Math.max(aLen, vLen) - Math.min(aLen, vLen) + 1;
       const start = Math.min(aLen, vLen) - 1;
-      const result = new Float64Array(validLen);
+      const validResult = ArrayStorage.empty([validLen], wasmFull.dtype);
+      const result = validResult.data as Float64Array;
       for (let i = 0; i < validLen; i++) result[i] = wasmData[start + i] as number;
-      return ArrayStorage.fromData(result, [validLen], wasmFull.dtype);
+      return validResult;
     }
   }
 
   // Real arrays — JS fallback
-  const fullResult = new Float64Array(fullLen);
+  const fullStorage = ArrayStorage.empty([fullLen], 'float64');
+  const fullResult = fullStorage.data as Float64Array;
 
   for (let k = 0; k < fullLen; k++) {
     let sum = 0;
@@ -780,22 +791,26 @@ export function correlate(
 
   // Return based on mode
   if (mode === 'full') {
-    return ArrayStorage.fromData(fullResult, [fullLen], 'float64');
+    return fullStorage;
   } else if (mode === 'same') {
     const start = Math.floor((fullLen - aLen) / 2);
-    const result = new Float64Array(aLen);
+    const sameStorage = ArrayStorage.empty([aLen], 'float64');
+    const result = sameStorage.data as Float64Array;
     for (let i = 0; i < aLen; i++) {
       result[i] = fullResult[start + i]!;
     }
-    return ArrayStorage.fromData(result, [aLen], 'float64');
+    fullStorage.dispose();
+    return sameStorage;
   } else {
     const validLen = Math.max(aLen, vLen) - Math.min(aLen, vLen) + 1;
     const start = Math.min(aLen, vLen) - 1;
-    const result = new Float64Array(validLen);
+    const validStorage = ArrayStorage.empty([validLen], 'float64');
+    const result = validStorage.data as Float64Array;
     for (let i = 0; i < validLen; i++) {
       result[i] = fullResult[start + i]!;
     }
-    return ArrayStorage.fromData(result, [validLen], 'float64');
+    fullStorage.dispose();
+    return validStorage;
   }
 }
 
@@ -825,15 +840,17 @@ export function convolve(
       const wasmData = wasmFull.data;
       if (mode === 'same') {
         const start = Math.floor((fullLen - aLen) / 2);
-        const result = new Float64Array(aLen);
+        const sameResult = ArrayStorage.empty([aLen], wasmFull.dtype);
+        const result = sameResult.data as Float64Array;
         for (let i = 0; i < aLen; i++) result[i] = wasmData[start + i] as number;
-        return ArrayStorage.fromData(result, [aLen], wasmFull.dtype);
+        return sameResult;
       } else {
         const validLen = Math.max(aLen, vLen) - Math.min(aLen, vLen) + 1;
         const start = Math.min(aLen, vLen) - 1;
-        const result = new Float64Array(validLen);
+        const validResult = ArrayStorage.empty([validLen], wasmFull.dtype);
+        const result = validResult.data as Float64Array;
         for (let i = 0; i < validLen; i++) result[i] = wasmData[start + i] as number;
-        return ArrayStorage.fromData(result, [validLen], wasmFull.dtype);
+        return validResult;
       }
     }
   }
@@ -981,9 +998,9 @@ export function cov(
 
         const divisor = n - effectiveDdof;
         if (divisor <= 0) {
-          const nanResult = new Float64Array(8);
-          nanResult.fill(NaN);
-          return ArrayStorage.fromData(nanResult, [2, 2], 'complex128');
+          const nanStorage = ArrayStorage.empty([2, 2], 'complex128');
+          (nanStorage.data as Float64Array).fill(NaN);
+          return nanStorage;
         }
 
         varMRe /= divisor;
@@ -994,7 +1011,8 @@ export function cov(
         covYMIm /= divisor;
 
         // Pack into interleaved format: [[varM, covMY], [covYM, varY]]
-        const result = new Float64Array(8);
+        const resultStorage = ArrayStorage.empty([2, 2], 'complex128');
+        const result = resultStorage.data as Float64Array;
         result[0] = varMRe;
         result[1] = varMIm; // [0,0]
         result[2] = covMYRe;
@@ -1003,7 +1021,7 @@ export function cov(
         result[5] = covYMIm; // [1,0]
         result[6] = varYRe;
         result[7] = varYIm; // [1,1]
-        return ArrayStorage.fromData(result, [2, 2], 'complex128');
+        return resultStorage;
       }
 
       // Real 1D case with y
@@ -1126,11 +1144,12 @@ export function cov(
     }
 
     // Compute complex covariance matrix (Hermitian: cov[i,j] = conj(cov[j,i]))
-    const covMatrix = new Float64Array(numVars * numVars * 2);
+    const covStorage = ArrayStorage.empty([numVars, numVars], 'complex128');
+    const covMatrix = covStorage.data as Float64Array;
 
     if (divisor <= 0) {
       covMatrix.fill(NaN);
-      return ArrayStorage.fromData(covMatrix, [numVars, numVars], 'complex128');
+      return covStorage;
     }
 
     for (let i = 0; i < numVars; i++) {
@@ -1155,13 +1174,14 @@ export function cov(
       }
     }
 
-    return ArrayStorage.fromData(covMatrix, [numVars, numVars], 'complex128');
+    return covStorage;
   }
 
-  // Real 2D case — center data into Float64Array, then direct dot products.
+  // Real 2D case — center data, then cov = centered @ centered^T / divisor.
 
-  // Step 1: Build centered matrix as contiguous [numVars × numObs] Float64Array
-  const centered = new Float64Array(numVars * numObs);
+  // Step 1: Build centered matrix in WASM [numVars × numObs]
+  const centeredStorage = ArrayStorage.empty([numVars, numObs], 'float64');
+  const centered = centeredStorage.data as Float64Array;
   for (let i = 0; i < numVars; i++) {
     let sum = 0;
     for (let j = 0; j < numObs; j++) {
@@ -1176,14 +1196,38 @@ export function cov(
     }
   }
 
-  // Step 2: Compute cov = centered @ centered^T / divisor
-  const covMatrix = new Float64Array(numVars * numVars);
-
   if (divisor <= 0) {
-    covMatrix.fill(NaN);
-    return ArrayStorage.fromData(covMatrix, [numVars, numVars], 'float64');
+    centeredStorage.dispose();
+    const covStorage = ArrayStorage.empty([numVars, numVars], 'float64');
+    (covStorage.data as Float64Array).fill(NaN);
+    return covStorage;
   }
 
+  // Step 2: cov = centered @ centeredT / divisor — use WASM matmul
+  // Create explicit transpose (contiguous) for WASM matmul
+  const centeredTStorage = ArrayStorage.empty([numObs, numVars], 'float64');
+  const centeredT = centeredTStorage.data as Float64Array;
+  for (let i = 0; i < numVars; i++) {
+    for (let j = 0; j < numObs; j++) {
+      centeredT[j * numVars + i] = centered[i * numObs + j]!;
+    }
+  }
+
+  const product = wasmMatmul(centeredStorage, centeredTStorage);
+  centeredStorage.dispose();
+  centeredTStorage.dispose();
+
+  if (product) {
+    // Scale by 1/divisor in-place
+    const covMatrix = product.data as Float64Array;
+    const invDiv = 1.0 / divisor;
+    for (let i = 0; i < numVars * numVars; i++) covMatrix[i] = covMatrix[i]! * invDiv;
+    return product;
+  }
+
+  // JS fallback (shouldn't happen for float64 contiguous arrays)
+  const covStorage = ArrayStorage.empty([numVars, numVars], 'float64');
+  const covMatrix = covStorage.data as Float64Array;
   const invDiv = 1.0 / divisor;
   for (let i = 0; i < numVars; i++) {
     const rowI = i * numObs;
@@ -1198,8 +1242,7 @@ export function cov(
       covMatrix[j * numVars + i] = covVal;
     }
   }
-
-  return ArrayStorage.fromData(covMatrix, [numVars, numVars], 'float64');
+  return covStorage;
 }
 
 /**
@@ -1224,61 +1267,67 @@ export function corrcoef(x: ArrayStorage, y?: ArrayStorage, rowvar: boolean = tr
   // Compute covariance matrix
   const covMatrix = cov(x, y, rowvar, false);
 
-  const covData = covMatrix.data;
-  const shape = covMatrix.shape;
-  const n = shape[0]!;
+  try {
+    const covData = covMatrix.data;
+    const shape = covMatrix.shape;
+    const n = shape[0]!;
 
-  if (isComplex) {
-    // Complex correlation coefficients
+    if (isComplex) {
+      // Complex correlation coefficients
+      // corr[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
+      // Diagonal elements (variances) are real, so sqrt(var_i * var_j) is real
+      const corrStorage = ArrayStorage.empty([n, n], 'complex128');
+      const corrData = corrStorage.data as Float64Array;
+
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          // Get cov[i,j] (complex)
+          const covIJRe = (covData as Float64Array)[(i * n + j) * 2]!;
+          const covIJIm = (covData as Float64Array)[(i * n + j) * 2 + 1]!;
+          // Variances are real (imaginary part is 0 for diagonal elements)
+          const varI = (covData as Float64Array)[(i * n + i) * 2]!;
+          const varJ = (covData as Float64Array)[(j * n + j) * 2]!;
+
+          const outIdx = (i * n + j) * 2;
+          if (varI <= 0 || varJ <= 0) {
+            corrData[outIdx] = NaN;
+            corrData[outIdx + 1] = NaN;
+          } else {
+            const divisor = Math.sqrt(varI * varJ);
+            corrData[outIdx] = covIJRe / divisor;
+            corrData[outIdx + 1] = covIJIm / divisor;
+          }
+        }
+      }
+
+      return corrStorage;
+    }
+
+    // Real correlation coefficients
     // corr[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
-    // Diagonal elements (variances) are real, so sqrt(var_i * var_j) is real
-    const corrData = new Float64Array(n * n * 2);
+    const corrStorage = ArrayStorage.empty([n, n], 'float64');
+    const corrData = corrStorage.data as Float64Array;
+    const cData = covData as Float64Array;
+
+    // Precompute 1/sqrt(variance) for each variable
+    const invStd = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const v = cData[i * n + i]!;
+      invStd[i] = v > 0 ? 1.0 / Math.sqrt(v) : NaN;
+    }
 
     for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        // Get cov[i,j] (complex)
-        const covIJRe = (covData as Float64Array)[(i * n + j) * 2]!;
-        const covIJIm = (covData as Float64Array)[(i * n + j) * 2 + 1]!;
-        // Variances are real (imaginary part is 0 for diagonal elements)
-        const varI = (covData as Float64Array)[(i * n + i) * 2]!;
-        const varJ = (covData as Float64Array)[(j * n + j) * 2]!;
-
-        const outIdx = (i * n + j) * 2;
-        if (varI <= 0 || varJ <= 0) {
-          corrData[outIdx] = NaN;
-          corrData[outIdx + 1] = NaN;
-        } else {
-          const divisor = Math.sqrt(varI * varJ);
-          corrData[outIdx] = covIJRe / divisor;
-          corrData[outIdx + 1] = covIJIm / divisor;
-        }
+      for (let j = i; j < n; j++) {
+        const val = cData[i * n + j]! * invStd[i]! * invStd[j]!;
+        corrData[i * n + j] = val;
+        corrData[j * n + i] = val;
       }
     }
 
-    return ArrayStorage.fromData(corrData, [n, n], 'complex128');
+    return corrStorage;
+  } finally {
+    covMatrix.dispose();
   }
-
-  // Real correlation coefficients
-  // corr[i,j] = cov[i,j] / sqrt(cov[i,i] * cov[j,j])
-  const corrData = new Float64Array(n * n);
-  const cData = covData as Float64Array;
-
-  // Precompute 1/sqrt(variance) for each variable
-  const invStd = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const v = cData[i * n + i]!;
-    invStd[i] = v > 0 ? 1.0 / Math.sqrt(v) : NaN;
-  }
-
-  for (let i = 0; i < n; i++) {
-    for (let j = i; j < n; j++) {
-      const val = cData[i * n + j]! * invStd[i]! * invStd[j]!;
-      corrData[i * n + j] = val;
-      corrData[j * n + i] = val;
-    }
-  }
-
-  return ArrayStorage.fromData(corrData, [n, n], 'float64');
 }
 
 /**
@@ -1341,13 +1390,14 @@ export function histogram_bin_edges(
   numBins = Math.max(1, Math.round(numBins));
 
   // Compute bin edges
-  const binEdges = new Float64Array(numBins + 1);
+  const edgeStorage = ArrayStorage.empty([numBins + 1], 'float64');
+  const binEdges = edgeStorage.data as Float64Array;
   const step = (maxVal - minVal) / numBins;
   for (let i = 0; i <= numBins; i++) {
     binEdges[i] = minVal + i * step;
   }
 
-  return ArrayStorage.fromData(binEdges, [numBins + 1], 'float64');
+  return edgeStorage;
 }
 
 /**
@@ -1553,11 +1603,13 @@ export function trapezoid(
   const yDtypeND = y.dtype;
   const useF16ND = yDtypeND === 'float16' && hasFloat16;
   const useF32ND = yDtypeND === 'float32';
-  const resultData = useF16ND
-    ? new Float16Array(outSize)
+  const outDtype = useF16ND
+    ? ('float16' as const)
     : useF32ND
-      ? new Float32Array(outSize)
-      : new Float64Array(outSize);
+      ? ('float32' as const)
+      : ('float64' as const);
+  const resultStorage = ArrayStorage.empty(outShape, outDtype);
+  const resultData = resultStorage.data;
 
   // Compute strides for the input array
   const yStrides: number[] = new Array(ndim);
@@ -1660,13 +1712,9 @@ export function trapezoid(
   }
 
   if (outShape.length === 0) {
-    return resultData[0]!;
+    resultStorage.dispose();
+    return Number(resultData[0]!);
   }
 
-  const outDtype = useF16ND
-    ? ('float16' as const)
-    : useF32ND
-      ? ('float32' as const)
-      : ('float64' as const);
-  return ArrayStorage.fromData(resultData as unknown as TypedArray, outShape, outDtype);
+  return resultStorage;
 }

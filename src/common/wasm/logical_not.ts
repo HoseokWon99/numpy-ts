@@ -12,8 +12,9 @@ import {
   logical_not_i32,
   logical_not_i16,
   logical_not_i8,
+  logical_not_f16,
 } from './bins/logical_not.wasm';
-import { ensureMemory, resetAllocator, copyIn, alloc, copyOut } from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr } from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -25,6 +26,7 @@ type UnaryFn = (aPtr: number, outPtr: number, N: number) => void;
 const kernels: Partial<Record<DType, UnaryFn>> = {
   float64: logical_not_f64,
   float32: logical_not_f32,
+  float16: logical_not_f16 as unknown as UnaryFn, // operates on raw u16 bits
   int64: logical_not_i64,
   uint64: logical_not_i64,
   int32: logical_not_i32,
@@ -39,6 +41,7 @@ type AnyTypedArrayCtor = new (length: number) => TypedArray;
 const inputCtorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
   float64: Float64Array,
   float32: Float32Array,
+  float16: Float16Array as unknown as AnyTypedArrayCtor,
   int64: BigInt64Array,
   uint64: BigUint64Array,
   int32: Int32Array,
@@ -60,27 +63,33 @@ export function wasmLogicalNot(a: ArrayStorage): ArrayStorage | null {
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 
   const dtype = a.dtype;
+
   const kernel = kernels[dtype];
   const InCtor = inputCtorMap[dtype];
   if (!kernel || !InCtor) return null;
 
   const bpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
-  const aBytes = size * bpe;
   const outBytes = size; // u8 output
 
-  ensureMemory(aBytes + outBytes);
-  resetAllocator();
+  const outRegion = wasmMalloc(outBytes);
+  if (!outRegion) return null;
 
-  const aPtr = copyIn(a.data.subarray(a.offset, a.offset + size) as TypedArray);
-  const outPtr = alloc(outBytes);
+  wasmConfig.wasmCallCount++;
 
-  kernel(aPtr, outPtr, size);
+  resetScratchAllocator();
+  const aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
 
-  const outData = copyOut(
-    outPtr,
+  kernel(aPtr, outRegion.ptr, size);
+
+  return ArrayStorage.fromWasmRegion(
+    Array.from(a.shape),
+    'bool',
+    outRegion,
     size,
-    Uint8Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
+    Uint8Array as unknown as new (
+      buffer: ArrayBuffer,
+      byteOffset: number,
+      length: number
+    ) => TypedArray
   );
-
-  return ArrayStorage.fromData(outData, Array.from(a.shape), 'bool');
 }

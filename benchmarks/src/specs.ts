@@ -911,38 +911,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
-    specs.push({
-      name: `absolute [${sizes.medium.join('x')}]`,
-      category: 'math',
-      operation: 'absolute',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -100 },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `negative [${sizes.medium.join('x')}]`,
-      category: 'math',
-      operation: 'negative',
-      setup: {
-        a: { shape: sizes.medium, fill: 'ones' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `sign [${sizes.medium.join('x')}]`,
-      category: 'math',
-      operation: 'sign',
-      setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -100 },
-      },
-      iterations,
-      warmup,
-    });
+    // absolute, negative, sign are already in arithmetic — not duplicated here.
 
     // Trigonometric & hyperbolic functions
     specs.push({
@@ -2450,17 +2419,19 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       warmup,
     });
 
-    specs.push({
-      name: `unravel_index [${sizes.small}]`,
-      category: 'indexing',
-      operation: 'unravel_index',
-      setup: {
-        a: { shape: [sizes.small], fill: 'arange', dtype: 'int32' },
-        dims: { shape: [100, 100] },
-      },
-      iterations,
-      warmup,
-    });
+    for (const idxDtype of ['int32', 'int64', 'uint32', 'uint64'] as const) {
+      specs.push({
+        name: `unravel_index [${sizes.small}]${idxDtype === 'int32' ? '' : ` ${idxDtype}`}`,
+        category: 'indexing',
+        operation: 'unravel_index',
+        setup: {
+          a: { shape: [sizes.small], fill: 'arange', dtype: idxDtype },
+          dims: { shape: [100, 100] },
+        },
+        iterations,
+        warmup,
+      });
+    }
 
     // ========================================
     // Bitwise Operations Benchmarks
@@ -2987,7 +2958,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       category: 'logic',
       operation: 'signbit',
       setup: {
-        a: { shape: sizes.medium, fill: 'arange', value: -50 },
+        a: { shape: sizes.medium, fill: 'arange' },
       },
       iterations,
       warmup,
@@ -3369,27 +3340,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     // (categorized with their natural category)
     // ========================================
 
-    specs.push({
-      name: `zeros [${sizes.medium.join('x')}] complex128`,
-      category: 'creation',
-      operation: 'complex_zeros',
-      setup: {
-        shape: { shape: sizes.medium },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `ones [${sizes.medium.join('x')}] complex128`,
-      category: 'creation',
-      operation: 'complex_ones',
-      setup: {
-        shape: { shape: sizes.medium },
-      },
-      iterations,
-      warmup,
-    });
+    // complex_zeros and complex_ones removed — auto-generated as zeros/ones complex128
 
     specs.push({
       name: `real [${sizes.medium.join('x')}] complex128`,
@@ -3397,6 +3348,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
       operation: 'complex_real',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `real [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_real',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
       },
       iterations,
       warmup,
@@ -3414,6 +3376,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `imag [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_imag',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
       name: `conj [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_conj',
@@ -3425,11 +3398,33 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `conj [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_conj',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
       name: `angle [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_angle',
       setup: {
         a: { shape: sizes.medium, fill: 'complex' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
+      name: `angle [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_angle',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
       },
       iterations,
       warmup,
@@ -3448,6 +3443,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
+      name: `abs [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_abs',
+      setup: {
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
+      },
+      iterations,
+      warmup,
+    });
+
+    specs.push({
       name: `sqrt [${sizes.medium.join('x')}] complex128`,
       category: 'math',
       operation: 'complex_sqrt',
@@ -3459,37 +3465,17 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     });
 
     specs.push({
-      name: `sum [${sizes.medium.join('x')}] complex128`,
-      category: 'reductions',
-      operation: 'complex_sum',
+      name: `sqrt [${sizes.medium.join('x')}] complex64`,
+      category: 'math',
+      operation: 'complex_sqrt',
       setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
+        a: { shape: sizes.medium, fill: 'complex_small', dtype: 'complex64' },
       },
       iterations,
       warmup,
     });
 
-    specs.push({
-      name: `mean [${sizes.medium.join('x')}] complex128`,
-      category: 'reductions',
-      operation: 'complex_mean',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      warmup,
-    });
-
-    specs.push({
-      name: `prod [${sizes.medium.join('x')}] complex128`,
-      category: 'reductions',
-      operation: 'complex_prod',
-      setup: {
-        a: { shape: sizes.medium, fill: 'complex' },
-      },
-      iterations,
-      warmup,
-    });
+    // complex_sum, complex_mean, complex_prod removed — auto-generated as sum/mean/prod complex128
 
     // ========================================
     // Polynomial Benchmarks
@@ -3952,6 +3938,7 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'ldexp', // real float composition
     'modf', // real float decomposition
     'interp', // special setup, not dtype-variant-friendly
+    'unravel_index', // index dtype pinned manually (int32, int64, float64)
     'packbits', // always uint8
     'unpackbits', // always uint8
   ]);
@@ -3982,6 +3969,10 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
     'polyfit',
     'polyval',
     'roots',
+    // dot/inner/vdot: NumPy accumulates in f16 (overflows to inf), our WASM uses f32 (finite)
+    'dot',
+    'inner',
+    'vdot',
   ]);
 
   // Operations to skip for ALL int dtype variants (blocks both int and uint families)
@@ -4010,7 +4001,6 @@ export function getBenchmarkSpecs(mode: BenchmarkMode = 'standard'): BenchmarkCa
   // NumPy raises TypeError for these on unsigned integer arrays.
   const SKIP_UINT_OPERATIONS = new Set([
     'sign', // np.sign raises TypeError for uint types
-    'signbit', // np.signbit raises TypeError for uint types
   ]);
 
   // Operations to skip for NARROW int types (int8/int16) only.

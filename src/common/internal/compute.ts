@@ -127,7 +127,7 @@ export function elementwiseBinaryOp(
     !isBigIntDType(resultDtype)
   ) {
     const size = a.size;
-    const result = ArrayStorage.zeros(Array.from(aShape), resultDtype);
+    const result = ArrayStorage.empty(Array.from(aShape), resultDtype);
     const resultData = result.data;
     const aOff = a.offset;
     const bOff = b.offset;
@@ -155,7 +155,7 @@ export function elementwiseBinaryOp(
   const bBroadcast = broadcastTo(b, outputShape);
 
   // Create result storage
-  const result = ArrayStorage.zeros(outputShape, resultDtype);
+  const result = ArrayStorage.empty(outputShape, resultDtype);
   const resultData = result.data;
   const size = result.size;
 
@@ -222,11 +222,10 @@ export function elementwiseComparisonOp(
   const aBroadcast = broadcastTo(a, outputShape);
   const bBroadcast = broadcastTo(b, outputShape);
 
-  // Get output shape
-  const size = outputShape.reduce((a, b) => a * b, 1);
-
   // Create result array with bool dtype
-  const resultData = new Uint8Array(size);
+  const result = ArrayStorage.empty(outputShape, 'bool');
+  const resultData = result.data as Uint8Array;
+  const size = result.size;
 
   // Check if we need to convert BigInt to Number for comparison
   const needsConversion = isBigIntDType(a.dtype) || isBigIntDType(b.dtype);
@@ -243,7 +242,7 @@ export function elementwiseComparisonOp(
     resultData[i] = op(aVal, bVal) ? 1 : 0;
   }
 
-  return ArrayStorage.fromData(resultData, outputShape, 'bool');
+  return result;
 }
 
 /**
@@ -269,7 +268,7 @@ export function elementwiseUnaryOp(
   const resultDtype = preserveDtype ? dtype : isIntegerType ? 'float64' : dtype;
 
   // Create result storage
-  const result = ArrayStorage.zeros(shape, resultDtype);
+  const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const inputData = a.data;
   const off = a.offset;

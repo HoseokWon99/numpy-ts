@@ -8,12 +8,7 @@
  */
 
 import { ArrayStorage } from '../storage';
-import {
-  isComplexDType,
-  getComplexComponentDType,
-  getTypedArrayConstructor,
-  type DType,
-} from '../dtype';
+import { isComplexDType, getComplexComponentDType, type DType } from '../dtype';
 import { Complex } from '../complex';
 
 /**
@@ -33,7 +28,7 @@ export function real(a: ArrayStorage): ArrayStorage {
   if (isComplexDType(dtype)) {
     // Complex array: extract real parts
     const resultDtype = getComplexComponentDType(dtype);
-    const result = ArrayStorage.zeros(shape, resultDtype);
+    const result = ArrayStorage.empty(shape, resultDtype);
     const resultData = result.data;
     const srcData = a.data as Float64Array | Float32Array;
 
@@ -66,7 +61,7 @@ export function imag(a: ArrayStorage): ArrayStorage {
   if (isComplexDType(dtype)) {
     // Complex array: extract imaginary parts
     const resultDtype = getComplexComponentDType(dtype);
-    const result = ArrayStorage.zeros(shape, resultDtype);
+    const result = ArrayStorage.empty(shape, resultDtype);
     const resultData = result.data;
     const srcData = a.data as Float64Array | Float32Array;
 
@@ -100,18 +95,17 @@ export function conj(a: ArrayStorage): ArrayStorage {
 
   if (isComplexDType(dtype)) {
     // Complex array: negate imaginary parts
-    const Constructor = getTypedArrayConstructor(dtype)!;
-    const physicalSize = size * 2;
-    const resultData = new Constructor(physicalSize);
+    const result = ArrayStorage.empty(shape, dtype);
+    const resultData = result.data as Float64Array | Float32Array;
     const srcData = a.data as Float64Array | Float32Array;
 
     // Data is interleaved [re, im, re, im, ...]
     for (let i = 0; i < size; i++) {
-      (resultData as Float64Array | Float32Array)[i * 2] = srcData[i * 2]!; // real stays same
-      (resultData as Float64Array | Float32Array)[i * 2 + 1] = -srcData[i * 2 + 1]!; // negate imag
+      resultData[i * 2] = srcData[i * 2]!; // real stays same
+      resultData[i * 2 + 1] = -srcData[i * 2 + 1]!; // negate imag
     }
 
-    return ArrayStorage.fromData(resultData, shape, dtype);
+    return result;
   }
 
   // Real array: return copy
@@ -138,7 +132,7 @@ export function angle(a: ArrayStorage, deg: boolean = false): ArrayStorage {
   const size = a.size;
 
   // Result is always float64
-  const result = ArrayStorage.zeros(shape, 'float64');
+  const result = ArrayStorage.empty(shape, 'float64');
   const resultData = result.data as Float64Array;
 
   if (isComplexDType(dtype)) {
@@ -188,18 +182,19 @@ export function complexAbs(a: ArrayStorage): ArrayStorage {
   // For complex, result dtype is the component dtype
   const resultDtype = isComplexDType(dtype) ? getComplexComponentDType(dtype) : dtype;
 
-  const result = ArrayStorage.zeros(shape, resultDtype);
-  const resultData = result.data;
-
   if (isComplexDType(dtype)) {
+    const result = ArrayStorage.empty(shape, resultDtype);
+    const resultData = result.data as Float64Array | Float32Array;
     const srcData = a.data as Float64Array | Float32Array;
 
     for (let i = 0; i < size; i++) {
       const re = srcData[i * 2]!;
       const im = srcData[i * 2 + 1]!;
-      (resultData as Float64Array | Float32Array)[i] = Math.sqrt(re * re + im * im);
+      resultData[i] = Math.sqrt(re * re + im * im);
     }
+    return result;
   }
 
-  return result;
+  // Real array: return zeros (dead path but safe)
+  return ArrayStorage.zeros(shape, resultDtype);
 }

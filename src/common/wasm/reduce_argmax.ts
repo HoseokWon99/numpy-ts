@@ -7,6 +7,7 @@
  */
 
 import {
+  reduce_argmax_f64,
   reduce_argmax_f32,
   reduce_argmax_i64,
   reduce_argmax_i32,
@@ -16,8 +17,23 @@ import {
   reduce_argmax_u32,
   reduce_argmax_u16,
   reduce_argmax_u8,
+  reduce_argmax_strided_f64,
+  reduce_argmax_strided_f32,
+  reduce_argmax_strided_i32,
+  reduce_argmax_strided_u32,
+  reduce_argmax_strided_i16,
+  reduce_argmax_strided_u16,
+  reduce_argmax_strided_i8,
+  reduce_argmax_strided_u8,
 } from './bins/reduce_argmax.wasm';
-import { ensureMemory, resetAllocator, copyIn, f16ToF32Input } from './runtime';
+import {
+  resetScratchAllocator,
+  resolveInputPtr,
+  scratchCopyIn,
+  alloc,
+  copyOut,
+  f16ToF32Input,
+} from './runtime';
 import { ArrayStorage } from '../storage';
 import type { DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -27,7 +43,7 @@ const BASE_THRESHOLD = 64;
 type ReduceFn = (aPtr: number, N: number) => number | bigint;
 
 const kernels: Partial<Record<DType, ReduceFn>> = {
-  // float64 excluded: WASM scalar loop is slower than V8's JIT'd loop
+  float64: reduce_argmax_f64,
   float32: reduce_argmax_f32,
   float16: reduce_argmax_f32,
   int64: reduce_argmax_i64,
@@ -72,13 +88,77 @@ export function wasmReduceArgmax(a: ArrayStorage): number | null {
 
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
 
-  ensureMemory(size * bpe);
-  resetAllocator();
-
-  const aOff = a.offset;
-  const aRaw = a.data.subarray(aOff, aOff + size) as TypedArray;
-  const aData = f16ToF32Input(aRaw, dtype);
-  const aPtr = copyIn(aData);
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  let aPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + size) as TypedArray;
+    aPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    aPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, size, bpe);
+  }
 
   return Number(kernel(aPtr, size));
+}
+
+// --- Strided axis reduction (output is always int32) ---
+
+type StridedFn = (aPtr: number, outPtr: number, outer: number, axis: number, inner: number) => void;
+
+const stridedKernels: Partial<Record<DType, StridedFn>> = {
+  float64: reduce_argmax_strided_f64,
+  float32: reduce_argmax_strided_f32,
+  float16: reduce_argmax_strided_f32,
+  int32: reduce_argmax_strided_i32,
+  uint32: reduce_argmax_strided_u32,
+  int16: reduce_argmax_strided_i16,
+  uint16: reduce_argmax_strided_u16,
+  int8: reduce_argmax_strided_i8,
+  uint8: reduce_argmax_strided_u8,
+};
+
+/**
+ * WASM-accelerated strided argmax along an axis.
+ * Output dtype is always int32 (indices). Returns output ArrayStorage, or null if WASM can't handle.
+ */
+export function wasmReduceArgmaxStrided(
+  a: ArrayStorage,
+  outerSize: number,
+  axisSize: number,
+  innerSize: number
+): ArrayStorage | null {
+  if (!a.isCContiguous) return null;
+
+  const totalSize = outerSize * axisSize * innerSize;
+  if (totalSize < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
+
+  const dtype = a.dtype;
+  const kernel = stridedKernels[dtype];
+  const InCtor = ctorMap[dtype];
+  if (!kernel || !InCtor) return null;
+
+  const inBpe = (InCtor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
+  const outSize = outerSize * innerSize;
+
+  wasmConfig.wasmCallCount++;
+  resetScratchAllocator();
+  let inPtr: number;
+  if (dtype === 'float16') {
+    const aRaw = a.data.subarray(a.offset, a.offset + totalSize) as TypedArray;
+    inPtr = scratchCopyIn(f16ToF32Input(aRaw, dtype));
+  } else {
+    inPtr = resolveInputPtr(a.data, a.isWasmBacked, a.wasmPtr, a.offset, totalSize, inBpe);
+  }
+  const outPtr = alloc(outSize * 4); // i32 = 4 bytes
+
+  kernel(inPtr, outPtr, outerSize, axisSize, innerSize);
+
+  const OutCtor = Int32Array as unknown as new (
+    buf: ArrayBuffer,
+    off: number,
+    len: number
+  ) => TypedArray;
+  const outData = copyOut(outPtr, outSize, OutCtor);
+
+  return ArrayStorage.fromData(outData, [outSize], 'int32');
 }
