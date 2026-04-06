@@ -109,18 +109,23 @@ export function full(
 }
 
 // Helper functions for array()
+function isArrayLike(value: unknown): value is ArrayLike<unknown> {
+  return Array.isArray(value) || ArrayBuffer.isView(value);
+}
+
 function inferShape(data: unknown): number[] {
   const shape: number[] = [];
   let current = data;
-  while (Array.isArray(current)) {
+  while (isArrayLike(current)) {
     shape.push(current.length);
-    current = current[0];
+    current = (current as unknown[])[0];
   }
   return shape;
 }
 
 function containsBigInt(data: unknown): boolean {
   if (typeof data === 'bigint') return true;
+  if (data instanceof BigInt64Array || data instanceof BigUint64Array) return true;
   if (Array.isArray(data)) {
     return data.some((item) => containsBigInt(item));
   }
@@ -140,6 +145,10 @@ function flattenKeepBigInt(data: unknown): unknown[] {
   function flatten(arr: unknown): void {
     if (Array.isArray(arr)) {
       arr.forEach((item) => flatten(item));
+    } else if (ArrayBuffer.isView(arr)) {
+      for (let i = 0; i < (arr as ArrayLike<unknown>).length; i++) {
+        result.push((arr as ArrayLike<unknown>)[i]);
+      }
     } else {
       result.push(arr);
     }
