@@ -50,46 +50,45 @@ export fn dot_i32(a: [*]const i32, b: [*]const i32, out: [*]i32, K: u32) void {
 /// Computes the dot product of two i16 vectors of length K.
 /// out[0] = sum_k a[k] * b[k]
 /// Handles both signed (i16) and unsigned (u16) with wrapping arithmetic.
+/// Uses i32x4.dot_i16x8_s for pairwise multiply-accumulate into i32.
 export fn dot_i16(a: [*]const i16, b: [*]const i16, out: [*]i16, K: u32) void {
     const k_simd = K & ~@as(u32, 7); // floor to V8i16 (8-wide)
-    var acc: simd.V8i16 = @splat(0);
+    var acc: simd.V4i32 = @splat(0);
 
-    // SIMD loop: 8 i16s per iteration
+    // SIMD loop: 8 i16s per iteration via dot_i16x8_s
     var k: u32 = 0;
     while (k < k_simd) : (k += 8) {
-        acc +%= simd.load8_i16(a, k) *% simd.load8_i16(b, k);
+        acc +%= simd.dot_i16x8_s(simd.load8_i16(a, k), simd.load8_i16(b, k));
     }
 
     // Horizontal sum + scalar remainder
-    var sum: i16 = acc[0] +% acc[1] +% acc[2] +% acc[3] +% acc[4] +% acc[5] +% acc[6] +% acc[7];
+    var sum: i32 = acc[0] +% acc[1] +% acc[2] +% acc[3];
     while (k < K) : (k += 1) {
-        sum +%= a[k] *% b[k];
+        sum +%= @as(i32, a[k]) *% @as(i32, b[k]);
     }
-    out[0] = sum;
+    out[0] = @truncate(sum);
 }
 
 /// Computes the dot product of two i8 vectors of length K.
 /// out[0] = sum_k a[k] * b[k]
 /// Handles both signed (i8) and unsigned (u8) with wrapping arithmetic.
+/// Widens i8→i16, uses i32x4.dot_i16x8_s for pairwise accumulation into i32.
 export fn dot_i8(a: [*]const i8, b: [*]const i8, out: [*]i8, K: u32) void {
     const k_simd = K & ~@as(u32, 15); // floor to V16i8 (16-wide)
-    var acc: simd.V16i8 = @splat(0);
+    var acc: simd.V4i32 = @splat(0);
 
-    // SIMD loop: 16 i8s per iteration (widened i16 multiply via muladd)
+    // SIMD loop: 16 i8s per iteration via widening dot into i32
     var k: u32 = 0;
     while (k < k_simd) : (k += 16) {
-        acc = simd.muladd_i8x16(acc, simd.load16_i8(a, k), simd.load16_i8(b, k));
+        acc +%= simd.dot_i8x16_to_i32x4(simd.load16_i8(a, k), simd.load16_i8(b, k));
     }
 
-    // Horizontal sum of 16 lanes + scalar remainder
-    var sum: i8 = 0;
-    for (0..16) |lane| {
-        sum +%= acc[lane];
-    }
+    // Horizontal sum + scalar remainder
+    var sum: i32 = acc[0] +% acc[1] +% acc[2] +% acc[3];
     while (k < K) : (k += 1) {
-        sum +%= a[k] *% b[k];
+        sum +%= @as(i32, a[k]) *% @as(i32, b[k]);
     }
-    out[0] = sum;
+    out[0] = @truncate(sum);
 }
 
 // --- Tests ---

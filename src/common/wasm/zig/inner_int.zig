@@ -160,72 +160,73 @@ export fn inner_i32(a: [*]const i32, b: [*]const i32, c: [*]i32, M: u32, N: u32,
 /// Computes C = inner(A, B) for row-major i16 arrays.
 /// A is (M x K), B is (N x K), C is (M x N).
 /// Handles both signed (i16) and unsigned (u16) with wrapping arithmetic.
-/// Uses a 4×N register-blocked micro-kernel with 4-wide SIMD for the main loop, then smaller remainders.
+/// Uses i32x4.dot_i16x8_s for pairwise multiply-accumulate into i32.
+/// Uses a 4×N register-blocked micro-kernel for the main loop, then smaller remainders.
 export fn inner_i16(a: [*]const i16, b: [*]const i16, c: [*]i16, M: u32, N: u32, K: u32) void {
     var i: usize = 0;
     while (i + 4 <= M) : (i += 4) {
         for (0..N) |j| {
             const b_row = j * K;
-            var a0_0: simd.V8i16 = @splat(0);
-            var a0_1: simd.V8i16 = @splat(0);
-            var a1_0: simd.V8i16 = @splat(0);
-            var a1_1: simd.V8i16 = @splat(0);
-            var a2_0: simd.V8i16 = @splat(0);
-            var a2_1: simd.V8i16 = @splat(0);
-            var a3_0: simd.V8i16 = @splat(0);
-            var a3_1: simd.V8i16 = @splat(0);
+            var a0_0: simd.V4i32 = @splat(0);
+            var a0_1: simd.V4i32 = @splat(0);
+            var a1_0: simd.V4i32 = @splat(0);
+            var a1_1: simd.V4i32 = @splat(0);
+            var a2_0: simd.V4i32 = @splat(0);
+            var a2_1: simd.V4i32 = @splat(0);
+            var a3_0: simd.V4i32 = @splat(0);
+            var a3_1: simd.V4i32 = @splat(0);
 
             var k: usize = 0;
             while (k + 16 <= K) : (k += 16) {
                 const b0 = simd.load8_i16(b, b_row + k);
                 const b1 = simd.load8_i16(b, b_row + k + 8);
-                a0_0 +%= simd.load8_i16(a, (i + 0) * K + k) *% b0;
-                a0_1 +%= simd.load8_i16(a, (i + 0) * K + k + 8) *% b1;
-                a1_0 +%= simd.load8_i16(a, (i + 1) * K + k) *% b0;
-                a1_1 +%= simd.load8_i16(a, (i + 1) * K + k + 8) *% b1;
-                a2_0 +%= simd.load8_i16(a, (i + 2) * K + k) *% b0;
-                a2_1 +%= simd.load8_i16(a, (i + 2) * K + k + 8) *% b1;
-                a3_0 +%= simd.load8_i16(a, (i + 3) * K + k) *% b0;
-                a3_1 +%= simd.load8_i16(a, (i + 3) * K + k + 8) *% b1;
+                a0_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 0) * K + k), b0);
+                a0_1 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 0) * K + k + 8), b1);
+                a1_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 1) * K + k), b0);
+                a1_1 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 1) * K + k + 8), b1);
+                a2_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 2) * K + k), b0);
+                a2_1 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 2) * K + k + 8), b1);
+                a3_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 3) * K + k), b0);
+                a3_1 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 3) * K + k + 8), b1);
             }
             while (k + 8 <= K) : (k += 8) {
                 const bv = simd.load8_i16(b, b_row + k);
-                a0_0 +%= simd.load8_i16(a, (i + 0) * K + k) *% bv;
-                a1_0 +%= simd.load8_i16(a, (i + 1) * K + k) *% bv;
-                a2_0 +%= simd.load8_i16(a, (i + 2) * K + k) *% bv;
-                a3_0 +%= simd.load8_i16(a, (i + 3) * K + k) *% bv;
+                a0_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 0) * K + k), bv);
+                a1_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 1) * K + k), bv);
+                a2_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 2) * K + k), bv);
+                a3_0 +%= simd.dot_i16x8_s(simd.load8_i16(a, (i + 3) * K + k), bv);
             }
-            var s0: i16 = a0_0[0] +% a0_0[1] +% a0_0[2] +% a0_0[3] +% a0_0[4] +% a0_0[5] +% a0_0[6] +% a0_0[7] +% a0_1[0] +% a0_1[1] +% a0_1[2] +% a0_1[3] +% a0_1[4] +% a0_1[5] +% a0_1[6] +% a0_1[7];
-            var s1: i16 = a1_0[0] +% a1_0[1] +% a1_0[2] +% a1_0[3] +% a1_0[4] +% a1_0[5] +% a1_0[6] +% a1_0[7] +% a1_1[0] +% a1_1[1] +% a1_1[2] +% a1_1[3] +% a1_1[4] +% a1_1[5] +% a1_1[6] +% a1_1[7];
-            var s2: i16 = a2_0[0] +% a2_0[1] +% a2_0[2] +% a2_0[3] +% a2_0[4] +% a2_0[5] +% a2_0[6] +% a2_0[7] +% a2_1[0] +% a2_1[1] +% a2_1[2] +% a2_1[3] +% a2_1[4] +% a2_1[5] +% a2_1[6] +% a2_1[7];
-            var s3: i16 = a3_0[0] +% a3_0[1] +% a3_0[2] +% a3_0[3] +% a3_0[4] +% a3_0[5] +% a3_0[6] +% a3_0[7] +% a3_1[0] +% a3_1[1] +% a3_1[2] +% a3_1[3] +% a3_1[4] +% a3_1[5] +% a3_1[6] +% a3_1[7];
+            var s0: i32 = a0_0[0] +% a0_0[1] +% a0_0[2] +% a0_0[3] +% a0_1[0] +% a0_1[1] +% a0_1[2] +% a0_1[3];
+            var s1: i32 = a1_0[0] +% a1_0[1] +% a1_0[2] +% a1_0[3] +% a1_1[0] +% a1_1[1] +% a1_1[2] +% a1_1[3];
+            var s2: i32 = a2_0[0] +% a2_0[1] +% a2_0[2] +% a2_0[3] +% a2_1[0] +% a2_1[1] +% a2_1[2] +% a2_1[3];
+            var s3: i32 = a3_0[0] +% a3_0[1] +% a3_0[2] +% a3_0[3] +% a3_1[0] +% a3_1[1] +% a3_1[2] +% a3_1[3];
             while (k < K) : (k += 1) {
-                const bv = b[b_row + k];
-                s0 +%= a[(i + 0) * K + k] *% bv;
-                s1 +%= a[(i + 1) * K + k] *% bv;
-                s2 +%= a[(i + 2) * K + k] *% bv;
-                s3 +%= a[(i + 3) * K + k] *% bv;
+                const bv: i32 = b[b_row + k];
+                s0 +%= @as(i32, a[(i + 0) * K + k]) *% bv;
+                s1 +%= @as(i32, a[(i + 1) * K + k]) *% bv;
+                s2 +%= @as(i32, a[(i + 2) * K + k]) *% bv;
+                s3 +%= @as(i32, a[(i + 3) * K + k]) *% bv;
             }
-            c[(i + 0) * N + j] = s0;
-            c[(i + 1) * N + j] = s1;
-            c[(i + 2) * N + j] = s2;
-            c[(i + 3) * N + j] = s3;
+            c[(i + 0) * N + j] = @truncate(s0);
+            c[(i + 1) * N + j] = @truncate(s1);
+            c[(i + 2) * N + j] = @truncate(s2);
+            c[(i + 3) * N + j] = @truncate(s3);
         }
     }
     while (i < M) : (i += 1) {
         const a_row = i * K;
         for (0..N) |j| {
             const b_row = j * K;
-            var acc: simd.V8i16 = @splat(0);
+            var acc: simd.V4i32 = @splat(0);
             var k: usize = 0;
             while (k + 8 <= K) : (k += 8) {
-                acc +%= simd.load8_i16(a, a_row + k) *% simd.load8_i16(b, b_row + k);
+                acc +%= simd.dot_i16x8_s(simd.load8_i16(a, a_row + k), simd.load8_i16(b, b_row + k));
             }
-            var sum: i16 = acc[0] +% acc[1] +% acc[2] +% acc[3] +% acc[4] +% acc[5] +% acc[6] +% acc[7];
+            var sum: i32 = acc[0] +% acc[1] +% acc[2] +% acc[3];
             while (k < K) : (k += 1) {
-                sum +%= a[a_row + k] *% b[b_row + k];
+                sum +%= @as(i32, a[a_row + k]) *% @as(i32, b[b_row + k]);
             }
-            c[i * N + j] = sum;
+            c[i * N + j] = @truncate(sum);
         }
     }
 }
@@ -233,7 +234,7 @@ export fn inner_i16(a: [*]const i16, b: [*]const i16, c: [*]i16, M: u32, N: u32,
 /// Computes C = inner(A, B) for row-major i8 arrays.
 /// A is (M x K), B is (N x K), C is (M x N).
 /// Handles both signed (i8) and unsigned (u8) with wrapping arithmetic.
-/// Uses a 4×N register-blocked micro-kernel with 16-wide SIMD for the main loop, then smaller remainders.
+/// Widens i8→i16, uses i32x4.dot_i16x8_s for pairwise accumulation into i32.
 export fn inner_i8(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: u32) void {
     const k_simd = K & ~@as(u32, 15);
 
@@ -241,22 +242,19 @@ export fn inner_i8(a: [*]const i8, b: [*]const i8, c: [*]i8, M: u32, N: u32, K: 
         const a_row = i * K;
         for (0..N) |j| {
             const b_row = j * K;
-            var acc: simd.V16i8 = @splat(0);
+            var acc: simd.V4i32 = @splat(0);
 
             var k: u32 = 0;
             while (k < k_simd) : (k += 16) {
-                acc = simd.muladd_i8x16(acc, simd.load16_i8(a, a_row + k), simd.load16_i8(b, b_row + k));
+                acc +%= simd.dot_i8x16_to_i32x4(simd.load16_i8(a, a_row + k), simd.load16_i8(b, b_row + k));
             }
 
-            var sum: i8 = 0;
-            for (0..16) |lane| {
-                sum +%= acc[lane];
-            }
+            var sum: i32 = acc[0] +% acc[1] +% acc[2] +% acc[3];
             while (k < K) : (k += 1) {
-                sum +%= a[a_row + k] *% b[b_row + k];
+                sum +%= @as(i32, a[a_row + k]) *% @as(i32, b[b_row + k]);
             }
 
-            c[i * N + j] = sum;
+            c[i * N + j] = @truncate(sum);
         }
     }
 }
