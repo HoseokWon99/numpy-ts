@@ -66,7 +66,7 @@ export fn cholesky_f32(a: [*]const f32, out: [*]f32, n_arg: u32) u32 {
     for (0..N * N) |i| out[i] = 0;
 
     for (0..N) |j| {
-        // Diagonal
+        // 1. Diagonal: L[j,j] = sqrt(A[j,j] - sum(L[j,k]^2, k<j))
         const row_j = j * N;
         var dacc: simd.V4f32 = @splat(0);
         const j4 = j & ~@as(usize, 3);
@@ -86,7 +86,8 @@ export fn cholesky_f32(a: [*]const f32, out: [*]f32, n_arg: u32) u32 {
         out[j * N + j] = ljj;
         const inv_ljj = 1.0 / ljj;
 
-        // Off-diagonal
+        // 2. Off-diagonal: L[i,j] = (A[i,j] - sum(L[i,k]*L[j,k], k<j)) / L[j,j]
+        //    for all i > j — no branching, straight loop
         for (j + 1..N) |i| {
             const row_i = i * N;
             var acc: simd.V4f32 = @splat(0);
