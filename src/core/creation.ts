@@ -145,9 +145,10 @@ function flattenKeepBigInt(data: unknown): unknown[] {
   function flatten(arr: unknown): void {
     if (Array.isArray(arr)) {
       arr.forEach((item) => flatten(item));
-    } else if (ArrayBuffer.isView(arr)) {
-      for (let i = 0; i < (arr as ArrayLike<unknown>).length; i++) {
-        result.push((arr as ArrayLike<unknown>)[i]);
+    } else if (ArrayBuffer.isView(arr) && 'length' in arr) {
+      const view = arr as unknown as ArrayLike<unknown>;
+      for (let i = 0; i < view.length; i++) {
+        result.push(view[i]);
       }
     } else {
       result.push(arr);
