@@ -41,8 +41,7 @@ export function slice(storage: ArrayStorage, ...slices: (string | number)[]): Ar
       axis++;
       newOffset += slice * stride;
       continue;
-    }
-    else if (slice === 'newaxis') {
+    } else if (slice === 'newaxis') {
       newShape.push(1);
       newStrides.push(0);
     } else {
@@ -93,8 +92,7 @@ export function sliceKeepDim(storage: ArrayStorage, ...slices: string[]): ArrayS
       newOffset += slice * stride;
       newShape.push(1);
       newStrides.push(stride);
-    }
-    else if (slice === 'newaxis') {
+    } else if (slice === 'newaxis') {
       newShape.push(1);
       newStrides.push(0);
     } else {
