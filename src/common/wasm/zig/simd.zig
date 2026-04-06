@@ -221,6 +221,33 @@ pub inline fn muladd_i8x16(c_vec: V16i8, a_vec: V16i8, b_vec: V16i8) V16i8 {
     return @bitCast(@shuffle(u8, r_lo_bytes, r_hi_bytes, narrow));
 }
 
+/// Computes a *% b element-wise for V16i8 (no accumulator).
+/// Uses the same @bitCast widen-multiply-narrow approach as muladd_i8x16,
+/// but skips the c addition. Avoids the LLVM scalarization that occurs when
+/// muladd_i8x16 is called with c=zero (LLVM constant-folds the zero add,
+/// recognizes i8*i8, and scalarizes to 16× extract+mul+replace).
+pub inline fn mul_i8x16(a_vec: V16i8, b_vec: V16i8) V16i8 {
+    const a_bytes: V16u8 = @bitCast(a_vec);
+    const b_bytes: V16u8 = @bitCast(b_vec);
+    const zero: V16u8 = @splat(0);
+
+    const lo_even = @Vector(16, i32){ 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, 7, -1 };
+    const a_lo: V8i16 = @bitCast(@shuffle(u8, a_bytes, zero, lo_even));
+    const b_lo: V8i16 = @bitCast(@shuffle(u8, b_bytes, zero, lo_even));
+
+    const hi_even = @Vector(16, i32){ 8, -1, 9, -1, 10, -1, 11, -1, 12, -1, 13, -1, 14, -1, 15, -1 };
+    const a_hi: V8i16 = @bitCast(@shuffle(u8, a_bytes, zero, hi_even));
+    const b_hi: V8i16 = @bitCast(@shuffle(u8, b_bytes, zero, hi_even));
+
+    const r_lo = a_lo *% b_lo;
+    const r_hi = a_hi *% b_hi;
+
+    const r_lo_bytes: V16u8 = @bitCast(r_lo);
+    const r_hi_bytes: V16u8 = @bitCast(r_hi);
+    const narrow = @Vector(16, i32){ 0, 2, 4, 6, 8, 10, 12, 14, -1, -3, -5, -7, -9, -11, -13, -15 };
+    return @bitCast(@shuffle(u8, r_lo_bytes, r_hi_bytes, narrow));
+}
+
 // --- i32x4.dot_i16x8_s ---
 // Base SIMD128 instruction: pairwise multiply i16 pairs and sum into i32.
 // out[i] = a[2i] * b[2i] + a[2i+1] * b[2i+1]
@@ -338,7 +365,36 @@ pub inline fn min_f32x4(a: V4f32, b: V4f32) V4f32 {
 // --- Integer SIMD min/max ---
 // @select(T, a < b, a, b) pattern-matches to native WASM SIMD min/max instructions.
 // i32x4.min_s, i32x4.max_s, i16x8.min_s, etc. — all base SIMD128.
+// i64x2 has signed compare (i64x2.lt_s) but no unsigned compare.
+// For u64: use sign-bit flip (XOR 0x8000000000000000) to convert to signed domain.
 // NOTE: Do NOT change to @min/@max — LLVM scalarizes those.
+
+pub inline fn max_i64x2(a: V2i64, b: V2i64) V2i64 {
+    return @select(i64, a > b, a, b);
+}
+pub inline fn min_i64x2(a: V2i64, b: V2i64) V2i64 {
+    return @select(i64, a < b, a, b);
+}
+
+const SIGN_FLIP_64: V2i64 = @splat(@bitCast(@as(u64, 0x8000000000000000)));
+
+/// Element-wise max for V2u64 via sign-flip + signed compare.
+/// WASM has i64x2.gt_s but no unsigned variant.
+pub inline fn max_u64x2(a: V2u64, b: V2u64) V2u64 {
+    const sa: V2i64 = @bitCast(a);
+    const sb: V2i64 = @bitCast(b);
+    const fa = sa +% SIGN_FLIP_64;
+    const fb = sb +% SIGN_FLIP_64;
+    return @select(u64, fa > fb, a, b);
+}
+/// Element-wise min for V2u64 via sign-flip + signed compare.
+pub inline fn min_u64x2(a: V2u64, b: V2u64) V2u64 {
+    const sa: V2i64 = @bitCast(a);
+    const sb: V2i64 = @bitCast(b);
+    const fa = sa +% SIGN_FLIP_64;
+    const fb = sb +% SIGN_FLIP_64;
+    return @select(u64, fa < fb, a, b);
+}
 
 pub inline fn max_i32x4(a: V4i32, b: V4i32) V4i32 {
     return @select(i32, a > b, a, b);
