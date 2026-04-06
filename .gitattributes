@@ -8,3 +8,4 @@ benchmarks/** linguist-vendored
 wasm-bench/** linguist-vendored
 benchmarks/**/*.json linguist-generated
 benchmarks/**/*.html linguist-generated
+src/common/wasm/bins/**/*.wasm.ts linguist-generated
