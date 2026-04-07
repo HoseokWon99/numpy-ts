@@ -29,11 +29,11 @@ function parseCaller(stack: string): string | null {
   let best: string | null = null;
   let bestPriority = -1;
 
-  for (let i = 2; i < Math.min(lines.length, 15); i++) {
+  for (let i = 2; i < Math.min(lines.length, 25); i++) {
     const line = lines[i]!;
 
     // src/full/index.ts — the public API (np.sin, np.add, etc.)
-    let match = line.match(/at (\w+) .*\/full\/index\.ts/);
+    let match = line.match(/at (?:Module\.)?(\w+) .*\/full\/index\.ts/);
     if (match && bestPriority < 4) { best = match[1]!; bestPriority = 4; continue; }
 
     // src/core/linalg.ts namespace
