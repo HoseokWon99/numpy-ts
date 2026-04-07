@@ -11,6 +11,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  expectBothReject,
 } from './_helpers';
 
 const { array } = np;
@@ -53,19 +54,25 @@ result = np.fft.ifft(np.fft.fft(np.array(${JSON.stringify(data)}, dtype=${npDtyp
     });
 
     it(`fft.rfft ${dtype}`, () => {
+      const pyCode = `result = np.fft.rfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})).astype(np.complex128)`;
+      // rfft: expects real input — complex dtypes rejected by NumPy
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('rfft expects real-valued input, not complex', () => np.fft.rfft(array(data, dtype)), pyCode); if (_r === 'both-reject') return; }
+      }
       const jsResult = np.fft.rfft(array(data, dtype));
-      const pyResult = runNumPy(`
-result = np.fft.rfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})).astype(np.complex128)
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 
     it(`fft.irfft ${dtype}`, () => {
+      const pyCode = `result = np.fft.irfft(np.fft.rfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})))`;
+      // irfft round-trip through rfft — complex input to rfft rejected
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('rfft(complex) not supported, so irfft round-trip fails', () => { const r = np.fft.rfft(array(data, dtype)); np.fft.irfft(r); }, pyCode); if (_r === 'both-reject') return; }
+      }
       const rfftResult = np.fft.rfft(array(data, dtype));
       const jsResult = np.fft.irfft(rfftResult);
-      const pyResult = runNumPy(`
-result = np.fft.irfft(np.fft.rfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})))
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 
@@ -87,19 +94,24 @@ result = np.fft.ifft2(np.fft.fft2(np.array(${JSON.stringify(data2d)}, dtype=${np
     });
 
     it(`fft.rfft2 ${dtype}`, () => {
+      const pyCode = `result = np.fft.rfft2(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})).astype(np.complex128)`;
+      // rfft2: expects real input — complex rejected
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('rfft2 expects real-valued input', () => np.fft.rfft2(array(data2d, dtype)), pyCode); if (_r === 'both-reject') return; }
+      }
       const jsResult = np.fft.rfft2(array(data2d, dtype));
-      const pyResult = runNumPy(`
-result = np.fft.rfft2(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})).astype(np.complex128)
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 
     it(`fft.irfft2 ${dtype}`, () => {
+      const pyCode = `result = np.fft.irfft2(np.fft.rfft2(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})))`;
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('rfft2(complex) not supported', () => { const r = np.fft.rfft2(array(data2d, dtype)); np.fft.irfft2(r); }, pyCode); if (_r === 'both-reject') return; }
+      }
       const rfft2Result = np.fft.rfft2(array(data2d, dtype));
       const jsResult = np.fft.irfft2(rfft2Result);
-      const pyResult = runNumPy(`
-result = np.fft.irfft2(np.fft.rfft2(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})))
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 
@@ -121,19 +133,24 @@ result = np.fft.ifftn(np.fft.fftn(np.array(${JSON.stringify(data2d)}, dtype=${np
     });
 
     it(`fft.rfftn ${dtype}`, () => {
+      const pyCode = `result = np.fft.rfftn(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})).astype(np.complex128)`;
+      // rfftn: expects real input — complex rejected
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('rfftn expects real-valued input', () => np.fft.rfftn(array(data2d, dtype)), pyCode); if (_r === 'both-reject') return; }
+      }
       const jsResult = np.fft.rfftn(array(data2d, dtype));
-      const pyResult = runNumPy(`
-result = np.fft.rfftn(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})).astype(np.complex128)
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 
     it(`fft.irfftn ${dtype}`, () => {
+      const pyCode = `result = np.fft.irfftn(np.fft.rfftn(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})))`;
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('rfftn(complex) not supported', () => { const r = np.fft.rfftn(array(data2d, dtype)); np.fft.irfftn(r); }, pyCode); if (_r === 'both-reject') return; }
+      }
       const rfftnResult = np.fft.rfftn(array(data2d, dtype));
       const jsResult = np.fft.irfftn(rfftnResult);
-      const pyResult = runNumPy(`
-result = np.fft.irfftn(np.fft.rfftn(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})))
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 
@@ -146,10 +163,13 @@ result = np.fft.hfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
     });
 
     it(`fft.ihfft ${dtype}`, () => {
+      const pyCode = `result = np.fft.ihfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})).astype(np.complex128)`;
+      // ihfft: expects real (Hermitian-symmetric) input — complex rejected by NumPy
+      if (isComplex(dtype)) {
+        { const _r = expectBothReject('ihfft expects real-valued input', () => np.fft.ihfft(array(data, dtype)), pyCode); if (_r === 'both-reject') return; }
+      }
       const jsResult = np.fft.ihfft(array(data, dtype));
-      const pyResult = runNumPy(`
-result = np.fft.ihfft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})).astype(np.complex128)
-      `);
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, tol)).toBe(true);
     });
 

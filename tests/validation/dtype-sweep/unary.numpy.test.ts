@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isInt } from './_helpers';
+import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isInt, expectBothReject } from './_helpers';
 
 const { array } = np;
 
@@ -97,14 +97,18 @@ describe('DType Sweep: Binary-like unary', () => {
     it(`nextafter ${dtype}`, () => {
       const data1 = dtype === 'bool' ? [1, 0] : [1, 2];
       const data2 = dtype === 'bool' ? [0, 1] : [2, 3];
-      const a = array(data1, dtype);
-      const b = array(data2, dtype);
-      const jsResult = np.nextafter(a, b);
-      const pyResult = runNumPy(`
+      const pyCode = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
-result = np.nextafter(a, b).astype(np.float64)
-      `);
+result = np.nextafter(a, b).astype(np.float64)`;
+      // nextafter: only defined for real floating-point — complex rejected by both JS and NumPy
+      if (dtype.startsWith('complex')) {
+        const _r = expectBothReject('nextafter is only defined for real floating-point numbers', () => np.nextafter(array(data1, dtype), array(data2, dtype)), pyCode);
+        if (_r === 'both-reject') return;
+        // js-permissive not expected here — nextafter always rejects complex
+      }
+      const jsResult = np.nextafter(array(data1, dtype), array(data2, dtype));
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value, 1e-3)).toBe(true);
     });
   }

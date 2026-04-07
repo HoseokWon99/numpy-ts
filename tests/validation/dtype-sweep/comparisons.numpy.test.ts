@@ -11,6 +11,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  expectBothReject,
 } from './_helpers';
 
 const { array } = np;
@@ -50,22 +51,24 @@ describe('DType Sweep: Close comparisons', () => {
     it(`isclose ${dtype}`, () => {
       const data1 = dtype === 'bool' ? [1, 0, 1] : [1.0, 2.0, 3.0];
       const data2 = dtype === 'bool' ? [1, 0, 1] : [1.0, 2.0, 3.0];
-      const jsResult = np.isclose(array(data1, dtype), array(data2, dtype));
-      const pyResult = runNumPy(`
+      const pyCode = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
-result = np.isclose(a, b).astype(np.float64)
-      `);
+result = np.isclose(a, b).astype(np.float64)`;
+      // isclose(complex): Bug #14 — our impl throws, NumPy supports it. Test fails until fixed.
+      const jsResult = np.isclose(array(data1, dtype), array(data2, dtype));
+      const pyResult = runNumPy(pyCode);
       expect(arraysClose(jsResult.toArray(), pyResult.value)).toBe(true);
     });
 
     it(`allclose ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1] : [1.0, 2.0, 3.0];
-      const jsResult = np.allclose(array(data, dtype), array(data, dtype));
-      const pyResult = runNumPy(`
+      const pyCode = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = bool(np.allclose(a, a))
-      `);
+result = bool(np.allclose(a, a))`;
+      // allclose(complex): Bug #14 — our impl throws, NumPy supports it. Test fails until fixed.
+      const jsResult = np.allclose(array(data, dtype), array(data, dtype));
+      const pyResult = runNumPy(pyCode);
       expect(Boolean(jsResult)).toBe(Boolean(pyResult.value));
     });
   }

@@ -78,12 +78,12 @@ describe('DType Sweep: linalg namespace', () => {
 
     it(`linalg.qr ${dtype}`, () => {
       const { q, r } = np.linalg.qr(array(mat, dtype)) as any;
-      // Verify Q is orthogonal: Q @ Q^T ≈ I
-      const pyResult = runNumPy(`
-q, r = np.linalg.qr(np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)}))
-result = r.astype(np.float64)
-      `);
-      expect(arraysClose(toNumbers(r), pyResult.value, 1e-4)).toBe(true);
+      // Verify Q@R ≈ A (mathematical invariant, sign-convention independent)
+      const reconstructed = np.matmul(q, r);
+      const pyResult = runNumPy(
+        `result = np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)}).astype(np.float64)`
+      );
+      expect(arraysClose(toNumbers(reconstructed), pyResult.value, 1e-4)).toBe(true);
     });
 
     it(`linalg.svd ${dtype}`, () => {
