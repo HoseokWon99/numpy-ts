@@ -14,6 +14,7 @@ import {
   type TypedArray,
 } from '../dtype';
 import { Complex } from '../complex';
+import { conj as conjStorage } from './complex';
 import { wasmMatmul } from '../wasm/matmul';
 import { wasmSvdValues } from '../wasm/svd';
 import { wasmVectorNorm2 } from '../wasm/vector_norm';
@@ -5250,9 +5251,10 @@ export function vecmat(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
     throw new Error(`vecmat: last axis of x1 (${m1}) must match second-to-last axis of x2 (${m2})`);
   }
 
-  // For simple 1D @ 2D case, use existing dot
+  // For simple 1D @ 2D case, use existing dot (conjugate x1 for complex types)
   if (x1.ndim === 1 && x2.ndim === 2) {
-    return dot(x1, x2) as ArrayStorage;
+    const x1Conj = isComplexDType(x1.dtype) ? conjStorage(x1) : x1;
+    return dot(x1Conj, x2) as ArrayStorage;
   }
 
   // General case: batch vector-matrix multiplication
@@ -5321,7 +5323,11 @@ export function vecmat(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
         for (let i = 0; i < m1; i++) {
           const x1Idx = [...x1BatchIdx, i];
           const x2Idx = [...x2BatchIdx, i, j];
-          const x1Val = x1.get(...x1Idx);
+          let x1Val = x1.get(...x1Idx);
+          // vecmat conjugates x1 for complex types (matches NumPy)
+          if (x1Val instanceof Complex) {
+            x1Val = new Complex(x1Val.re, -x1Val.im);
+          }
           const x2Val = x2.get(...x2Idx);
           const prod = multiplyValues(x1Val, x2Val);
           if (sum instanceof Complex || prod instanceof Complex) {
