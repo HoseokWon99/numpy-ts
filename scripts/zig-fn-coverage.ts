@@ -13,7 +13,9 @@ const SKIP_FILES = new Set(['simd.zig', 'alloc.zig', 'sorting_common.zig', 'zigg
 
 const verbose = process.argv.includes('--verbose');
 const list = process.argv.includes('--list');
-const files = readdirSync(ZIG_DIR).filter(f => f.endsWith('.zig') && !SKIP_FILES.has(f)).sort();
+const files = readdirSync(ZIG_DIR)
+  .filter((f) => f.endsWith('.zig') && !SKIP_FILES.has(f))
+  .sort();
 
 interface FileStat {
   file: string;
@@ -26,7 +28,7 @@ const stats: FileStat[] = [];
 
 for (const file of files) {
   const src = readFileSync(join(ZIG_DIR, file), 'utf-8');
-  const exportFns = [...src.matchAll(/^export fn (\w+)/gm)].map(m => m[1]);
+  const exportFns = [...src.matchAll(/^export fn (\w+)/gm)].map((m) => m[1]);
   if (exportFns.length === 0) continue;
 
   const testStart = src.search(/^test\s+"/m);
@@ -71,25 +73,29 @@ console.log();
 console.log(bold(' Zig export fn test coverage'));
 console.log(sep);
 console.log(
-  ' ' + 'File'.padEnd(fileCol) +
-  dim('Fns'.padStart(numCol)) +
-  dim('Covered'.padStart(numCol)) +
-  dim('Missing'.padStart(numCol)) +
-  '  ' + dim('Coverage'),
+  ' ' +
+    'File'.padEnd(fileCol) +
+    dim('Fns'.padStart(numCol)) +
+    dim('Covered'.padStart(numCol)) +
+    dim('Missing'.padStart(numCol)) +
+    '  ' +
+    dim('Coverage')
 );
 console.log(sep);
 
-const filesToShow = verbose ? stats : stats.filter(f => f.covered < f.total);
+const filesToShow = verbose ? stats : stats.filter((f) => f.covered < f.total);
 
 for (const f of filesToShow) {
   const p = f.total > 0 ? (f.covered / f.total) * 100 : 100;
   const missing = f.total - f.covered;
   console.log(
-    ' ' + f.file.padEnd(fileCol) +
-    String(f.total).padStart(numCol) +
-    String(f.covered).padStart(numCol) +
-    (missing > 0 ? red(String(missing).padStart(numCol)) : String(0).padStart(numCol)) +
-    '  ' + colorPct(p),
+    ' ' +
+      f.file.padEnd(fileCol) +
+      String(f.total).padStart(numCol) +
+      String(f.covered).padStart(numCol) +
+      (missing > 0 ? red(String(missing).padStart(numCol)) : String(0).padStart(numCol)) +
+      '  ' +
+      colorPct(p)
   );
 }
 
@@ -101,16 +107,17 @@ if (!verbose && filesToShow.length < stats.length) {
 console.log(sep);
 console.log(
   bold(' All files'.padEnd(fileCol + 1)) +
-  bold(String(totalFns).padStart(numCol)) +
-  bold(String(coveredFns).padStart(numCol)) +
-  bold(String(totalFns - coveredFns).padStart(numCol)) +
-  '  ' + colorPct(pct),
+    bold(String(totalFns).padStart(numCol)) +
+    bold(String(coveredFns).padStart(numCol)) +
+    bold(String(totalFns - coveredFns).padStart(numCol)) +
+    '  ' +
+    colorPct(pct)
 );
 console.log();
 
 // --- List uncovered functions ---
 if (list) {
-  const allUncovered = stats.flatMap(f => f.uncoveredFns.map(fn => ({ file: f.file, fn })));
+  const allUncovered = stats.flatMap((f) => f.uncoveredFns.map((fn) => ({ file: f.file, fn })));
   if (allUncovered.length > 0) {
     console.log(bold(' Uncovered functions:'));
     for (const { file, fn } of allUncovered) {

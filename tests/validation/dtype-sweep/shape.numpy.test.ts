@@ -10,7 +10,10 @@ const { array } = np;
 const ALL = SETS.ALL;
 
 const SMALL_DATA = [1, 2, 3, 4, 5, 6];
-const SMALL_2D = [[1, 2, 3], [4, 5, 6]];
+const SMALL_2D = [
+  [1, 2, 3],
+  [4, 5, 6],
+];
 
 beforeAll(() => {
   if (!checkNumPyAvailable()) throw new Error('Python NumPy not available');
@@ -19,7 +22,13 @@ beforeAll(() => {
 describe('DType Sweep: Shape manipulation', () => {
   for (const dtype of ALL) {
     const data = dtype === 'bool' ? [1, 0, 1, 0, 1, 0] : SMALL_DATA;
-    const data2d = dtype === 'bool' ? [[1, 0, 1], [0, 1, 0]] : SMALL_2D;
+    const data2d =
+      dtype === 'bool'
+        ? [
+            [1, 0, 1],
+            [0, 1, 0],
+          ]
+        : SMALL_2D;
 
     it(`reshape ${dtype}`, () => {
       expect(np.reshape(array(data, dtype), [2, 3]).shape).toEqual([2, 3]);
@@ -97,15 +106,21 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`atleast_1d ${dtype}`, () => {
-      expect(np.atleast_1d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(1);
+      expect(np.atleast_1d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(
+        1
+      );
     });
 
     it(`atleast_2d ${dtype}`, () => {
-      expect(np.atleast_2d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(2);
+      expect(np.atleast_2d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(
+        2
+      );
     });
 
     it(`atleast_3d ${dtype}`, () => {
-      expect(np.atleast_3d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(3);
+      expect(np.atleast_3d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(
+        3
+      );
     });
 
     it(`broadcast_to ${dtype}`, () => {
@@ -168,7 +183,10 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`compress ${dtype}`, () => {
-      const a = array(dtype === 'bool' ? [1, 0, 1] : isComplex(dtype) ? [1, 2, 3] : [1, 2, 3], dtype);
+      const a = array(
+        dtype === 'bool' ? [1, 0, 1] : isComplex(dtype) ? [1, 2, 3] : [1, 2, 3],
+        dtype
+      );
       const cond = array([1, 0, 1], 'bool');
       expect(np.compress(cond, a).shape).toEqual([2]);
     });
@@ -189,7 +207,14 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`fill_diagonal ${dtype}`, () => {
-      const a = array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype);
+      const a = array(
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ],
+        dtype
+      );
       np.fill_diagonal(a, dtype === 'bool' ? 1 : 9);
       expect(a.shape).toEqual([3, 3]);
     });

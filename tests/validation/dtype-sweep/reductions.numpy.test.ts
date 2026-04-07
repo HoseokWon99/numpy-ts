@@ -12,7 +12,10 @@ const REAL = SETS.REAL;
 const ALL = SETS.ALL;
 
 const SMALL_DATA = [1, 2, 3, 4, 5, 6];
-const SMALL_2D = [[1, 2, 3], [4, 5, 6]];
+const SMALL_2D = [
+  [1, 2, 3],
+  [4, 5, 6],
+];
 
 beforeAll(() => {
   if (!checkNumPyAvailable()) throw new Error('Python NumPy not available');

@@ -18,7 +18,10 @@ beforeAll(() => {
 describe('DType Sweep: Creation', () => {
   for (const dtype of ALL) {
     it(`array ${dtype}`, () => {
-      const a = array(isComplex(dtype) ? [1, 2, 3] : dtype === 'bool' ? [1, 0, 1] : [1, 2, 3], dtype);
+      const a = array(
+        isComplex(dtype) ? [1, 2, 3] : dtype === 'bool' ? [1, 0, 1] : [1, 2, 3],
+        dtype
+      );
       expect(a.dtype).toBe(dtype);
       expect(a.shape).toEqual([3]);
     });

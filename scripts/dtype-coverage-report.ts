@@ -30,7 +30,7 @@ function loadHits(): Record<string, string[]> {
     process.exit(1);
   }
 
-  const files = readdirSync(HITS_DIR).filter(f => f.endsWith('.json'));
+  const files = readdirSync(HITS_DIR).filter((f) => f.endsWith('.json'));
   if (files.length === 0) {
     console.error('No dtype coverage data. Run: npm run test:dtype-coverage');
     process.exit(1);
@@ -102,10 +102,11 @@ if (showSummary) {
   // Per-dtype summary
   for (const d of DTYPES) {
     const missing = missingByDtype.get(d) || [];
-    const total = fns.filter(f => EXPECTED[f]!.includes(d)).length;
+    const total = fns.filter((f) => EXPECTED[f]!.includes(d)).length;
     const tested = total - missing.length;
     const dpct = total > 0 ? ((tested / total) * 100).toFixed(0) : '—';
-    const status = missing.length === 0 ? '\x1b[32m✓\x1b[0m' : `\x1b[31m${missing.length} missing\x1b[0m`;
+    const status =
+      missing.length === 0 ? '\x1b[32m✓\x1b[0m' : `\x1b[31m${missing.length} missing\x1b[0m`;
     console.log(`  ${d.padEnd(12)} ${dpct.padStart(3)}% (${tested}/${total}) ${status}`);
   }
   process.exit(0);
@@ -113,7 +114,8 @@ if (showSummary) {
 
 if (!showMissing) {
   // Full matrix
-  const hdr = 'Function'.padEnd(nameW) + ' ' + DTYPES.map(d => abbrev(d).padStart(colW)).join(' ');
+  const hdr =
+    'Function'.padEnd(nameW) + ' ' + DTYPES.map((d) => abbrev(d).padStart(colW)).join(' ');
   console.log(hdr);
   console.log('-'.repeat(hdr.length));
 
@@ -121,7 +123,7 @@ if (!showMissing) {
     const expected = new Set(EXPECTED[fn]!);
     const tested = new Set(hits[fn] || []);
 
-    const cols = DTYPES.map(d => {
+    const cols = DTYPES.map((d) => {
       if (!expected.has(d)) return `\x1b[90m${' '.repeat(colW - 1)}·\x1b[0m`; // not applicable
       if (tested.has(d)) return `\x1b[32m${' '.repeat(colW - 1)}✓\x1b[0m`; // covered
       return `\x1b[31m${' '.repeat(colW - 1)}✗\x1b[0m`; // missing
@@ -145,14 +147,16 @@ if (missingByFn.size > 0) {
 }
 
 // Functions in expected but never seen in tests
-const untested = fns.filter(f => !hits[f]);
+const untested = fns.filter((f) => !hits[f]);
 if (untested.length > 0) {
   console.log(`\nFunctions in matrix but NEVER tested (${untested.length}):`);
   console.log(`  ${untested.join(', ')}`);
 }
 
 // Functions seen in tests but not in expected matrix
-const unmatched = Object.keys(hits).filter(f => !EXPECTED[f]).sort();
+const unmatched = Object.keys(hits)
+  .filter((f) => !EXPECTED[f])
+  .sort();
 if (unmatched.length > 0) {
   console.log(`\nFunctions tested but NOT in matrix (${unmatched.length}):`);
   console.log(`  ${unmatched.slice(0, 20).join(', ')}${unmatched.length > 20 ? '...' : ''}`);

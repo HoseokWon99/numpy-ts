@@ -34,27 +34,51 @@ function parseCaller(stack: string): string | null {
 
     // src/full/index.ts — the public API (np.sin, np.add, etc.)
     let match = line.match(/at (?:Module\.)?(\w+) .*\/full\/index\.ts/);
-    if (match && bestPriority < 4) { best = match[1]!; bestPriority = 4; continue; }
+    if (match && bestPriority < 4) {
+      best = match[1]!;
+      bestPriority = 4;
+      continue;
+    }
 
     // src/core/linalg.ts namespace
     match = line.match(/at (?:Object\.)?(\w+) .*\/core\/linalg\.ts/);
-    if (match && bestPriority < 3) { best = `linalg.${match[1]}`; bestPriority = 3; continue; }
+    if (match && bestPriority < 3) {
+      best = `linalg.${match[1]}`;
+      bestPriority = 3;
+      continue;
+    }
 
     // src/core/linalg.ts, core/fft.ts — namespaced
     match = line.match(/at (?:Object\.)?(\w+) .*\/core\/(linalg|fft)\.ts/);
-    if (match && bestPriority < 3) { best = `${match[2]}.${match[1]}`; bestPriority = 3; continue; }
+    if (match && bestPriority < 3) {
+      best = `${match[2]}.${match[1]}`;
+      bestPriority = 3;
+      continue;
+    }
 
     // src/core/*.ts — other modules (creation, trig, etc.)
     match = line.match(/at (?:Object\.)?(\w+) .*\/core\/(\w+)\.ts/);
-    if (match && match[2] !== 'linalg' && match[2] !== 'fft' && bestPriority < 3) { best = match[1]!; bestPriority = 3; continue; }
+    if (match && match[2] !== 'linalg' && match[2] !== 'fft' && bestPriority < 3) {
+      best = match[1]!;
+      bestPriority = 3;
+      continue;
+    }
 
     // src/common/ops/*.ts
     match = line.match(/at (?:Object\.)?(\w+) .*\/ops\/(\w+)\.ts/);
-    if (match && bestPriority < 2) { best = `ops/${match[2]}/${match[1]}`; bestPriority = 2; continue; }
+    if (match && bestPriority < 2) {
+      best = `ops/${match[2]}/${match[1]}`;
+      bestPriority = 2;
+      continue;
+    }
 
     // src/common/wasm/*.ts
     match = line.match(/at (?:Object\.)?(\w+) .*\/wasm\/([\w-]+)\.ts/);
-    if (match && match[2] !== 'runtime' && bestPriority < 1) { best = `wasm/${match[2]}/${match[1]}`; bestPriority = 1; continue; }
+    if (match && match[2] !== 'runtime' && bestPriority < 1) {
+      best = `wasm/${match[2]}/${match[1]}`;
+      bestPriority = 1;
+      continue;
+    }
   }
 
   return best;
@@ -103,14 +127,14 @@ Object.defineProperty(ArrayStorage.prototype, 'dtype', {
 
 // --- Intercept 2: static creation methods (captures writes) ---
 const origEmpty = ArrayStorage.empty.bind(ArrayStorage);
-(ArrayStorage as any).empty = function(shape: number[], dtype: string) {
+(ArrayStorage as any).empty = function (shape: number[], dtype: string) {
   const result = origEmpty(shape, dtype);
   record(parseCaller(new Error().stack || ''), dtype);
   return result;
 };
 
 const origZeros = ArrayStorage.zeros.bind(ArrayStorage);
-(ArrayStorage as any).zeros = function(shape: number[], dtype: string) {
+(ArrayStorage as any).zeros = function (shape: number[], dtype: string) {
   const result = origZeros(shape, dtype);
   record(parseCaller(new Error().stack || ''), dtype);
   return result;
@@ -121,7 +145,7 @@ for (const method of ['ones', 'fromData'] as const) {
   const orig = (ArrayStorage as any)[method];
   if (typeof orig === 'function') {
     const bound = orig.bind(ArrayStorage);
-    (ArrayStorage as any)[method] = function(...args: any[]) {
+    (ArrayStorage as any)[method] = function (...args: any[]) {
       const result = bound(...args);
       const dtype = args[1] ?? result?.dtype;
       if (dtype) record(parseCaller(new Error().stack || ''), String(dtype));

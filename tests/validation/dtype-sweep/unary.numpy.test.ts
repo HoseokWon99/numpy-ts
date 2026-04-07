@@ -62,7 +62,9 @@ describe('DType Sweep: Unary math', () => {
           const needsDomain = ['arcsin', 'arccos', 'arctanh'].includes(name);
           const needsPositive = ['arccosh', 'log', 'log2', 'log10', 'log1p', 'sqrt'].includes(name);
           const data = needsDomain
-            ? (isInt(dtype) ? [0, 1, 0, 1] : [0.1, 0.5, 0.9, 0.3])
+            ? isInt(dtype)
+              ? [0, 1, 0, 1]
+              : [0.1, 0.5, 0.9, 0.3]
             : needsPositive
               ? [1, 2, 3, 4]
               : [1, 2, 3, 4];
