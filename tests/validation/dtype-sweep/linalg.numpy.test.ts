@@ -15,12 +15,23 @@ beforeAll(() => {
 // Helper: convert bigint array values to numbers for comparison
 function toNumbers(arr: any): any {
   const flat = arr.toArray();
-  return JSON.parse(JSON.stringify(flat, (_k: string, v: any) => typeof v === 'bigint' ? Number(v) : v));
+  return JSON.parse(
+    JSON.stringify(flat, (_k: string, v: any) => (typeof v === 'bigint' ? Number(v) : v))
+  );
 }
 
 describe('DType Sweep: linalg namespace', () => {
   for (const dtype of ALL_DTYPES) {
-    const mat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]];
+    const mat =
+      dtype === 'bool'
+        ? [
+            [1, 0],
+            [0, 1],
+          ]
+        : [
+            [1, 2],
+            [3, 4],
+          ];
     const vec = dtype === 'bool' ? [1, 0] : [3, 4];
 
     it(`linalg.norm ${dtype}`, () => {
@@ -48,7 +59,16 @@ describe('DType Sweep: linalg namespace', () => {
     });
 
     it(`linalg.cholesky ${dtype}`, () => {
-      const pdMat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[4, 2], [2, 5]];
+      const pdMat =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [4, 2],
+              [2, 5],
+            ];
       const jsResult = np.linalg.cholesky(array(pdMat, dtype));
       const pyResult = runNumPy(
         `result = np.linalg.cholesky(np.array(${JSON.stringify(pdMat)}, dtype=${npDtype(dtype)})).astype(np.float64)`
@@ -87,7 +107,16 @@ result = np.sort(np.abs(w)).astype(np.float64)
     });
 
     it(`linalg.eigh ${dtype}`, { timeout: 30000 }, () => {
-      const symMat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[2, 1], [1, 3]];
+      const symMat =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [2, 1],
+              [1, 3],
+            ];
       const { w } = np.linalg.eigh(array(symMat, dtype)) as any;
       const pyResult = runNumPy(`
 w, v = np.linalg.eigh(np.array(${JSON.stringify(symMat)}, dtype=${npDtype(dtype)}))
@@ -107,7 +136,16 @@ result = np.sort(np.abs(w)).astype(np.float64)
     });
 
     it(`linalg.eigvalsh ${dtype}`, { timeout: 30000 }, () => {
-      const symMat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[2, 1], [1, 3]];
+      const symMat =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [2, 1],
+              [1, 3],
+            ];
       const jsResult = np.linalg.eigvalsh(array(symMat, dtype));
       const pyResult = runNumPy(`
 result = np.linalg.eigvalsh(np.array(${JSON.stringify(symMat)}, dtype=${npDtype(dtype)})).astype(np.float64)
@@ -116,7 +154,16 @@ result = np.linalg.eigvalsh(np.array(${JSON.stringify(symMat)}, dtype=${npDtype(
     });
 
     it(`linalg.solve ${dtype}`, () => {
-      const A = dtype === 'bool' ? [[1, 0], [0, 1]] : [[3, 1], [1, 2]];
+      const A =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [3, 1],
+              [1, 2],
+            ];
       const b = dtype === 'bool' ? [1, 0] : [9, 8];
       const jsResult = np.linalg.solve(array(A, dtype), array(b, dtype));
       const pyResult = runNumPy(
@@ -126,7 +173,18 @@ result = np.linalg.eigvalsh(np.array(${JSON.stringify(symMat)}, dtype=${npDtype(
     });
 
     it(`linalg.lstsq ${dtype}`, () => {
-      const A = dtype === 'bool' ? [[1, 0], [0, 1], [1, 1]] : [[1, 1], [1, 2], [1, 3]];
+      const A =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+              [1, 1],
+            ]
+          : [
+              [1, 1],
+              [1, 2],
+              [1, 3],
+            ];
       const b = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
       const { x } = np.linalg.lstsq(array(A, dtype), array(b, dtype)) as any;
       const pyResult = runNumPy(`
@@ -214,7 +272,16 @@ result = np.linalg.multi_dot([a, a]).astype(np.float64)
     });
 
     it(`linalg.tensorinv ${dtype}`, () => {
-      const id = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 0], [0, 1]];
+      const id =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 0],
+              [0, 1],
+            ];
       const jsResult = np.linalg.tensorinv(array(id, dtype));
       const pyResult = runNumPy(`
 result = np.linalg.tensorinv(np.array(${JSON.stringify(id)}, dtype=${npDtype(dtype)})).astype(np.float64)
@@ -223,7 +290,16 @@ result = np.linalg.tensorinv(np.array(${JSON.stringify(id)}, dtype=${npDtype(dty
     });
 
     it(`linalg.tensorsolve ${dtype}`, () => {
-      const id = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 0], [0, 1]];
+      const id =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 0],
+              [0, 1],
+            ];
       const b = dtype === 'bool' ? [1, 0] : [1, 2];
       const jsResult = np.linalg.tensorsolve(array(id, dtype), array(b, dtype));
       const pyResult = runNumPy(`
@@ -381,7 +457,16 @@ result = np.outer(a, a).astype(np.float64)
     });
 
     it(`matmul ${dtype}`, () => {
-      const mat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]];
+      const mat =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 2],
+              [3, 4],
+            ];
       const jsResult = np.matmul(array(mat, dtype), array(mat, dtype));
       const pyResult = runNumPy(`
 a = np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})
@@ -415,7 +500,16 @@ result = np.kron(a, b).astype(np.float64)
     });
 
     it(`trace ${dtype}`, () => {
-      const mat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]];
+      const mat =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 2],
+              [3, 4],
+            ];
       const jsResult = np.trace(array(mat, dtype));
       const pyResult = runNumPy(
         `result = float(np.trace(np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})))`
@@ -424,7 +518,16 @@ result = np.kron(a, b).astype(np.float64)
     });
 
     it(`tensordot ${dtype}`, () => {
-      const mat = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]];
+      const mat =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 2],
+              [3, 4],
+            ];
       const r = np.tensordot(array(mat, dtype), array(mat, dtype));
       const pyResult = runNumPy(`
 a = np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})
@@ -446,7 +549,16 @@ result = float(np.vecdot(a, b))
     });
 
     it(`matvec ${dtype}`, () => {
-      const m = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]];
+      const m =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 2],
+              [3, 4],
+            ];
       const v = dtype === 'bool' ? [1, 0] : [5, 6];
       const jsResult = np.matvec(array(m, dtype), array(v, dtype));
       const pyResult = runNumPy(`
@@ -458,7 +570,16 @@ result = np.matvec(m, v).astype(np.float64)
     });
 
     it(`vecmat ${dtype}`, () => {
-      const m = dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]];
+      const m =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 2],
+              [3, 4],
+            ];
       const v = dtype === 'bool' ? [1, 0] : [5, 6];
       const jsResult = np.vecmat(array(v, dtype), array(m, dtype));
       const pyResult = runNumPy(`

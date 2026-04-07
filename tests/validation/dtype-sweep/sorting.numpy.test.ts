@@ -4,7 +4,14 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isComplex } from './_helpers';
+import {
+  ALL_DTYPES,
+  runNumPy,
+  arraysClose,
+  checkNumPyAvailable,
+  npDtype,
+  isComplex,
+} from './_helpers';
 
 const { array } = np;
 

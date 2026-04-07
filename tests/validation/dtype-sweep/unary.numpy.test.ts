@@ -64,12 +64,16 @@ describe('DType Sweep: Unary math', () => {
       for (const dtype of ALL_DTYPES) {
         it(`${dtype}`, () => {
           const needsDomain = ['arcsin', 'arccos', 'arctanh'].includes(name);
-          const needsPositive = ['arccosh', 'log', 'log2', 'log10', 'log1p', 'sqrt', 'i0'].includes(name);
+          const needsPositive = ['arccosh', 'log', 'log2', 'log10', 'log1p', 'sqrt', 'i0'].includes(
+            name
+          );
           const data =
             dtype === 'bool'
               ? [1, 0, 1, 0]
               : needsDomain
-                ? isInt(dtype) ? [0, 1, 0, 1] : [0.1, 0.5, 0.9, 0.3]
+                ? isInt(dtype)
+                  ? [0, 1, 0, 1]
+                  : [0.1, 0.5, 0.9, 0.3]
                 : needsPositive
                   ? [1, 2, 3, 4]
                   : [1, 2, 3, 4];

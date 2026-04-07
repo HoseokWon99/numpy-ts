@@ -4,7 +4,14 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isComplex } from './_helpers';
+import {
+  ALL_DTYPES,
+  runNumPy,
+  arraysClose,
+  checkNumPyAvailable,
+  npDtype,
+  isComplex,
+} from './_helpers';
 
 const { array } = np;
 
@@ -40,12 +47,18 @@ describe('DType Sweep: Reductions (scalar)', () => {
     describe(name, () => {
       for (const dtype of ALL_DTYPES) {
         it(`${dtype}`, () => {
-          const data = dtype === 'bool' ? [1, 0, 1, 1, 0, 1] : isComplex(dtype) ? [1, 2, 3, 4, 5, 6] : SMALL_DATA;
+          const data =
+            dtype === 'bool'
+              ? [1, 0, 1, 1, 0, 1]
+              : isComplex(dtype)
+                ? [1, 2, 3, 4, 5, 6]
+                : SMALL_DATA;
           const a = array(data, dtype);
           const jsResult = fn(a);
-          const castExpr = isComplex(dtype) && (name === 'sum' || name === 'prod')
-            ? `complex(np.${npFn || name}(a))`
-            : `float(np.${npFn || name}(a))`;
+          const castExpr =
+            isComplex(dtype) && (name === 'sum' || name === 'prod')
+              ? `complex(np.${npFn || name}(a))`
+              : `float(np.${npFn || name}(a))`;
           const pyResult = runNumPy(`
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 result = ${castExpr}
@@ -188,7 +201,13 @@ result = np.ediff1d(a).astype(np.float64)
 describe('DType Sweep: Axis reductions', () => {
   for (const dtype of ALL_DTYPES) {
     it(`sum axis=0 ${dtype}`, () => {
-      const data = dtype === 'bool' ? [[1, 0, 1], [0, 1, 0]] : SMALL_2D;
+      const data =
+        dtype === 'bool'
+          ? [
+              [1, 0, 1],
+              [0, 1, 0],
+            ]
+          : SMALL_2D;
       const a = array(data, dtype);
       const jsResult = np.sum(a, 0);
       const pyResult = runNumPy(`
@@ -199,7 +218,13 @@ result = np.sum(a, axis=0).astype(np.float64)
     });
 
     it(`mean axis=1 ${dtype}`, () => {
-      const data = dtype === 'bool' ? [[1, 0, 1], [0, 1, 0]] : SMALL_2D;
+      const data =
+        dtype === 'bool'
+          ? [
+              [1, 0, 1],
+              [0, 1, 0],
+            ]
+          : SMALL_2D;
       const a = array(data, dtype);
       const jsResult = np.mean(a, 1);
       const pyResult = runNumPy(`
@@ -210,7 +235,13 @@ result = np.mean(a, axis=1)
     });
 
     it(`max axis=0 ${dtype}`, () => {
-      const data = dtype === 'bool' ? [[1, 0, 1], [0, 1, 0]] : SMALL_2D;
+      const data =
+        dtype === 'bool'
+          ? [
+              [1, 0, 1],
+              [0, 1, 0],
+            ]
+          : SMALL_2D;
       const a = array(data, dtype);
       const jsResult = np.max(a, 0);
       const pyResult = runNumPy(`

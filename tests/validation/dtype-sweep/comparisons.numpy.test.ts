@@ -4,7 +4,14 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isComplex } from './_helpers';
+import {
+  ALL_DTYPES,
+  runNumPy,
+  arraysClose,
+  checkNumPyAvailable,
+  npDtype,
+  isComplex,
+} from './_helpers';
 
 const { array } = np;
 
@@ -19,8 +26,10 @@ describe('DType Sweep: Comparisons', () => {
     describe(name, () => {
       for (const dtype of ALL_DTYPES) {
         it(`${dtype}`, () => {
-          const data1 = dtype === 'bool' ? [1, 0, 1, 0] : isComplex(dtype) ? [1, 2, 3, 4] : [1, 2, 3, 4];
-          const data2 = dtype === 'bool' ? [0, 1, 1, 0] : isComplex(dtype) ? [4, 3, 2, 1] : [4, 3, 2, 1];
+          const data1 =
+            dtype === 'bool' ? [1, 0, 1, 0] : isComplex(dtype) ? [1, 2, 3, 4] : [1, 2, 3, 4];
+          const data2 =
+            dtype === 'bool' ? [0, 1, 1, 0] : isComplex(dtype) ? [4, 3, 2, 1] : [4, 3, 2, 1];
           const a = array(data1, dtype);
           const b = array(data2, dtype);
           const jsResult = (np as any)[name](a, b);

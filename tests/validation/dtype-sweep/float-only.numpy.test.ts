@@ -4,7 +4,14 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isComplex } from './_helpers';
+import {
+  ALL_DTYPES,
+  runNumPy,
+  arraysClose,
+  checkNumPyAvailable,
+  npDtype,
+  isComplex,
+} from './_helpers';
 
 const { array } = np;
 
@@ -49,7 +56,16 @@ result = a.astype(np.float64)
     });
 
     it(`put_along_axis ${dtype}`, () => {
-      const data = dtype === 'bool' ? [[1, 0], [0, 1]] : [[10, 20], [30, 40]];
+      const data =
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [10, 20],
+              [30, 40],
+            ];
       const vals = dtype === 'bool' ? [[1], [0]] : [[99], [88]];
       const a = array(data, dtype);
       np.put_along_axis(a, array([[0], [1]], 'int32'), array(vals, dtype), 1);
@@ -73,7 +89,15 @@ result = a.astype(np.float64)
     it(`diag ${dtype}`, () => {
       const jsResult = np.diag(
         array(
-          dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]],
+          dtype === 'bool'
+            ? [
+                [1, 0],
+                [0, 1],
+              ]
+            : [
+                [1, 2],
+                [3, 4],
+              ],
           dtype
         )
       );
@@ -164,7 +188,10 @@ describe('DType Sweep: Set operations', () => {
     });
 
     it(`union1d ${dtype}`, () => {
-      const jsResult = np.union1d(array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype), array(dtype === 'bool' ? [0, 1] : [3, 4, 5], dtype));
+      const jsResult = np.union1d(
+        array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype),
+        array(dtype === 'bool' ? [0, 1] : [3, 4, 5], dtype)
+      );
       const pyResult = runNumPy(
         `result = np.union1d(np.array(${JSON.stringify(dtype === 'bool' ? [1, 0] : [1, 2, 3])}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(dtype === 'bool' ? [0, 1] : [3, 4, 5])}, dtype=${npDtype(dtype)})).astype(np.float64)`
       );
@@ -188,7 +215,10 @@ describe('DType Sweep: Set operations', () => {
     });
 
     it(`in1d ${dtype}`, () => {
-      const jsResult = np.in1d(array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype), array(dtype === 'bool' ? [1] : [2, 3, 4], dtype));
+      const jsResult = np.in1d(
+        array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype),
+        array(dtype === 'bool' ? [1] : [2, 3, 4], dtype)
+      );
       const pyResult = runNumPy(
         `result = np.in1d(np.array(${JSON.stringify(dtype === 'bool' ? [1, 0] : [1, 2, 3])}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(dtype === 'bool' ? [1] : [2, 3, 4])}, dtype=${npDtype(dtype)})).astype(np.float64)`
       );
@@ -196,7 +226,10 @@ describe('DType Sweep: Set operations', () => {
     });
 
     it(`isin ${dtype}`, () => {
-      const jsResult = np.isin(array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype), array(dtype === 'bool' ? [1] : [2, 3, 4], dtype));
+      const jsResult = np.isin(
+        array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype),
+        array(dtype === 'bool' ? [1] : [2, 3, 4], dtype)
+      );
       const pyResult = runNumPy(
         `result = np.isin(np.array(${JSON.stringify(dtype === 'bool' ? [1, 0] : [1, 2, 3])}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(dtype === 'bool' ? [1] : [2, 3, 4])}, dtype=${npDtype(dtype)})).astype(np.float64)`
       );
@@ -218,7 +251,16 @@ result = h.astype(np.float64)
     });
 
     it(`corrcoef ${dtype}`, () => {
-      const data = dtype === 'bool' ? [[1, 0, 1], [0, 1, 0]] : [[1, 2, 3], [4, 5, 6]];
+      const data =
+        dtype === 'bool'
+          ? [
+              [1, 0, 1],
+              [0, 1, 0],
+            ]
+          : [
+              [1, 2, 3],
+              [4, 5, 6],
+            ];
       const jsResult = np.corrcoef(array(data, dtype));
       const pyResult = runNumPy(
         `result = np.corrcoef(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))`
@@ -227,7 +269,16 @@ result = h.astype(np.float64)
     });
 
     it(`cov ${dtype}`, () => {
-      const data = dtype === 'bool' ? [[1, 0, 1], [0, 1, 0]] : [[1, 2, 3], [4, 5, 6]];
+      const data =
+        dtype === 'bool'
+          ? [
+              [1, 0, 1],
+              [0, 1, 0],
+            ]
+          : [
+              [1, 2, 3],
+              [4, 5, 6],
+            ];
       const jsResult = np.cov(array(data, dtype));
       const pyResult = runNumPy(
         `result = np.cov(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))`
@@ -322,7 +373,11 @@ describe('DType Sweep: Misc', () => {
   for (const dtype of ALL_DTYPES) {
     it(`clip ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1] : [1, 5, 10];
-      const jsResult = np.clip(array(data, dtype), dtype === 'bool' ? 0 : 2, dtype === 'bool' ? 1 : 8);
+      const jsResult = np.clip(
+        array(data, dtype),
+        dtype === 'bool' ? 0 : 2,
+        dtype === 'bool' ? 1 : 8
+      );
       const pyResult = runNumPy(
         `result = np.clip(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}), ${dtype === 'bool' ? 0 : 2}, ${dtype === 'bool' ? 1 : 8}).astype(np.float64)`
       );

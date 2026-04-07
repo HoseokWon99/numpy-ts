@@ -4,7 +4,14 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isComplex } from './_helpers';
+import {
+  ALL_DTYPES,
+  runNumPy,
+  arraysClose,
+  checkNumPyAvailable,
+  npDtype,
+  isComplex,
+} from './_helpers';
 
 const { array } = np;
 
@@ -15,9 +22,16 @@ beforeAll(() => {
 describe('DType Sweep: FFT', () => {
   for (const dtype of ALL_DTYPES) {
     const data = dtype === 'bool' ? [1, 0, 1, 0] : [1, 2, 3, 4];
-    const data2d = dtype === 'bool'
-      ? [[1, 0, 1, 0], [0, 1, 0, 1]]
-      : [[1, 2, 3, 4], [5, 6, 7, 8]];
+    const data2d =
+      dtype === 'bool'
+        ? [
+            [1, 0, 1, 0],
+            [0, 1, 0, 1],
+          ]
+        : [
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+          ];
     const tol = dtype === 'float32' || dtype === 'complex64' ? 1e-2 : 1e-4;
 
     it(`fft.fft ${dtype}`, () => {

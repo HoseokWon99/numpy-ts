@@ -4,7 +4,14 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
-import { ALL_DTYPES, runNumPy, arraysClose, checkNumPyAvailable, npDtype, isComplex } from './_helpers';
+import {
+  ALL_DTYPES,
+  runNumPy,
+  arraysClose,
+  checkNumPyAvailable,
+  npDtype,
+  isComplex,
+} from './_helpers';
 
 const { array } = np;
 
@@ -115,15 +122,21 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`atleast_1d ${dtype}`, () => {
-      expect(np.atleast_1d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(1);
+      expect(np.atleast_1d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(
+        1
+      );
     });
 
     it(`atleast_2d ${dtype}`, () => {
-      expect(np.atleast_2d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(2);
+      expect(np.atleast_2d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(
+        2
+      );
     });
 
     it(`atleast_3d ${dtype}`, () => {
-      expect(np.atleast_3d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(3);
+      expect(np.atleast_3d(array(dtype === 'bool' ? [1] : [1], dtype)).ndim).toBeGreaterThanOrEqual(
+        3
+      );
     });
 
     it(`broadcast_to ${dtype}`, () => {
@@ -149,12 +162,26 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`vsplit ${dtype}`, () => {
-      const a = array(dtype === 'bool' ? [[1, 0], [0, 1]] : [[1, 2], [3, 4]], dtype);
+      const a = array(
+        dtype === 'bool'
+          ? [
+              [1, 0],
+              [0, 1],
+            ]
+          : [
+              [1, 2],
+              [3, 4],
+            ],
+        dtype
+      );
       expect(np.vsplit(a, 2).length).toBe(2);
     });
 
     it(`dsplit ${dtype}`, () => {
-      const a = np.reshape(array(dtype === 'bool' ? [1, 0, 1, 0, 1, 0, 1, 0] : [1, 2, 3, 4, 5, 6, 7, 8], dtype), [2, 2, 2]);
+      const a = np.reshape(
+        array(dtype === 'bool' ? [1, 0, 1, 0, 1, 0, 1, 0] : [1, 2, 3, 4, 5, 6, 7, 8], dtype),
+        [2, 2, 2]
+      );
       expect(np.dsplit(a, 2).length).toBe(2);
     });
 
@@ -188,7 +215,10 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`insert ${dtype}`, () => {
-      const a = array(dtype === 'bool' ? [1, 0, 1] : isComplex(dtype) ? [1, 2, 3] : [1, 2, 3], dtype);
+      const a = array(
+        dtype === 'bool' ? [1, 0, 1] : isComplex(dtype) ? [1, 2, 3] : [1, 2, 3],
+        dtype
+      );
       const jsResult = np.insert(a, 1, dtype === 'bool' ? 0 : 99);
       expect(jsResult.shape).toEqual([4]);
     });
@@ -211,7 +241,9 @@ describe('DType Sweep: Shape manipulation', () => {
     });
 
     it(`diagflat ${dtype}`, () => {
-      const jsResult = np.diagflat(array(dtype === 'bool' ? [1, 0] : isComplex(dtype) ? [1, 2] : [1, 2], dtype));
+      const jsResult = np.diagflat(
+        array(dtype === 'bool' ? [1, 0] : isComplex(dtype) ? [1, 2] : [1, 2], dtype)
+      );
       expect(jsResult.shape).toEqual([2, 2]);
     });
 

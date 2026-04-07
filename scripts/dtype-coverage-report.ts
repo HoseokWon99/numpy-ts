@@ -45,73 +45,191 @@ function normalizeFnName(name: string): string {
 /** Functions/types that are NOT dtype-parametric and should be excluded */
 const EXCLUDED = new Set([
   // Types and classes
-  'DType', 'TypedArray', 'NDArrayCore', 'Complex', 'ArrayStorage',
+  'DType',
+  'TypedArray',
+  'NDArrayCore',
+  'Complex',
+  'ArrayStorage',
   // Type utilities
-  'can_cast', 'common_type', 'result_type', 'min_scalar_type', 'issubdtype',
-  'typename', 'mintypecode', 'promote_types', 'isdtype',
+  'can_cast',
+  'common_type',
+  'result_type',
+  'min_scalar_type',
+  'issubdtype',
+  'typename',
+  'mintypecode',
+  'promote_types',
+  'isdtype',
   // Type checking / introspection (return bool/scalar, not dtype-parametric)
-  'isscalar', 'iterable', 'isfortran', 'iscomplex', 'iscomplexobj',
-  'isreal', 'isrealobj', 'real_if_close', 'isnat',
+  'isscalar',
+  'iterable',
+  'isfortran',
+  'iscomplex',
+  'iscomplexobj',
+  'isreal',
+  'isrealobj',
+  'real_if_close',
+  'isnat',
   // Formatting & printing
-  'set_printoptions', 'get_printoptions', 'printoptions',
-  'format_float_positional', 'format_float_scientific',
-  'base_repr', 'binary_repr', 'array2string', 'array_repr', 'array_str',
+  'set_printoptions',
+  'get_printoptions',
+  'printoptions',
+  'format_float_positional',
+  'format_float_scientific',
+  'base_repr',
+  'binary_repr',
+  'array2string',
+  'array_repr',
+  'array_str',
   // Utility (shape/size introspection)
-  'ndim', 'shape', 'size', 'item', 'tolist', 'tobytes', 'byteswap', 'view', 'tofile', 'fill',
+  'ndim',
+  'shape',
+  'size',
+  'item',
+  'tolist',
+  'tobytes',
+  'byteswap',
+  'view',
+  'tofile',
+  'fill',
   // Error handling
-  'geterr', 'seterr',
+  'geterr',
+  'seterr',
   // IO types/errors
-  'UnsupportedDTypeError', 'InvalidNpyError', 'SUPPORTED_DTYPES', 'DTYPE_TO_DESCR',
-  'NpyHeader', 'NpyMetadata', 'NpyVersion',
-  'NpzParseOptions', 'NpzParseResult', 'NpzArraysInput', 'NpzSerializeOptions',
-  'ParseTxtOptions', 'SerializeTxtOptions',
+  'UnsupportedDTypeError',
+  'InvalidNpyError',
+  'SUPPORTED_DTYPES',
+  'DTYPE_TO_DESCR',
+  'NpyHeader',
+  'NpyMetadata',
+  'NpyVersion',
+  'NpzParseOptions',
+  'NpzParseResult',
+  'NpzArraysInput',
+  'NpzSerializeOptions',
+  'ParseTxtOptions',
+  'SerializeTxtOptions',
   // IO functions (not dtype-parametric in the sweep sense)
-  'parseNpy', 'parseNpyHeader', 'parseNpyData', 'serializeNpy',
-  'parseNpz', 'parseNpzSync', 'loadNpz', 'loadNpzSync',
-  'serializeNpz', 'serializeNpzSync',
-  'parseTxt', 'genfromtxt', 'fromregex', 'serializeTxt',
+  'parseNpy',
+  'parseNpyHeader',
+  'parseNpyData',
+  'serializeNpy',
+  'parseNpz',
+  'parseNpzSync',
+  'loadNpz',
+  'loadNpzSync',
+  'serializeNpz',
+  'serializeNpzSync',
+  'parseTxt',
+  'genfromtxt',
+  'fromregex',
+  'serializeTxt',
   // Aliases (tracked under their canonical name)
-  'abs', 'pow', 'true_divide', 'amax', 'amin', 'var_', 'var',
-  'asin', 'acos', 'atan', 'atan2', 'asinh', 'acosh', 'atanh',
-  'conjugate', 'row_stack', 'concat',
-  'cumulative_sum', 'cumulative_prod', 'nancumsum', 'nancumprod',
-  'bitwise_invert', 'bitwise_left_shift', 'bitwise_right_shift',
+  'abs',
+  'pow',
+  'true_divide',
+  'amax',
+  'amin',
+  'var_',
+  'var',
+  'asin',
+  'acos',
+  'atan',
+  'atan2',
+  'asinh',
+  'acosh',
+  'atanh',
+  'conjugate',
+  'row_stack',
+  'concat',
+  'cumulative_sum',
+  'cumulative_prod',
+  'nancumsum',
+  'nancumprod',
+  'bitwise_invert',
+  'bitwise_left_shift',
+  'bitwise_right_shift',
   'round',
   // Index utilities (not dtype-parametric)
-  'indices', 'ix_', 'ravel_multi_index', 'unravel_index',
-  'diag_indices', 'diag_indices_from',
-  'tril_indices', 'tril_indices_from', 'triu_indices', 'triu_indices_from',
+  'indices',
+  'ix_',
+  'ravel_multi_index',
+  'unravel_index',
+  'diag_indices',
+  'diag_indices_from',
+  'tril_indices',
+  'tril_indices_from',
+  'triu_indices',
+  'triu_indices_from',
   'mask_indices',
   // Advanced utilities
-  'apply_along_axis', 'apply_over_axes',
-  'may_share_memory', 'shares_memory',
-  'place', 'putmask', 'copyto',
-  'iindex', 'bindex',
+  'apply_along_axis',
+  'apply_over_axes',
+  'may_share_memory',
+  'shares_memory',
+  'place',
+  'putmask',
+  'copyto',
+  'iindex',
+  'bindex',
   'broadcast_shapes',
   // Creation from special sources (not dtype-sweep)
-  'frombuffer', 'fromfunction', 'fromiter', 'fromstring', 'fromfile',
-  'meshgrid', 'vander',
+  'frombuffer',
+  'fromfunction',
+  'fromiter',
+  'fromstring',
+  'fromfile',
+  'meshgrid',
+  'vander',
   // Niche creation
-  'zeros_like', 'ones_like', 'empty_like', 'full_like',
-  'copy', 'asanyarray', 'asarray_chkfinite', 'require',
-  'tri', 'tril', 'triu',
+  'zeros_like',
+  'ones_like',
+  'empty_like',
+  'full_like',
+  'copy',
+  'asanyarray',
+  'asarray_chkfinite',
+  'require',
+  'tri',
+  'tril',
+  'triu',
   // Polynomial
-  'poly', 'polyadd', 'polyder', 'polydiv', 'polyfit', 'polyint',
-  'polymul', 'polysub', 'polyval', 'roots',
+  'poly',
+  'polyadd',
+  'polyder',
+  'polydiv',
+  'polyfit',
+  'polyint',
+  'polymul',
+  'polysub',
+  'polyval',
+  'roots',
   // Einsum
-  'einsum', 'einsum_path',
+  'einsum',
+  'einsum_path',
   // Misc
-  'vdot', 'matrix_transpose', 'permute_dims',
-  'rollaxis', 'block',
+  'vdot',
+  'matrix_transpose',
+  'permute_dims',
+  'rollaxis',
+  'block',
   'array_equal',
   // Unique variants (tracked under 'unique')
-  'unique_all', 'unique_counts', 'unique_inverse', 'unique_values',
+  'unique_all',
+  'unique_counts',
+  'unique_inverse',
+  'unique_values',
   // Histogram variants
-  'histogram2d', 'histogramdd', 'histogram_bin_edges',
+  'histogram2d',
+  'histogramdd',
+  'histogram_bin_edges',
   // Misc extra
-  'modf', 'unwrap',
+  'modf',
+  'unwrap',
   // Namespace objects (methods tracked separately as linalg.*, fft.*)
-  'linalg', 'fft', 'random',
+  'linalg',
+  'fft',
+  'random',
   // delete is alias for delete_
   'delete',
 ]);
@@ -174,15 +292,45 @@ function extractNamespaceFunctions(): string[] {
 // Known dtype set names that appear in test files (for variable resolution)
 const ALL = [...ALL_DTYPES];
 const FLOAT = ['float64', 'float32'];
-const REAL = ['float64', 'float32', 'int64', 'uint64', 'int32', 'uint32', 'int16', 'uint16', 'int8', 'uint8'];
-const NUMERIC = ['float64', 'float32', 'complex128', 'complex64', 'int64', 'uint64', 'int32', 'uint32', 'int16', 'uint16', 'int8', 'uint8'];
+const REAL = [
+  'float64',
+  'float32',
+  'int64',
+  'uint64',
+  'int32',
+  'uint32',
+  'int16',
+  'uint16',
+  'int8',
+  'uint8',
+];
+const NUMERIC = [
+  'float64',
+  'float32',
+  'complex128',
+  'complex64',
+  'int64',
+  'uint64',
+  'int32',
+  'uint32',
+  'int16',
+  'uint16',
+  'int8',
+  'uint8',
+];
 const FLOAT_COMPLEX = ['float64', 'float32', 'complex128', 'complex64'];
 const INTEGER = ['int64', 'uint64', 'int32', 'uint32', 'int16', 'uint16', 'int8', 'uint8'];
 const BITWISE = [...INTEGER, 'bool'];
 
 const KNOWN_SETS: Record<string, readonly string[]> = {
   ALL_DTYPES: ALL,
-  ALL, FLOAT, REAL, NUMERIC, FLOAT_COMPLEX, INTEGER, BITWISE,
+  ALL,
+  FLOAT,
+  REAL,
+  NUMERIC,
+  FLOAT_COMPLEX,
+  INTEGER,
+  BITWISE,
   FLOAT64_ONLY: ['float64'],
   COMPLEX: ['complex128', 'complex64'],
   'SETS.ALL': ALL,
@@ -207,10 +355,16 @@ type CoverageEntry = {
 // Parser
 // ============================================================
 
-function resolveLoopDtypes(line: string, localVars: Map<string, readonly string[]>): readonly string[] | null {
+function resolveLoopDtypes(
+  line: string,
+  localVars: Map<string, readonly string[]>
+): readonly string[] | null {
   const m = line.match(/for\s*\(\s*const\s+\w+\s+of\s+(.+?)\s*\)/);
   if (!m) return null;
-  let expr = m[1]!.trim().replace(/[{)]\s*$/, '').trim();
+  let expr = m[1]!
+    .trim()
+    .replace(/[{)]\s*$/, '')
+    .trim();
 
   if (localVars.has(expr)) return localVars.get(expr)!;
   if (KNOWN_SETS[expr]) return KNOWN_SETS[expr]!;
@@ -222,8 +376,8 @@ function resolveLoopDtypes(line: string, localVars: Map<string, readonly string[
     if (base) {
       const excludeMatches = [...expr.matchAll(/!==\s*'(\w+)'/g)];
       if (excludeMatches.length > 0) {
-        const excludes = new Set(excludeMatches.map(m => m[1]!));
-        return base.filter(d => !excludes.has(d));
+        const excludes = new Set(excludeMatches.map((m) => m[1]!));
+        return base.filter((d) => !excludes.has(d));
       }
       return base;
     }
@@ -232,7 +386,10 @@ function resolveLoopDtypes(line: string, localVars: Map<string, readonly string[
   // Inline array: ['float64', 'float32']
   const arrM = expr.match(/^\[([^\]]+)\]/);
   if (arrM) {
-    return arrM[1]!.split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
+    return arrM[1]!
+      .split(',')
+      .map((s) => s.trim().replace(/['"]/g, ''))
+      .filter(Boolean);
   }
 
   return null;
@@ -250,8 +407,11 @@ function resolveLocalVars(lines: string[]): Map<string, readonly string[]> {
     const arrM = line.match(/const\s+(\w+)\s*=\s*\[([^\]]+)\]\s*(?:as\s+const)?\s*;/);
     if (arrM) {
       const name = arrM[1]!;
-      const items = arrM[2]!.split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
-      if (items.length > 0 && items.every(s => /^[a-z]\w+$/i.test(s))) {
+      const items = arrM[2]!
+        .split(',')
+        .map((s) => s.trim().replace(/['"]/g, ''))
+        .filter(Boolean);
+      if (items.length > 0 && items.every((s) => /^[a-z]\w+$/i.test(s))) {
         vars.set(name, items);
       }
     }
@@ -262,8 +422,11 @@ function resolveLocalVars(lines: string[]): Map<string, readonly string[]> {
       if (base) {
         const excludeMatches = [...filterM[3]!.matchAll(/!==\s*'(\w+)'/g)];
         if (excludeMatches.length > 0) {
-          const excludes = new Set(excludeMatches.map(m => m[1]!));
-          vars.set(name, base.filter(d => !excludes.has(d)));
+          const excludes = new Set(excludeMatches.map((m) => m[1]!));
+          vars.set(
+            name,
+            base.filter((d) => !excludes.has(d))
+          );
         } else {
           vars.set(name, [...base]);
         }
@@ -297,11 +460,17 @@ function parseTestFile(filePath: string): CoverageEntry[] {
       if (ch === '{') braceDepth++;
       else if (ch === '}') {
         braceDepth--;
-        while (forLoopBraceDepth.length > 0 && forLoopBraceDepth[forLoopBraceDepth.length - 1]! >= braceDepth) {
+        while (
+          forLoopBraceDepth.length > 0 &&
+          forLoopBraceDepth[forLoopBraceDepth.length - 1]! >= braceDepth
+        ) {
           forLoopBraceDepth.pop();
           forLoopStack.pop();
         }
-        while (describeBraceDepth.length > 0 && describeBraceDepth[describeBraceDepth.length - 1]! >= braceDepth) {
+        while (
+          describeBraceDepth.length > 0 &&
+          describeBraceDepth[describeBraceDepth.length - 1]! >= braceDepth
+        ) {
           describeBraceDepth.pop();
           describeStack.pop();
         }
@@ -362,7 +531,7 @@ function parseTestFile(filePath: string): CoverageEntry[] {
     const dtypeVarM = testName.match(/\$\{(\w+)\}/);
     if (dtypeVarM) {
       const varName = dtypeVarM[1]!;
-      const loop = forLoopStack.find(l => l.varName === varName);
+      const loop = forLoopStack.find((l) => l.varName === varName);
       const fnPart = testName.replace(/\s*\$\{.*?\}\s*$/, '').trim();
       let fnName = fnPart || null;
 
@@ -378,7 +547,13 @@ function parseTestFile(filePath: string): CoverageEntry[] {
 
       if (loop && fnName) {
         for (const dtype of loop.dtypes) {
-          entries.push({ fn: fnName, dtype, oracle: hasOracle, structural: isStructural, file: fileName });
+          entries.push({
+            fn: fnName,
+            dtype,
+            oracle: hasOracle,
+            structural: isStructural,
+            file: fileName,
+          });
         }
       }
       continue;
@@ -395,16 +570,28 @@ function parseTestFile(filePath: string): CoverageEntry[] {
         }
       }
       if (fnName) {
-        entries.push({ fn: fnName, dtype: testName, oracle: hasOracle, structural: isStructural, file: fileName });
+        entries.push({
+          fn: fnName,
+          dtype: testName,
+          oracle: hasOracle,
+          structural: isStructural,
+          file: fileName,
+        });
       }
       continue;
     }
 
     // Test name is function name only — dtype from parent for-loop
-    const dtypeLoop = forLoopStack.find(l => l.varName === 'dtype');
+    const dtypeLoop = forLoopStack.find((l) => l.varName === 'dtype');
     if (dtypeLoop) {
       for (const dtype of dtypeLoop.dtypes) {
-        entries.push({ fn: testName, dtype, oracle: hasOracle, structural: isStructural, file: fileName });
+        entries.push({
+          fn: testName,
+          dtype,
+          oracle: hasOracle,
+          structural: isStructural,
+          file: fileName,
+        });
       }
       continue;
     }
@@ -412,7 +599,13 @@ function parseTestFile(filePath: string): CoverageEntry[] {
     // Test name: `functionName literal_dtype`
     const spaceM = testName.match(/^(.+?)\s+([\w]+)$/);
     if (spaceM && allDtypeSet.has(spaceM[2]!)) {
-      entries.push({ fn: spaceM[1]!, dtype: spaceM[2]!, oracle: hasOracle, structural: isStructural, file: fileName });
+      entries.push({
+        fn: spaceM[1]!,
+        dtype: spaceM[2]!,
+        oracle: hasOracle,
+        structural: isStructural,
+        file: fileName,
+      });
       continue;
     }
   }
@@ -507,8 +700,15 @@ function parseOpsPattern(filePath: string): CoverageEntry[] {
     const line = lines[i]!.trim();
     const arrM = line.match(/const\s+(\w+)\s*=\s*\[([^\]]+)\]\s*;/);
     if (arrM) {
-      const items = arrM[2]!.split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
-      if (items.length > 0 && items.every(s => /^[a-z_]+$/i.test(s)) && !ALL_DTYPES.includes(items[0]!)) {
+      const items = arrM[2]!
+        .split(',')
+        .map((s) => s.trim().replace(/['"]/g, ''))
+        .filter(Boolean);
+      if (
+        items.length > 0 &&
+        items.every((s) => /^[a-z_]+$/i.test(s)) &&
+        !ALL_DTYPES.includes(items[0]!)
+      ) {
         for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
           const forM = lines[j]!.match(/for\s*\(\s*const\s+(\w+)\s+of\s+(\w+)\s*\)/);
           if (forM && forM[2] === arrM[1]) {
@@ -559,8 +759,8 @@ for (const fn of allExpectedFns) {
 
 // Parse test files
 const testFiles = readdirSync(SWEEP_DIR)
-  .filter(f => f.endsWith('.numpy.test.ts'))
-  .map(f => join(SWEEP_DIR, f));
+  .filter((f) => f.endsWith('.numpy.test.ts'))
+  .map((f) => join(SWEEP_DIR, f));
 
 const allEntries: CoverageEntry[] = [];
 const seenPairs = new Set<string>();
@@ -583,7 +783,7 @@ for (const file of testFiles) {
       seenPairs.add(key);
       allEntries.push(e);
     } else if (e.oracle) {
-      const existing = allEntries.find(x => x.fn === e.fn && x.dtype === e.dtype);
+      const existing = allEntries.find((x) => x.fn === e.fn && x.dtype === e.dtype);
       if (existing) existing.oracle = true;
     }
   }
@@ -646,8 +846,12 @@ const totalTested = totalOracle + totalStructural;
 const pct = totalExpected > 0 ? ((totalTested / totalExpected) * 100).toFixed(1) : '0.0';
 
 console.log(`\nDTYPE COVERAGE: ${totalTested}/${totalExpected} expected pairs (${pct}%)`);
-console.log(`  Oracle-validated: ${totalOracle}  |  Structural: ${totalStructural}  |  Missing: ${totalMissing}`);
-console.log(`  Functions in core/index.ts: ${fns.length}  |  Covered in sweep: ${coverageMap.size}\n`);
+console.log(
+  `  Oracle-validated: ${totalOracle}  |  Structural: ${totalStructural}  |  Missing: ${totalMissing}`
+);
+console.log(
+  `  Functions in core/index.ts: ${fns.length}  |  Covered in sweep: ${coverageMap.size}\n`
+);
 
 if (showSummary) {
   for (const d of ALL_DTYPES) {
@@ -655,22 +859,22 @@ if (showSummary) {
     const total = fns.length; // every function expected for every dtype
     const tested = total - missing.length;
     const dpct = ((tested / total) * 100).toFixed(0);
-    const status = missing.length === 0
-      ? '\x1b[32m100%\x1b[0m'
-      : `\x1b[31m${missing.length} missing\x1b[0m`;
+    const status =
+      missing.length === 0 ? '\x1b[32m100%\x1b[0m' : `\x1b[31m${missing.length} missing\x1b[0m`;
     console.log(`  ${d.padEnd(12)} ${dpct.padStart(4)}% (${tested}/${total}) ${status}`);
   }
   process.exit(0);
 }
 
 if (!showMissing) {
-  const hdr = 'Function'.padEnd(nameW) + ' ' + ALL_DTYPES.map(d => abbrev(d).padStart(colW)).join(' ');
+  const hdr =
+    'Function'.padEnd(nameW) + ' ' + ALL_DTYPES.map((d) => abbrev(d).padStart(colW)).join(' ');
   console.log(hdr);
   console.log('-'.repeat(hdr.length));
 
   for (const fn of fns) {
     const tested = coverageMap.get(fn) ?? new Map();
-    const cols = ALL_DTYPES.map(d => {
+    const cols = ALL_DTYPES.map((d) => {
       const entry = tested.get(d);
       if (!entry) return `\x1b[31m${' '.repeat(colW - 1)}X\x1b[0m`;
       if (entry.oracle) return `\x1b[32m${' '.repeat(colW - 1)}V\x1b[0m`;
@@ -695,14 +899,14 @@ if (missingByFn.size > 0 && (showMissing || !showSummary)) {
 }
 
 // Functions never tested
-const untested = fns.filter(f => !coverageMap.has(f));
+const untested = fns.filter((f) => !coverageMap.has(f));
 if (untested.length > 0) {
   console.log(`\nFunctions NEVER tested (${untested.length}):`);
   console.log(`  ${untested.join(', ')}`);
 }
 
 // Functions in tests but not in expected (extra coverage)
-const unmatched = [...coverageMap.keys()].filter(f => !EXPECTED[f]).sort();
+const unmatched = [...coverageMap.keys()].filter((f) => !EXPECTED[f]).sort();
 if (unmatched.length > 0) {
   console.log(`\nFunctions tested but NOT in core/index.ts exports (${unmatched.length}):`);
   console.log(`  ${unmatched.join(', ')}`);
