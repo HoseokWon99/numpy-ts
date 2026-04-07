@@ -213,3 +213,209 @@ test "argsort_f64 single element" {
     argsort_f64(&a, &out, 1);
     try testing.expectEqual(out[0], 0);
 }
+
+test "argsort_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 3.0, 1.0, 2.0 };
+    var out: [3]u32 = undefined;
+    argsort_f32(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 100, -50, 0 };
+    var out: [3]u32 = undefined;
+    argsort_i64(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{ 300, 100, 200 };
+    var out: [3]u32 = undefined;
+    argsort_u64(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{ 5, 1, 3 };
+    var out: [3]u32 = undefined;
+    argsort_u32(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 10, -20, 0 };
+    var out: [3]u32 = undefined;
+    argsort_i16(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 500, 100, 300 };
+    var out: [3]u32 = undefined;
+    argsort_u16(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 10, -5, 0 };
+    var out: [3]u32 = undefined;
+    argsort_i8(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_f64 two slices" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 3.0, 1.0, 2.0, 9.0, 7.0, 8.0 };
+    var out: [6]u32 = undefined;
+    argsort_slices_f64(&a, &out, 3, 2);
+    try testing.expectEqual(out[0], 1); // min of [3,1,2]
+    try testing.expectEqual(out[2], 0); // max of [3,1,2]
+    try testing.expectEqual(out[3], 1); // min of [9,7,8]
+    try testing.expectEqual(out[5], 0); // max of [9,7,8]
+}
+
+test "argsort_slices_f32 two slices" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 3.0, 1.0, 2.0, 9.0, 7.0, 8.0 };
+    var out: [6]u32 = undefined;
+    argsort_slices_f32(&a, &out, 3, 2);
+    try testing.expectEqual(out[0], 1); // min of [3,1,2]
+    try testing.expectEqual(out[2], 0); // max of [3,1,2]
+    try testing.expectEqual(out[3], 1); // min of [9,7,8]
+    try testing.expectEqual(out[5], 0); // max of [9,7,8]
+}
+
+test "argsort_slices_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 30, 10, 20, -10, -30, -20 };
+    var out: [6]u32 = undefined;
+    argsort_slices_i64(&a, &out, 3, 2);
+    try testing.expectEqual(out[0], 1); // min of [30,10,20]
+    try testing.expectEqual(out[3], 1); // min of [-10,-30,-20] is -30 at idx 1
+}
+
+test "argsort_slices_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argsort_slices_u64(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argsort_slices_i32(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argsort_slices_u32(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argsort_slices_i16(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 300, 100, 200 };
+    var out: [3]u32 = undefined;
+    argsort_slices_u16(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argsort_slices_i8(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_u8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{ 200, 50, 100 };
+    var out: [3]u32 = undefined;
+    argsort_slices_u8(&a, &out, 3, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_c128 basic" {
+    // Complex128: interleaved f64 pairs, sorted lexicographically by (re, im)
+    const testing = @import("std").testing;
+    // [(3,0), (1,0), (2,0)]
+    const a = [_]f64{ 3.0, 0.0, 1.0, 0.0, 2.0, 0.0 };
+    var out: [3]u32 = undefined;
+    argsort_c128(&a, &out, 3);
+    try testing.expectEqual(out[0], 1); // re=1 is smallest
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_c64 basic" {
+    // Complex64: interleaved f32 pairs, sorted lexicographically by (re, im)
+    const testing = @import("std").testing;
+    const a = [_]f32{ 3.0, 0.0, 1.0, 0.0, 2.0, 0.0 };
+    var out: [3]u32 = undefined;
+    argsort_c64(&a, &out, 3);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "argsort_slices_c128 basic" {
+    const testing = @import("std").testing;
+    // One slice of 2 complex128: [(3,0),(1,0)]
+    const a = [_]f64{ 3.0, 0.0, 1.0, 0.0 };
+    var out: [2]u32 = undefined;
+    argsort_slices_c128(&a, &out, 2, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+}
+
+test "argsort_slices_c64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 3.0, 0.0, 1.0, 0.0 };
+    var out: [2]u32 = undefined;
+    argsort_slices_c64(&a, &out, 2, 1);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 0);
+}

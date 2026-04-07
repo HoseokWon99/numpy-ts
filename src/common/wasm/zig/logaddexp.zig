@@ -323,3 +323,122 @@ test "logaddexp_scalar_i64 basic" {
     try testing.expectApproxEqAbs(out[0], 1.6931471805599454, 1e-10);
     try testing.expectApproxEqAbs(out[1], 1.3132616875182228, 1e-10);
 }
+
+test "logaddexp_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{0};
+    const b = [_]u64{0};
+    var out: [1]f64 = undefined;
+    logaddexp_u64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{0};
+    const b = [_]i32{0};
+    var out: [1]f64 = undefined;
+    logaddexp_i32(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{0};
+    const b = [_]u32{0};
+    var out: [1]f64 = undefined;
+    logaddexp_u32(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{0};
+    const b = [_]i16{0};
+    var out: [1]f64 = undefined;
+    logaddexp_i16(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{0};
+    const b = [_]u16{0};
+    var out: [1]f64 = undefined;
+    logaddexp_u16(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{0};
+    const b = [_]i8{0};
+    var out: [1]f64 = undefined;
+    logaddexp_i8(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_u8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{0};
+    const b = [_]u8{0};
+    var out: [1]f64 = undefined;
+    logaddexp_u8(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_u64(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_i32(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_u32(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_i16(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_u16(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_i8(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}
+
+test "logaddexp_scalar_u8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{0};
+    var out: [1]f64 = undefined;
+    logaddexp_scalar_u8(&a, &out, 1, 0);
+    try testing.expectApproxEqAbs(out[0], 0.6931471805599453, 1e-10);
+}

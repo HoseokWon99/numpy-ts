@@ -60,3 +60,19 @@ test "arccos_f32 basic" {
     try testing.expectApproxEqAbs(out[1], 1.0472, 1e-4);
     try testing.expectApproxEqAbs(out[2], math.pi / 2.0, 1e-5);
 }
+
+test "arccos_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{1};
+    var out: [1]f64 = undefined;
+    arccos_i64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arccos_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{1};
+    var out: [1]f64 = undefined;
+    arccos_u64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}

@@ -99,3 +99,67 @@ test "cos_f64 negative values" {
     try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
     try testing.expectApproxEqAbs(out[1], -1.0, 1e-10);
 }
+
+test "cos_i64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{0};
+    var out: [1]f64 = undefined;
+    cos_i64_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_u64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{0};
+    var out: [1]f64 = undefined;
+    cos_u64_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_i32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{0};
+    var out: [1]f64 = undefined;
+    cos_i32_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_u32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{0};
+    var out: [1]f64 = undefined;
+    cos_u32_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_i16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{0};
+    var out: [1]f64 = undefined;
+    cos_i16_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_u16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{0};
+    var out: [1]f64 = undefined;
+    cos_u16_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_i8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{0};
+    var out: [1]f64 = undefined;
+    cos_i8_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cos_u8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{0};
+    var out: [1]f64 = undefined;
+    cos_u8_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}

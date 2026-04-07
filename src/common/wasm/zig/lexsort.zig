@@ -159,3 +159,65 @@ test "lexsort_i16 radix basic" {
     try testing.expectEqual(out[1], 2); // 200
     try testing.expectEqual(out[2], 0); // 300
 }
+
+test "lexsort_f32 basic" {
+    const testing = @import("std").testing;
+    const keys = [_]f32{ 3.0, 1.0, 2.0 };
+    var out: [3]u32 = undefined;
+    lexsort_f32(&keys, 1, 3, &out);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "lexsort_i64 basic" {
+    const testing = @import("std").testing;
+    const keys = [_]i64{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    lexsort_i64(&keys, 1, 3, &out);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "lexsort_u64 basic" {
+    const testing = @import("std").testing;
+    const keys = [_]u64{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    lexsort_u64(&keys, 1, 3, &out);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "lexsort_u32 basic" {
+    const testing = @import("std").testing;
+    const keys = [_]u32{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    lexsort_u32(&keys, 1, 3, &out);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "lexsort_u16 basic" {
+    const testing = @import("std").testing;
+    const keys = [_]u16{ 300, 100, 200 };
+    var out: [3]u32 = undefined;
+    var scratch: [3]u32 = undefined;
+    lexsort_u16(&keys, 1, 3, &out, &scratch);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}
+
+test "lexsort_u8 basic" {
+    const testing = @import("std").testing;
+    const keys = [_]u8{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    var scratch: [3]u32 = undefined;
+    lexsort_u8(&keys, 1, 3, &out, &scratch);
+    try testing.expectEqual(out[0], 1);
+    try testing.expectEqual(out[1], 2);
+    try testing.expectEqual(out[2], 0);
+}

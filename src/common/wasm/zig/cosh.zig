@@ -57,3 +57,19 @@ test "cosh_f32 basic" {
     try testing.expectApproxEqAbs(out[0], 1.0, 1e-5);
     try testing.expectApproxEqAbs(out[1], 1.5431, 1e-4);
 }
+
+test "cosh_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{0};
+    var out: [1]f64 = undefined;
+    cosh_i64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}
+
+test "cosh_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{0};
+    var out: [1]f64 = undefined;
+    cosh_u64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 1.0, 1e-10);
+}

@@ -196,3 +196,54 @@ test "hypot_scalar_i64 basic" {
     try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
     try testing.expectApproxEqAbs(out[1], 4.0, 1e-10);
 }
+
+test "hypot_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{3};
+    const b = [_]i32{4};
+    var out: [1]f64 = undefined;
+    hypot_i32(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "hypot_scalar_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{3};
+    var out: [1]f64 = undefined;
+    hypot_scalar_i32(&a, &out, 1, 4);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "hypot_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{3};
+    const b = [_]i16{4};
+    var out: [1]f64 = undefined;
+    hypot_i16(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "hypot_scalar_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{3};
+    var out: [1]f64 = undefined;
+    hypot_scalar_i16(&a, &out, 1, 4);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "hypot_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{3};
+    const b = [_]i8{4};
+    var out: [1]f64 = undefined;
+    hypot_i8(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "hypot_scalar_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{3};
+    var out: [1]f64 = undefined;
+    hypot_scalar_i8(&a, &out, 1, 4);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}

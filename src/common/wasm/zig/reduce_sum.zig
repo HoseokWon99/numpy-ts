@@ -461,3 +461,157 @@ test "reduce_sum_i32 negatives" {
     const a = [_]i32{ -5, -3, 8 };
     try testing.expectEqual(reduce_sum_i32(&a, 3), 0);
 }
+
+test "reduce_sum_i8_to_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 100, 100, 100 }; // sum=300 > i8 max, needs i64
+    try testing.expectEqual(reduce_sum_i8_to_i64(&a, 3), 300);
+}
+
+test "reduce_sum_i16_to_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 30000, 30000, -10000 };
+    try testing.expectEqual(reduce_sum_i16_to_i64(&a, 3), 50000);
+}
+
+test "reduce_sum_u8_to_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{ 200, 200, 200 }; // sum=600 > u8 max
+    try testing.expectEqual(reduce_sum_u8_to_u64(&a, 3), 600);
+}
+
+test "reduce_sum_u16_to_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 60000, 60000, 60000 };
+    try testing.expectEqual(reduce_sum_u16_to_u64(&a, 3), 180000);
+}
+
+test "reduce_sum_c128 basic" {
+    const testing = @import("std").testing;
+    // [(1,2), (3,4), (5,6)] → sum = (9, 12)
+    const a = [_]f64{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
+    var out: [2]f64 = undefined;
+    reduce_sum_c128(&a, 3, &out);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_c64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1.0, 2.0, 3.0, 4.0 };
+    var out: [2]f32 = undefined;
+    reduce_sum_c64(&a, 2, &out);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-5);
+}
+
+test "reduce_sum_strided_f64 basic" {
+    // 3×2 matrix summed along axis 0: [[1,2],[3,4],[5,6]] → [9,12]
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_f64(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_f32(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_i64(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_u64(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_i32(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_u32(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_i16(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_u16(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_i8(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_u8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{ 1, 2, 3, 4, 5, 6 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_u8(&a, &out, 1, 3, 2);
+    try testing.expectApproxEqAbs(out[0], 9.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 12.0, 1e-10);
+}
+
+test "reduce_sum_strided_c128 basic" {
+    // 2 complex128 elements summed along axis (outer=1, axis=2, inner=1)
+    // Each "element" is 2 f64s. Data: [(1,2),(3,4)] → sum = (4,6)
+    const testing = @import("std").testing;
+    const a = [_]f64{ 1.0, 2.0, 3.0, 4.0 };
+    var out: [2]f64 = undefined;
+    reduce_sum_strided_c128(&a, &out, 1, 2, 1);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-10);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-10);
+}
+
+test "reduce_sum_strided_c64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 1.0, 2.0, 3.0, 4.0 };
+    var out: [2]f32 = undefined;
+    reduce_sum_strided_c64(&a, &out, 1, 2, 1);
+    try testing.expectApproxEqAbs(out[0], 4.0, 1e-5);
+    try testing.expectApproxEqAbs(out[1], 6.0, 1e-5);
+}

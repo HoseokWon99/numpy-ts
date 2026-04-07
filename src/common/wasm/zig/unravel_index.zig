@@ -71,3 +71,19 @@ test "unravel_index_i32 3D" {
     try testing.expectEqual(out[3], 2);
     try testing.expectEqual(out[5], 3);
 }
+
+test "unravel_index_i64 basic 2D" {
+    const testing = @import("std").testing;
+    // shape [3, 4], strides [4, 1] (C-order)
+    const indices = [_]i64{ 0, 5, 11 };
+    const strides = [_]i64{ 4, 1 };
+    const shape = [_]i64{ 3, 4 };
+    var out: [6]i64 = undefined;
+    unravel_index_i64(&indices, &out, 3, &strides, &shape, 2);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[3], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[4], 1);
+    try testing.expectEqual(out[2], 2);
+    try testing.expectEqual(out[5], 3);
+}

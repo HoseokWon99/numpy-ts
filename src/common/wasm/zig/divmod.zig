@@ -157,3 +157,83 @@ test "divmod_scalar_f32 basic" {
     try testing.expectApproxEqAbs(q[1], 3.0, 1e-5);
     try testing.expectApproxEqAbs(r[1], 1.0, 1e-5);
 }
+
+test "divmod_scalar_i64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_i64_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_u64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_u64_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_i32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_i32_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_u32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_u32_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_i16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_i16_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_u16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_u16_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_i8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_i8_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}
+
+test "divmod_scalar_u8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{7};
+    var q: [1]f64 = undefined;
+    var r: [1]f64 = undefined;
+    divmod_scalar_u8_f64(&a, &q, &r, 1, 3.0);
+    try testing.expectApproxEqAbs(q[0], 2.0, 1e-10);
+    try testing.expectApproxEqAbs(r[0], 1.0, 1e-10);
+}

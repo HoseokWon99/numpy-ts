@@ -212,3 +212,155 @@ test "argpartition_f64 single element" {
     argpartition_f64(&a, &out, 1, 0);
     try testing.expectEqual(out[0], 0);
 }
+
+test "argpartition_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 3.0, 1.0, 4.0, 1.5, 2.0 };
+    var out: [5]u32 = undefined;
+    argpartition_f32(&a, &out, 5, 2);
+    try testing.expectApproxEqAbs(a[out[2]], 2.0, 1e-5);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 50, 10, 40, 20, 30 };
+    var out: [5]u32 = undefined;
+    argpartition_i64(&a, &out, 5, 2);
+    try testing.expectEqual(a[out[2]], 30);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{ 50, 10, 40, 20, 30 };
+    var out: [5]u32 = undefined;
+    argpartition_u64(&a, &out, 5, 2);
+    try testing.expectEqual(a[out[2]], 30);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{ 50, 10, 40, 20, 30 };
+    var out: [5]u32 = undefined;
+    argpartition_u32(&a, &out, 5, 2);
+    try testing.expectEqual(a[out[2]], 30);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 50, 10, 40, 20, 30 };
+    var out: [5]u32 = undefined;
+    argpartition_i16(&a, &out, 5, 2);
+    try testing.expectEqual(a[out[2]], 30);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 500, 100, 400, 200, 300 };
+    var out: [5]u32 = undefined;
+    argpartition_u16(&a, &out, 5, 2);
+    try testing.expectEqual(a[out[2]], 300);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 50, 10, 40, 20, 30 };
+    var out: [5]u32 = undefined;
+    argpartition_i8(&a, &out, 5, 2);
+    try testing.expectEqual(a[out[2]], 30);
+    for (0..2) |i| try testing.expect(a[out[i]] <= a[out[2]]);
+    for (3..5) |i| try testing.expect(a[out[i]] >= a[out[2]]);
+}
+
+test "argpartition_slices_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f64{ 3.0, 1.0, 2.0, 9.0, 7.0, 8.0 };
+    var out: [6]u32 = undefined;
+    argpartition_slices_f64(&a, &out, 3, 2, 1);
+    // out indices are local (0-based within each slice)
+    try testing.expectApproxEqAbs(a[0 + out[1]], 2.0, 1e-10); // kth=1 of [3,1,2]
+    try testing.expectApproxEqAbs(a[3 + out[4]], 8.0, 1e-10); // kth=1 of [9,7,8]
+}
+
+test "argpartition_slices_f32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]f32{ 3.0, 1.0, 2.0 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_f32(&a, &out, 3, 1, 1);
+    try testing.expectApproxEqAbs(a[out[1]], 2.0, 1e-5);
+}
+
+test "argpartition_slices_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_i64(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 20);
+}
+
+test "argpartition_slices_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_u64(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 20);
+}
+
+test "argpartition_slices_i32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_i32(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 20);
+}
+
+test "argpartition_slices_u32 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_u32(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 20);
+}
+
+test "argpartition_slices_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_i16(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 20);
+}
+
+test "argpartition_slices_u16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{ 300, 100, 200 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_u16(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 200);
+}
+
+test "argpartition_slices_i8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{ 30, 10, 20 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_i8(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 20);
+}
+
+test "argpartition_slices_u8 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{ 200, 50, 100 };
+    var out: [3]u32 = undefined;
+    argpartition_slices_u8(&a, &out, 3, 1, 1);
+    try testing.expectEqual(a[out[1]], 100);
+}

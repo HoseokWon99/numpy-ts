@@ -117,3 +117,75 @@ test "arctan2_f64 negative values" {
     try testing.expectApproxEqAbs(out[0], -3.0 * math.pi / 4.0, 1e-10);
     try testing.expectApproxEqAbs(out[1], math.pi / 4.0, 1e-10);
 }
+
+test "arctan2_i64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{0};
+    const b = [_]i64{1};
+    var out: [1]f64 = undefined;
+    arctan2_i64_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_u64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{0};
+    const b = [_]u64{1};
+    var out: [1]f64 = undefined;
+    arctan2_u64_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_i32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i32{0};
+    const b = [_]i32{1};
+    var out: [1]f64 = undefined;
+    arctan2_i32_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_u32_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u32{0};
+    const b = [_]u32{1};
+    var out: [1]f64 = undefined;
+    arctan2_u32_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_i16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{0};
+    const b = [_]i16{1};
+    var out: [1]f64 = undefined;
+    arctan2_i16_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_u16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u16{0};
+    const b = [_]u16{1};
+    var out: [1]f64 = undefined;
+    arctan2_u16_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_i8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i8{0};
+    const b = [_]i8{1};
+    var out: [1]f64 = undefined;
+    arctan2_i8_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arctan2_u8_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u8{0};
+    const b = [_]u8{1};
+    var out: [1]f64 = undefined;
+    arctan2_u8_f64(&a, &b, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}

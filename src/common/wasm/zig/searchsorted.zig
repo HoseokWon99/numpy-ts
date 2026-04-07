@@ -253,3 +253,179 @@ test "searchsorted_left_f64 empty sorted array" {
     try testing.expectEqual(out[0], 0);
     try testing.expectEqual(out[1], 0);
 }
+
+test "searchsorted_left_f32 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0 };
+    const values = [_]f32{ 0.5, 2.0, 3.5 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_f32(&sorted, 5, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 3);
+}
+
+test "searchsorted_left_i64 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i64{ 10, 20, 30 };
+    const values = [_]i64{ 0, 20, 25 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_i64(&sorted, 3, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 2);
+}
+
+test "searchsorted_left_u64 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u64{ 10, 20, 30 };
+    const values = [_]u64{ 0, 20, 35 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_u64(&sorted, 3, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 3);
+}
+
+test "searchsorted_left_u32 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u32{ 10, 20, 30 };
+    const values = [_]u32{ 5, 20, 35 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_u32(&sorted, 3, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 3);
+}
+
+test "searchsorted_left_i16 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i16{ -10, 0, 10 };
+    const values = [_]i16{ -20, 0, 5 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_i16(&sorted, 3, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 2);
+}
+
+test "searchsorted_left_u16 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u16{ 100, 200, 300 };
+    const values = [_]u16{ 50, 200, 250 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_u16(&sorted, 3, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 2);
+}
+
+test "searchsorted_left_i8 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i8{ -10, 0, 10 };
+    const values = [_]i8{ -20, 0, 5 };
+    var out: [3]u32 = undefined;
+    searchsorted_left_i8(&sorted, 3, &values, &out, 3);
+    try testing.expectEqual(out[0], 0);
+    try testing.expectEqual(out[1], 1);
+    try testing.expectEqual(out[2], 2);
+}
+
+test "searchsorted_right_f32 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]f32{ 1.0, 2.0, 3.0 };
+    const values = [_]f32{ 2.0, 2.5 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_f32(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_right_i64 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i64{ 10, 20, 30 };
+    const values = [_]i64{ 20, 25 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_i64(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_right_u64 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u64{ 10, 20, 30 };
+    const values = [_]u64{ 20, 35 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_u64(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 3);
+}
+
+test "searchsorted_right_i32 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i32{ 10, 20, 30 };
+    const values = [_]i32{ 20, 25 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_i32(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_right_u32 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u32{ 10, 20, 30 };
+    const values = [_]u32{ 20, 35 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_u32(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 3);
+}
+
+test "searchsorted_right_i16 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i16{ -10, 0, 10 };
+    const values = [_]i16{ 0, 5 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_i16(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_right_u16 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u16{ 100, 200, 300 };
+    const values = [_]u16{ 200, 250 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_u16(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_right_i8 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]i8{ -10, 0, 10 };
+    const values = [_]i8{ 0, 5 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_i8(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_right_u8 basic" {
+    const testing = @import("std").testing;
+    const sorted = [_]u8{ 10, 20, 30 };
+    const values = [_]u8{ 20, 25 };
+    var out: [2]u32 = undefined;
+    searchsorted_right_u8(&sorted, 3, &values, &out, 2);
+    try testing.expectEqual(out[0], 2);
+    try testing.expectEqual(out[1], 2);
+}
+
+test "searchsorted_left_u8 beyond end" {
+    const testing = @import("std").testing;
+    const sorted = [_]u8{ 10, 20, 30 };
+    const values = [_]u8{255};
+    var out: [1]u32 = undefined;
+    searchsorted_left_u8(&sorted, 3, &values, &out, 1);
+    try testing.expectEqual(out[0], 3);
+}

@@ -177,3 +177,11 @@ test "sqrt_i64 basic" {
     try testing.expectApproxEqAbs(out[2], 2.0, 1e-10);
     try testing.expectApproxEqAbs(out[3], 10.0, 1e-10);
 }
+
+test "sqrt_i16 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{4};
+    var out: [1]f64 = undefined;
+    sqrt_i16(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 2.0, 1e-10);
+}

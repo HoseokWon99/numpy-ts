@@ -145,3 +145,19 @@ test "reciprocal_i8_f64 basic" {
     try testing.expectApproxEqAbs(out[2], -0.25, 1e-10);
     try testing.expectApproxEqAbs(out[3], 0.2, 1e-10);
 }
+
+test "reciprocal_i64_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{2};
+    var out: [1]f64 = undefined;
+    reciprocal_i64_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.5, 1e-10);
+}
+
+test "reciprocal_i16_f64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i16{4};
+    var out: [1]f64 = undefined;
+    reciprocal_i16_f64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.25, 1e-10);
+}

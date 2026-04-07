@@ -525,3 +525,72 @@ test "copysign_scalar_f16 basic" {
     try testing.expectEqual(out[0], 0x4000); // 2.0
     try testing.expectEqual(out[1], 0x3C00); // 1.0
 }
+
+test "copysign_u64 basic" {
+    const testing = @import("std").testing;
+    // u64 values: mag=5, sign source 0 means sign=0
+    const x1 = [_]u64{5};
+    const x2 = [_]u64{3};
+    var out: [1]f64 = undefined;
+    copysign_u64(&x1, &x2, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_u32 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]u32{5};
+    const x2 = [_]u32{3};
+    var out: [1]f64 = undefined;
+    copysign_u32(&x1, &x2, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_u16 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]u16{5};
+    const x2 = [_]u16{3};
+    var out: [1]f64 = undefined;
+    copysign_u16(&x1, &x2, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_u8 basic" {
+    const testing = @import("std").testing;
+    const x1 = [_]u8{5};
+    const x2 = [_]u8{3};
+    var out: [1]f64 = undefined;
+    copysign_u8(&x1, &x2, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_scalar_u64 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]u64{5};
+    var out: [1]f64 = undefined;
+    copysign_scalar_u64(&x1, &out, 1, 1.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_scalar_u32 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]u32{5};
+    var out: [1]f64 = undefined;
+    copysign_scalar_u32(&x1, &out, 1, 1.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_scalar_u16 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]u16{5};
+    var out: [1]f64 = undefined;
+    copysign_scalar_u16(&x1, &out, 1, 1.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}
+
+test "copysign_scalar_u8 positive scalar" {
+    const testing = @import("std").testing;
+    const x1 = [_]u8{5};
+    var out: [1]f64 = undefined;
+    copysign_scalar_u8(&x1, &out, 1, 1.0);
+    try testing.expectApproxEqAbs(out[0], 5.0, 1e-10);
+}

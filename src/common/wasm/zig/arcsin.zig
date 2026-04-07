@@ -60,3 +60,19 @@ test "arcsin_f32 basic" {
     try testing.expectApproxEqAbs(out[1], 0.5236, 1e-4);
     try testing.expectApproxEqAbs(out[2], math.pi / 2.0, 1e-5);
 }
+
+test "arcsin_i64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]i64{0};
+    var out: [1]f64 = undefined;
+    arcsin_i64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
+
+test "arcsin_u64 basic" {
+    const testing = @import("std").testing;
+    const a = [_]u64{0};
+    var out: [1]f64 = undefined;
+    arcsin_u64(&a, &out, 1);
+    try testing.expectApproxEqAbs(out[0], 0.0, 1e-10);
+}
