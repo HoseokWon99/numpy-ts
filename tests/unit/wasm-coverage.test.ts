@@ -458,7 +458,7 @@ describe('wasmLogaddexp', () => {
     const b = array([1, 2, 3], 'int16');
     const r = wasmLogaddexp(a.storage, b.storage);
     expect(r).not.toBeNull();
-    expect(r!.dtype).toBe('float64');
+    expect(r!.dtype).toBe('float32'); // NumPy: int16 → float32
   });
 
   it('float64 scalar path', () => {
@@ -486,7 +486,7 @@ describe('wasmLogaddexp', () => {
     const a = array([1, 2, 3], 'int8');
     const r = wasmLogaddexpScalar(a.storage, 2);
     expect(r).not.toBeNull();
-    expect(r!.dtype).toBe('float64');
+    expect(r!.dtype).toBe('float16'); // NumPy: int8 → float16
   });
 });
 
@@ -516,12 +516,12 @@ describe('wasmDiv / wasmDivScalar', () => {
     expect(data[1]).toBe(3);
   });
 
-  it('int16 binary → float64 output', () => {
+  it('int16 binary → float32 output', () => {
     const a = array([4, 9], 'int16');
     const b = array([2, 3], 'int16');
     const r = wasmDiv(a.storage, b.storage);
     expect(r).not.toBeNull();
-    expect(r!.dtype).toBe('float64');
+    expect(r!.dtype).toBe('float32'); // NumPy: int16 → float32
   });
 
   it('float64 scalar', () => {
@@ -541,11 +541,11 @@ describe('wasmDiv / wasmDivScalar', () => {
     expect(r!.dtype).toBe('float64');
   });
 
-  it('int8 scalar → float64 output', () => {
+  it('int8 scalar → float16 output', () => {
     const a = array([4, 8, 12], 'int8');
     const r = wasmDivScalar(a.storage, 4);
     expect(r).not.toBeNull();
-    expect(r!.dtype).toBe('float64');
+    expect(r!.dtype).toBe('float16'); // NumPy: int8 → float16
   });
 
   it('returns null for mixed dtypes', () => {

@@ -11,7 +11,6 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
-  expectBothReject,
   expectMatchPre,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
