@@ -52,6 +52,9 @@ jobs:
       - name: Run format check
         run: npm run format:check
 
+      - name: Zig dead code check
+        run: npm run test:zig:dead-code
+
       - name: Run all tests
         run: npm test
 
@@ -201,6 +204,9 @@ jobs:
 
       - name: Run tests with coverage
         run: npm run test:coverage
+
+      - name: Zig export fn test coverage (≥95%)
+        run: npm run test:zig:coverage
 
       # - name: Upload coverage reports
       #   uses: codecov/codecov-action@v4

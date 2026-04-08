@@ -57,6 +57,9 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Zig dead code check
+        run: npm run test:zig:dead-code
+
   # Run full test suite with coverage
   test:
     name: Tests & Coverage
@@ -91,6 +94,15 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
+      - name: Zig export fn test coverage (≥95%)
+        run: npm run test:zig:coverage
+
+      - name: DType coverage report
+        id: dtype-coverage
+        if: always()
+        run: |
+          npm run test:dtype-coverage -- --summary 2>&1 | tee dtype-coverage.txt || true
+
       - name: Generate coverage summary
         id: coverage
         run: |
@@ -105,6 +117,7 @@ jobs:
           };
 
           let comment = '## 📊 Coverage Report\n\n';
+          comment += '### Vitest Coverage\n\n';
           comment += '| Metric | Coverage | Threshold | Status |\n';
           comment += '|--------|----------|-----------|--------|\n';
           comment += \`| Statements | \${formatMetric(total.statements)} | 80% | \${total.statements.pct >= 80 ? '✅' : '❌'} |\n\`;
@@ -121,6 +134,18 @@ jobs:
             comment += '\n✅ All coverage thresholds met!\n';
           } else {
             comment += '\n⚠️ Some coverage thresholds not met. Please add tests.\n';
+          }
+
+          // Append dtype coverage summary if available
+          const fs = require('fs');
+          if (fs.existsSync('dtype-coverage.txt')) {
+            const dtypeSummary = fs.readFileSync('dtype-coverage.txt', 'utf-8').trim();
+            if (dtypeSummary) {
+              comment += '\n### DType Sweep Coverage\n\n';
+              comment += '<details><summary>Click to expand</summary>\n\n';
+              comment += '\`\`\`\n' + dtypeSummary + '\n\`\`\`\n';
+              comment += '</details>\n';
+            }
           }
 
           console.log('COMMENT<<EOF');
