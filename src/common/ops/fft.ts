@@ -478,7 +478,7 @@ function fftnd(
       rows >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier &&
       cols >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier
     ) {
-      const srcData = result.data as Float64Array;
+      const srcData = result.data as Float64Array | Float32Array;
       const outData = wasmFft2(srcData, rows, cols, inverse);
       if (outData) {
         result.dispose();
@@ -684,12 +684,19 @@ function wasmBatchRfft(a: ArrayStorage, n: number): ArrayStorage | null {
   const inStride = n;
   const outStride = outLen * 2;
 
-  const srcData =
-    a.dtype === 'float64'
-      ? (a.data as Float64Array)
-      : Float64Array.from(
-          a.data.subarray(a.offset, a.offset + a.size) as unknown as ArrayLike<number>
-        );
+  let srcData: Float64Array;
+  if (a.dtype === 'float64') {
+    srcData = a.data as Float64Array;
+  } else if (a.dtype === 'int64' || a.dtype === 'uint64') {
+    // BigInt arrays need explicit conversion
+    const bigData = a.data as BigInt64Array | BigUint64Array;
+    srcData = new Float64Array(a.size);
+    for (let i = 0; i < a.size; i++) srcData[i] = Number(bigData[a.offset + i]!);
+  } else {
+    srcData = Float64Array.from(
+      a.data.subarray(a.offset, a.offset + a.size) as unknown as ArrayLike<number>
+    );
+  }
 
   const outData = wasmRfftBatch(srcData, n, batch, inStride, outStride);
   if (!outData) return null;
@@ -1059,12 +1066,18 @@ export function rfft2(
       cols >= FFT_WASM_THRESHOLD * wasmConfig.thresholdMultiplier
     ) {
       const halfCols = Math.floor(cols / 2) + 1;
-      const inputData =
-        a.dtype === 'float64'
-          ? (a.data as Float64Array).subarray(a.offset, a.offset + rows * cols)
-          : Float64Array.from(
-              a.data.subarray(a.offset, a.offset + rows * cols) as ArrayLike<number>
-            );
+      let inputData: Float64Array;
+      if (a.dtype === 'float64') {
+        inputData = (a.data as Float64Array).subarray(a.offset, a.offset + rows * cols);
+      } else if (a.dtype === 'int64' || a.dtype === 'uint64') {
+        const bigData = a.data as BigInt64Array | BigUint64Array;
+        inputData = new Float64Array(rows * cols);
+        for (let i = 0; i < rows * cols; i++) inputData[i] = Number(bigData[a.offset + i]!);
+      } else {
+        inputData = Float64Array.from(
+          a.data.subarray(a.offset, a.offset + rows * cols) as ArrayLike<number>
+        );
+      }
       const outData = wasmRfft2(inputData, rows, cols);
       if (outData) {
         return ArrayStorage.fromData(outData, [rows, halfCols], fftResultDtype(a.dtype as DType));

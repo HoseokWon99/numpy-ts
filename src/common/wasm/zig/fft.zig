@@ -657,6 +657,32 @@ export fn ifft2_c128(inp: [*]const f64, out: [*]f64, scratch: [*]f64, rows: u32,
     complexTranspose(transpose_buf, out, N, M);
 }
 
+/// 2D forward complex FFT for complex64 (interleaved f32, computed in f64).
+export fn fft2_c64(inp: [*]const f32, out: [*]f32, scratch: [*]f64, rows: u32, cols: u32) void {
+    const M = @as(usize, rows);
+    const N = @as(usize, cols);
+    const total = M * N;
+    const in_f64 = scratch;
+    const out_f64 = scratch + total * 2;
+    const fft2_scratch = out_f64 + total * 2;
+    for (0..total * 2) |i| in_f64[i] = @as(f64, inp[i]);
+    fft2_c128(in_f64, out_f64, fft2_scratch, rows, cols);
+    for (0..total * 2) |i| out[i] = @as(f32, @floatCast(out_f64[i]));
+}
+
+/// 2D inverse complex FFT for complex64 (interleaved f32, computed in f64).
+export fn ifft2_c64(inp: [*]const f32, out: [*]f32, scratch: [*]f64, rows: u32, cols: u32) void {
+    const M = @as(usize, rows);
+    const N = @as(usize, cols);
+    const total = M * N;
+    const in_f64 = scratch;
+    const out_f64 = scratch + total * 2;
+    const fft2_scratch = out_f64 + total * 2;
+    for (0..total * 2) |i| in_f64[i] = @as(f64, inp[i]);
+    ifft2_c128(in_f64, out_f64, fft2_scratch, rows, cols);
+    for (0..total * 2) |i| out[i] = @as(f32, @floatCast(out_f64[i]));
+}
+
 /// Scratch size for fft2: max FFT scratch + transpose buffer.
 export fn fft2_scratch_size(rows: u32, cols: u32) u32 {
     const M = @as(usize, rows);

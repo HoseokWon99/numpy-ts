@@ -20,6 +20,8 @@ import {
   ifft_batch_c64,
   fft2_c128,
   ifft2_c128,
+  fft2_c64,
+  ifft2_c64,
   fft2_scratch_size,
   rfft2_f64,
   rfft2_scratch_size,
@@ -260,15 +262,20 @@ export function wasmIrfft(a: ArrayStorage, nOut: number): ArrayStorage | null {
  * Input: contiguous complex128 2D array (rows × cols).
  */
 export function wasmFft2(
-  data: Float64Array,
+  data: Float64Array | Float32Array,
   rows: number,
   cols: number,
   inverse: boolean
-): Float64Array | null {
+): Float64Array | Float32Array | null {
+  const isF32 = data instanceof Float32Array;
+  const bpe = isF32 ? 4 : 8;
   const totalDataLen = rows * cols * 2;
   const scratchN = fft2_scratch_size(rows, cols);
-  const totalBytes = totalDataLen * 8;
-  const scratchBytes = scratchN * 8;
+  const totalBytes = totalDataLen * bpe;
+  // c64 needs extra scratch: 4*rows*cols f64 for f32↔f64 conversion buffers
+  const scratchBytes = isF32
+    ? (scratchN + 4 * rows * cols) * 8
+    : scratchN * 8;
 
   wasmConfig.wasmCallCount++;
   resetScratchAllocator();
@@ -277,11 +284,17 @@ export function wasmFft2(
   const outPtr = scratchAlloc(totalBytes);
   const scratchPtr = scratchAlloc(scratchBytes);
 
-  const kernel = inverse ? ifft2_c128 : fft2_c128;
-  kernel(inPtr, outPtr, scratchPtr, rows, cols);
+  if (isF32) {
+    const kernel = inverse ? ifft2_c64 : fft2_c64;
+    kernel(inPtr, outPtr, scratchPtr, rows, cols);
+  } else {
+    const kernel = inverse ? ifft2_c128 : fft2_c128;
+    kernel(inPtr, outPtr, scratchPtr, rows, cols);
+  }
 
   const mem = getSharedMemory();
-  const result = new Float64Array(totalDataLen);
+  const Ctor = isF32 ? Float32Array : Float64Array;
+  const result = new Ctor(totalDataLen);
   new Uint8Array(result.buffer, 0, totalBytes).set(new Uint8Array(mem.buffer, outPtr, totalBytes));
   return result;
 }
