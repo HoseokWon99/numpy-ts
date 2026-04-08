@@ -546,7 +546,7 @@ describe('Trigonometric Operations', () => {
       const y = array([1, 0], 'uint8');
       const x = array([0, 1], 'uint8');
       const result = arctan2(y, x);
-      expect(result.dtype).toBe('float64');
+      expect(result.dtype).toBe('float16'); // NumPy: uint8 → float16
     });
 
     it('hypot with uint16 inputs', () => {

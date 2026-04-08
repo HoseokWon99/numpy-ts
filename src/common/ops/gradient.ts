@@ -78,10 +78,9 @@ function diffOnce(a: ArrayStorage, axis: number): ArrayStorage {
   const resultShape = [...shape];
   resultShape[axis] = axisSize - 1;
 
-  // Determine result dtype - always float64 for non-float types (except complex)
   const dtype = a.dtype;
   const isComplex = isComplexDType(dtype);
-  const resultDtype = isBigIntDType(dtype) ? 'float64' : dtype;
+  const resultDtype = dtype;
 
   const result = ArrayStorage.zeros(resultShape, resultDtype);
   const resultData = result.data;
@@ -133,13 +132,14 @@ function diffOnce(a: ArrayStorage, axis: number): ArrayStorage {
       const val1 = a.data[off + flatIdx1]! as number;
       const val2 = a.data[off + flatIdx2]! as number;
       resultData[resultIdx] = val1 !== val2 ? 1 : 0;
+    } else if (isBigIntDType(dtype)) {
+      const bigData = a.data as BigInt64Array | BigUint64Array;
+      const val1 = bigData[off + flatIdx1]!;
+      const val2 = bigData[off + flatIdx2]!;
+      (resultData as BigInt64Array | BigUint64Array)[resultIdx] = val2 - val1;
     } else {
-      const val1 = isBigIntDType(dtype)
-        ? Number(a.data[off + flatIdx1]!)
-        : Number(a.data[off + flatIdx1]!);
-      const val2 = isBigIntDType(dtype)
-        ? Number(a.data[off + flatIdx2]!)
-        : Number(a.data[off + flatIdx2]!);
+      const val1 = Number(a.data[off + flatIdx1]!);
+      const val2 = Number(a.data[off + flatIdx2]!);
       resultData[resultIdx] = val2 - val1;
     }
   }

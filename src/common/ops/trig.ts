@@ -504,9 +504,7 @@ function arctan2Array(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
   const dtype1 = x1.dtype;
   const dtype2 = x2.dtype;
 
-  // Always promote to float64 for arctan2 (matching NumPy behavior)
-  // Only preserve float32 if both inputs are float32
-  const resultDtype = dtype1 === 'float32' && dtype2 === 'float32' ? 'float32' : 'float64';
+  const resultDtype = mathResultDtype(promoteDTypes(dtype1, dtype2));
 
   const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;

@@ -15,6 +15,7 @@ import {
   isComplexDType,
   throwIfComplex,
   mathResultDtype,
+  promoteDTypes,
   type DType,
 } from '../dtype';
 import { Complex } from '../complex';
@@ -731,11 +732,7 @@ function logaddexpArray(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
   const dtype1 = x1.dtype;
   const dtype2 = x2.dtype;
 
-  // NumPy promotes small integer types (8/16-bit) to float32, larger integers to float64.
-  // Only use float32 when both inputs would promote to float32.
-  const promosToF32 = (d: string) =>
-    d === 'float32' || d === 'int8' || d === 'uint8' || d === 'int16' || d === 'uint16';
-  const resultDtype = promosToF32(dtype1) && promosToF32(dtype2) ? 'float32' : 'float64';
+  const resultDtype = mathResultDtype(promoteDTypes(dtype1, dtype2));
 
   const result = ArrayStorage.empty(outputShape, resultDtype);
   const resultData = result.data;
@@ -767,15 +764,7 @@ function logaddexpScalar(storage: ArrayStorage, x2: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  // NumPy promotes small integer types (8/16-bit) to float32, larger integers to float64.
-  const resultDtype =
-    dtype === 'float32' ||
-    dtype === 'int8' ||
-    dtype === 'uint8' ||
-    dtype === 'int16' ||
-    dtype === 'uint16'
-      ? 'float32'
-      : 'float64';
+  const resultDtype = mathResultDtype(dtype);
 
   const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
@@ -838,9 +827,7 @@ function logaddexp2Array(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage {
   const dtype1 = x1.dtype;
   const dtype2 = x2.dtype;
 
-  // Always promote to float64 for logaddexp2 (matching NumPy behavior)
-  // Only preserve float32 if both inputs are float32
-  const resultDtype = dtype1 === 'float32' && dtype2 === 'float32' ? 'float32' : 'float64';
+  const resultDtype = mathResultDtype(promoteDTypes(dtype1, dtype2));
 
   const result = ArrayStorage.empty(outputShape, resultDtype);
   const resultData = result.data;
@@ -872,8 +859,7 @@ function logaddexp2Scalar(storage: ArrayStorage, x2: number): ArrayStorage {
   const size = storage.size;
   const contiguous = storage.isCContiguous;
 
-  // Always promote to float64 for logaddexp2
-  const resultDtype = dtype === 'float32' ? 'float32' : 'float64';
+  const resultDtype = mathResultDtype(dtype);
 
   const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
