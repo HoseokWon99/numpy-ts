@@ -523,6 +523,33 @@ export fn ifft_batch_c128(inp: [*]const f64, out: [*]f64, scratch: [*]f64, n: u3
     fftBatchSameSize(inp, out, scratch, N, @as(usize, batch), N * 2, true);
 }
 
+/// Batched 1D forward FFT for complex64 (interleaved f32, computed in f64).
+/// Scratch must hold 4*n*batch f64 (f32→f64 conversion buffers) + FFT scratch.
+export fn fft_batch_c64(inp: [*]const f32, out: [*]f32, scratch: [*]f64, n: u32, batch: u32) void {
+    const N = @as(usize, n);
+    const B = @as(usize, batch);
+    const totalComplex = B * N * 2;
+    const in_f64 = scratch;
+    const out_f64 = scratch + totalComplex;
+    const fft_scratch = out_f64 + totalComplex;
+    for (0..totalComplex) |i| in_f64[i] = @as(f64, inp[i]);
+    fftBatchSameSize(in_f64, out_f64, fft_scratch, N, B, N * 2, false);
+    for (0..totalComplex) |i| out[i] = @as(f32, @floatCast(out_f64[i]));
+}
+
+/// Batched 1D inverse FFT for complex64 (interleaved f32, computed in f64).
+export fn ifft_batch_c64(inp: [*]const f32, out: [*]f32, scratch: [*]f64, n: u32, batch: u32) void {
+    const N = @as(usize, n);
+    const B = @as(usize, batch);
+    const totalComplex = B * N * 2;
+    const in_f64 = scratch;
+    const out_f64 = scratch + totalComplex;
+    const fft_scratch = out_f64 + totalComplex;
+    for (0..totalComplex) |i| in_f64[i] = @as(f64, inp[i]);
+    fftBatchSameSize(in_f64, out_f64, fft_scratch, N, B, N * 2, true);
+    for (0..totalComplex) |i| out[i] = @as(f32, @floatCast(out_f64[i]));
+}
+
 /// Main dispatch: choose algorithm based on size and factorization.
 fn fftDispatch(input: [*]const f64, output: [*]f64, scratch: [*]f64, N: usize, inverse: bool) void {
     if (N <= 1) {
