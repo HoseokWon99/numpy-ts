@@ -206,7 +206,7 @@ export fn pcg64_init_from_ss(words: [*]const u32) void {
 /// Initialize PCG64 with pre-computed 128-bit state and increment, passed as
 /// two u64 pairs. Performs the 2-bump seeded initialization matching
 /// NumPy's `pcg_setseq_128_srandom_r`.
-export fn pcg64_init(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
+fn pcg64_init(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
     const init_state: u128 = (@as(u128, state_hi) << 64) | @as(u128, state_lo);
     const init_seq: u128 = (@as(u128, inc_hi) << 64) | @as(u128, inc_lo);
     pcg64_init_raw(init_state, init_seq);
@@ -214,7 +214,7 @@ export fn pcg64_init(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) voi
 
 /// Advance the PCG64 state and return the next u64 (XSL-RR output function).
 /// Matches NumPy's `pcg64_random_r`.
-export fn pcg64_step() u64 {
+fn pcg64_step() u64 {
     pcg64_step_internal();
     return pcg64_output(pcg_state);
 }
@@ -262,7 +262,7 @@ export fn pcg64_get_state(out: [*]u64) void {
 
 /// Set PCG64 state directly from u64 pairs (no initialization bumps).
 /// Use this to restore a previously serialized state mid-stream.
-export fn pcg64_set_state(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
+fn pcg64_set_state(state_lo: u64, state_hi: u64, inc_lo: u64, inc_hi: u64) void {
     pcg_state = (@as(u128, state_hi) << 64) | @as(u128, state_lo);
     pcg_inc = (@as(u128, inc_hi) << 64) | @as(u128, inc_lo);
 }

@@ -61,39 +61,45 @@ export fn reduce_sum_i32(a: [*]const i32, N: u32) i32 {
     return total;
 }
 
-/// Sum i16 array using 8-wide SIMD accumulation.
-/// Handles both signed (i16) and unsigned (u16).
-export fn reduce_sum_i16(a: [*]const i16, N: u32) i16 {
-    var acc: simd.V8i16 = .{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    const n_simd = N & ~@as(u32, 7);
+
+/// Sum i16 array, accumulate in i64 to avoid overflow.
+export fn reduce_sum_i16_to_i64(a: [*]const i16, N: u32) i64 {
+    var sum: i64 = 0;
     var i: u32 = 0;
-    while (i < n_simd) : (i += 8) {
-        acc +%= simd.load8_i16(a, i);
-    }
-    var total: i16 = acc[0] +% acc[1] +% acc[2] +% acc[3] +% acc[4] +% acc[5] +% acc[6] +% acc[7];
     while (i < N) : (i += 1) {
-        total +%= a[i];
+        sum += @as(i64, a[i]);
     }
-    return total;
+    return sum;
 }
 
-/// Sum i8 array using 16-wide SIMD accumulation.
-/// Handles both signed (i8) and unsigned (u8).
-export fn reduce_sum_i8(a: [*]const i8, N: u32) i8 {
-    var acc: simd.V16i8 = .{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    const n_simd = N & ~@as(u32, 15);
+/// Sum u16 array, accumulate in u64 to avoid overflow.
+export fn reduce_sum_u16_to_u64(a: [*]const u16, N: u32) u64 {
+    var sum: u64 = 0;
     var i: u32 = 0;
-    while (i < n_simd) : (i += 16) {
-        acc +%= simd.load16_i8(a, i);
-    }
-    var total: i8 = 0;
-    inline for (0..16) |lane| {
-        total +%= acc[lane];
-    }
     while (i < N) : (i += 1) {
-        total +%= a[i];
+        sum += @as(u64, a[i]);
     }
-    return total;
+    return sum;
+}
+
+/// Sum i8 array, accumulate in i64 to avoid overflow.
+export fn reduce_sum_i8_to_i64(a: [*]const i8, N: u32) i64 {
+    var sum: i64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        sum += @as(i64, a[i]);
+    }
+    return sum;
+}
+
+/// Sum u8 array, accumulate in u64 to avoid overflow.
+export fn reduce_sum_u8_to_u64(a: [*]const u8, N: u32) u64 {
+    var sum: u64 = 0;
+    var i: u32 = 0;
+    while (i < N) : (i += 1) {
+        sum += @as(u64, a[i]);
+    }
+    return sum;
 }
 
 /// Strided sum for f64 input → f64 output.
@@ -264,46 +270,6 @@ export fn reduce_sum_strided_u8(a: [*]const u8, out: [*]f64, outer: u32, axis: u
     }
 }
 
-/// Sum i8 array, accumulate in i64 to avoid overflow.
-export fn reduce_sum_i8_to_i64(a: [*]const i8, N: u32) i64 {
-    var sum: i64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        sum += @as(i64, a[i]);
-    }
-    return sum;
-}
-
-/// Sum i16 array, accumulate in i64 to avoid overflow.
-export fn reduce_sum_i16_to_i64(a: [*]const i16, N: u32) i64 {
-    var sum: i64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        sum += @as(i64, a[i]);
-    }
-    return sum;
-}
-
-/// Sum u8 array, accumulate in u64 to avoid overflow.
-export fn reduce_sum_u8_to_u64(a: [*]const u8, N: u32) u64 {
-    var sum: u64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        sum += @as(u64, a[i]);
-    }
-    return sum;
-}
-
-/// Sum u16 array, accumulate in u64 to avoid overflow.
-export fn reduce_sum_u16_to_u64(a: [*]const u16, N: u32) u64 {
-    var sum: u64 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        sum += @as(u64, a[i]);
-    }
-    return sum;
-}
-
 // --- Complex sum kernels ---
 // Complex data is interleaved [re0, im0, re1, im1, ...].
 // N = number of complex elements. The buffer has 2*N floats.
@@ -436,24 +402,6 @@ test "reduce_sum_i64 negatives" {
     const testing = @import("std").testing;
     const a = [_]i64{ -100, 50, -25 };
     try testing.expectEqual(reduce_sum_i64(&a, 3), -75);
-}
-
-test "reduce_sum_i16 simd boundary" {
-    // 8-wide SIMD: test N=8, N=9, N=7
-    const testing = @import("std").testing;
-    const a = [_]i16{ 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-    try testing.expectEqual(reduce_sum_i16(&a, 8), 36);
-    try testing.expectEqual(reduce_sum_i16(&a, 9), 45);
-    try testing.expectEqual(reduce_sum_i16(&a, 7), 28);
-}
-
-test "reduce_sum_i8 simd boundary" {
-    // 16-wide SIMD: test N=16, N=17
-    const testing = @import("std").testing;
-    // All 1s so result is easy to verify
-    const a = [_]i8{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2 };
-    try testing.expectEqual(reduce_sum_i8(&a, 16), 16);
-    try testing.expectEqual(reduce_sum_i8(&a, 17), 18);
 }
 
 test "reduce_sum_i32 negatives" {

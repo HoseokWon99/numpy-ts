@@ -920,14 +920,6 @@ pub fn complexIntroSort(comptime T: type, a: [*]T, N: u32) void {
     complexIntroSortImpl(T, a, 0, N - 1, depthLimit);
 }
 
-/// Batch complex introsort: sort numSlices contiguous slices.
-pub fn complexIntroSortSlices(comptime T: type, a: [*]T, sliceSize: u32, numSlices: u32) void {
-    var i: u32 = 0;
-    while (i < numSlices) : (i += 1) {
-        complexIntroSort(T, a + @as(usize, i) * @as(usize, sliceSize) * 2, sliceSize);
-    }
-}
-
 // --- Complex indirect introsort (stable, for complex argsort) ---
 
 fn complexInsertionSortStable(comptime T: type, a: [*]const T, out: [*]u32, lo: u32, hi: u32) void {
@@ -1035,17 +1027,6 @@ pub fn complexIntroSortStable(comptime T: type, a: [*]const T, out: [*]u32, N: u
     complexIntroSortStableImpl(T, a, out, 0, N - 1, depthLimit);
 }
 
-/// Batch complex introsort stable: argsort numSlices contiguous slices.
-pub fn complexIntroSortStableSlices(comptime T: type, a: [*]const T, out: [*]u32, sliceSize: u32, numSlices: u32) void {
-    var i: u32 = 0;
-    while (i < numSlices) : (i += 1) {
-        const off = @as(usize, i) * @as(usize, sliceSize);
-        const sliceOut = out + off;
-        initIndices(sliceOut, sliceSize);
-        complexIntroSortStable(T, a + off * 2, sliceOut, sliceSize);
-    }
-}
-
 /// Heap sort for complex arrays. N = number of complex elements (buffer has 2*N floats).
 pub fn complexHeapSort(comptime T: type, a: [*]T, N: u32) void {
     if (N <= 1) return;
@@ -1091,16 +1072,6 @@ fn isSorted(comptime T: type, a: []const T) bool {
     var i: usize = 1;
     while (i < a.len) : (i += 1) {
         if (lessThan(T, a[i], a[i - 1])) return false;
-    }
-    return true;
-}
-
-fn isStablySorted(comptime T: type, a: []const T, out: []const u32) bool {
-    if (out.len <= 1) return true;
-    var i: usize = 1;
-    while (i < out.len) : (i += 1) {
-        if (!stableLess(T, @ptrCast(a.ptr), out[i - 1], out[i]) and
-            stableLess(T, @ptrCast(a.ptr), out[i], out[i - 1])) return false;
     }
     return true;
 }

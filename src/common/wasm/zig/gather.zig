@@ -252,18 +252,6 @@ export fn take_axis0_2d_u8(data: [*]const u8, indices: [*]const i32, out: [*]u8,
     }
 }
 
-// --- count_nonzero for condition array ---
-
-/// Count nonzero i32 elements. Used to pre-allocate extract output.
-export fn count_nonzero_i32(cond: [*]const i32, N: u32) u32 {
-    var count: u32 = 0;
-    var i: u32 = 0;
-    while (i < N) : (i += 1) {
-        if (cond[i] != 0) count += 1;
-    }
-    return count;
-}
-
 // --- where: out[i] = cond[i] ? x[i] : y[i] ---
 
 /// Element-wise where for f64: out[i] = cond[i] != 0 ? x[i] : y[i].
@@ -433,12 +421,6 @@ test "take_axis0_2d_i8 basic" {
     try testing.expectEqual(out[1], 2); // data[0][1]
     try testing.expectEqual(out[2], 3); // data[1][0]
     try testing.expectEqual(out[3], 6); // data[2][1]
-}
-
-test "count_nonzero_i32 basic" {
-    const testing = @import("std").testing;
-    const cond = [_]i32{ 0, 1, 0, 1, 1, 0 };
-    try testing.expectEqual(count_nonzero_i32(&cond, 6), 3);
 }
 
 test "extract_f32 basic" {

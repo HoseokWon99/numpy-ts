@@ -786,11 +786,6 @@ fn nextPow2(n: usize) usize {
     return v;
 }
 
-/// Check if n is a power of 2 (only one bit set).
-fn isPow2(n: usize) bool {
-    return n > 0 and (n & (n - 1)) == 0;
-}
-
 const MAX_FACTORS = 32;
 
 /// Factor n into allowed radix factors (8, 4, 2, 3, 5) for Stockham FFT.

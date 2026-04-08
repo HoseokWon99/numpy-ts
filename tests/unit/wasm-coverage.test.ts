@@ -521,7 +521,7 @@ describe('wasmDiv / wasmDivScalar', () => {
     const b = array([2, 3], 'int16');
     const r = wasmDiv(a.storage, b.storage);
     expect(r).not.toBeNull();
-    expect(r!.dtype).toBe('float32'); // NumPy: int16 → float32
+    expect(r!.dtype).toBe('float64'); // NumPy: all int divide → float64
   });
 
   it('float64 scalar', () => {
@@ -541,11 +541,11 @@ describe('wasmDiv / wasmDivScalar', () => {
     expect(r!.dtype).toBe('float64');
   });
 
-  it('int8 scalar → float16 output', () => {
+  it('int8 scalar → float64 output', () => {
     const a = array([4, 8, 12], 'int8');
     const r = wasmDivScalar(a.storage, 4);
     expect(r).not.toBeNull();
-    expect(r!.dtype).toBe('float16'); // NumPy: int8 → float16
+    expect(r!.dtype).toBe('float64'); // NumPy: all int divide → float64
   });
 
   it('returns null for mixed dtypes', () => {
