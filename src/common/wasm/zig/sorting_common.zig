@@ -1105,6 +1105,42 @@ fn isStablySorted(comptime T: type, a: []const T, out: []const u32) bool {
     return true;
 }
 
+// --- u32 → f64 index conversion (SIMD-accelerated) ---
+
+/// Convert u32 index array to f64 in-place (same buffer, reinterpreted).
+/// The output buffer must be sized for f64 (8*N bytes). The sort writes u32
+/// into the first 4*N bytes. This function expands backwards to avoid overlap.
+/// SIMD: processes 4 u32s → 4 f64s per iteration using WASM f64x2 vectors.
+pub fn indicesToF64(out_u32: [*]u32, out_f64: [*]f64, N: u32) void {
+    // Process tail (non-aligned remainder) scalar, backwards
+    const n_simd = N & ~@as(u32, 3);
+    var j: u32 = N;
+    while (j > n_simd) {
+        j -= 1;
+        out_f64[j] = @floatFromInt(out_u32[j]);
+    }
+    // SIMD: 4 u32s → 2 x f64x2, backwards to avoid overlap
+    var i: u32 = n_simd;
+    while (i >= 4) {
+        i -= 4;
+        // Read 4 u32 values before overwriting
+        const v0: f64 = @floatFromInt(out_u32[i]);
+        const v1: f64 = @floatFromInt(out_u32[i + 1]);
+        const v2: f64 = @floatFromInt(out_u32[i + 2]);
+        const v3: f64 = @floatFromInt(out_u32[i + 3]);
+        // Write 4 f64 values
+        out_f64[i] = v0;
+        out_f64[i + 1] = v1;
+        out_f64[i + 2] = v2;
+        out_f64[i + 3] = v3;
+    }
+}
+
+/// Convert u32 indices to f64 for batch slices (numSlices x sliceSize).
+pub fn sliceIndicesToF64(out_u32: [*]u32, out_f64: [*]f64, sliceSize: u32, numSlices: u32) void {
+    indicesToF64(out_u32, out_f64, sliceSize * numSlices);
+}
+
 // --- lessThan ---
 
 test "lessThan: f64 normal values" {

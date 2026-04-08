@@ -85,14 +85,14 @@ describe('DType Sweep: Sorting', () => {
 
     it(`argsort ${dtype}`, () => {
       const jsResult = np.argsort(array(data, dtype));
-      expectMatchPre(jsResult, oracle.get(`argsort_${dtype}`)!);
+      expectMatchPre(jsResult, oracle.get(`argsort_${dtype}`)!, { indexResult: true });
     });
 
     it(`searchsorted ${dtype}`, () => {
       const sorted = dtype === 'bool' ? [0, 0, 1, 1, 1] : [1, 3, 5, 7, 9];
       const vals = dtype === 'bool' ? [0, 1] : [2, 4, 6];
       const jsResult = np.searchsorted(array(sorted, dtype), array(vals, dtype));
-      expectMatchPre(jsResult, oracle.get(`searchsorted_${dtype}`)!);
+      expectMatchPre(jsResult, oracle.get(`searchsorted_${dtype}`)!, { indexResult: true });
     });
 
     it(`partition ${dtype}`, () => {
@@ -121,7 +121,7 @@ describe('DType Sweep: Sorting', () => {
       const keys1 = dtype === 'bool' ? [1, 0, 1] : [3, 1, 2];
       const keys2 = dtype === 'bool' ? [0, 1, 0] : [1, 3, 2];
       const jsResult = np.lexsort([array(keys1, dtype), array(keys2, dtype)]);
-      expectMatchPre(jsResult, oracle.get(`lexsort_${dtype}`)!);
+      expectMatchPre(jsResult, oracle.get(`lexsort_${dtype}`)!, { indexResult: true });
     });
   }
 });

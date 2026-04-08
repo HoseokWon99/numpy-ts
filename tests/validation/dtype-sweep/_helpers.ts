@@ -169,9 +169,9 @@ const NP_DTYPE_MAP: Record<string, string> = {
 export function expectMatch(
   jsResult: any,
   pyCode: string,
-  opts: { rtol?: number; atol?: number } = {}
+  opts: { rtol?: number; atol?: number; indexResult?: boolean } = {}
 ): void {
-  const { rtol = 1e-5, atol = 1e-8 } = opts;
+  const { rtol = 1e-5, atol = 1e-8, indexResult = false } = opts;
   const pyResult = _runNumPy(pyCode);
 
   // --- Shape check ---
@@ -183,7 +183,12 @@ export function expectMatch(
   const jsDtype: string = jsResult.dtype ?? typeof jsResult;
   const pyDtypeRaw: string = pyResult.orig_dtype ?? pyResult.dtype;
   const pyDtype = NP_DTYPE_MAP[pyDtypeRaw] ?? pyDtypeRaw;
-  expect(jsDtype, `dtype mismatch: JS '${jsDtype}' vs NumPy '${pyDtype}'`).toBe(pyDtype);
+  // Index-returning functions: we return float64 (for JS ergonomics), NumPy returns int64
+  if (indexResult && jsDtype === 'float64' && (pyDtype === 'int64' || pyDtype === 'uint64')) {
+    // Accepted intentional difference
+  } else {
+    expect(jsDtype, `dtype mismatch: JS '${jsDtype}' vs NumPy '${pyDtype}'`).toBe(pyDtype);
+  }
 
   // --- Value check ---
   if (jsShape.length === 0 && typeof jsResult !== 'object') {
@@ -203,9 +208,9 @@ export function expectMatch(
 export function expectMatchPre(
   jsResult: any,
   pyResult: NumPyResult & { error?: string },
-  opts: { rtol?: number; atol?: number } = {}
+  opts: { rtol?: number; atol?: number; indexResult?: boolean } = {}
 ): void {
-  const { rtol = 1e-5, atol = 1e-8 } = opts;
+  const { rtol = 1e-5, atol = 1e-8, indexResult = false } = opts;
 
   if (pyResult.error) {
     throw new Error(`NumPy error: ${pyResult.error}`);
@@ -220,7 +225,12 @@ export function expectMatchPre(
   const jsDtype: string = jsResult.dtype ?? typeof jsResult;
   const pyDtypeRaw: string = pyResult.orig_dtype ?? pyResult.dtype;
   const pyDtype = NP_DTYPE_MAP[pyDtypeRaw] ?? pyDtypeRaw;
-  expect(jsDtype, `dtype mismatch: JS '${jsDtype}' vs NumPy '${pyDtype}'`).toBe(pyDtype);
+  // Index-returning functions: we return float64 (for JS ergonomics), NumPy returns int64
+  if (indexResult && jsDtype === 'float64' && (pyDtype === 'int64' || pyDtype === 'uint64')) {
+    // Accepted intentional difference
+  } else {
+    expect(jsDtype, `dtype mismatch: JS '${jsDtype}' vs NumPy '${pyDtype}'`).toBe(pyDtype);
+  }
 
   // --- Value check ---
   if (jsShape.length === 0 && typeof jsResult !== 'object') {

@@ -1,6 +1,8 @@
 /**
  * WASM-accelerated lexsort (indirect stable sort on multiple keys).
  *
+ * Output is float64 indices for JS ergonomics (no BigInt).
+ * WASM sorts u32 internally and converts to f64 before returning.
  * All keys must be the same dtype and contiguous.
  * Returns null if WASM can't handle this case.
  */
@@ -75,7 +77,7 @@ const ctorMap: Partial<Record<DType, AnyTypedArrayCtor>> = {
 /**
  * WASM-accelerated lexsort.
  * All keys must be the same dtype and 1D contiguous.
- * Returns ArrayStorage of int32 indices or null if WASM can't handle it.
+ * Returns ArrayStorage of float64 indices or null if WASM can't handle it.
  */
 export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
   if (keys.length === 0) return null;
@@ -99,7 +101,7 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
   const numKeys = keys.length;
   const bpe = (Ctor as unknown as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT;
   const keysBytes = numKeys * n * bpe;
-  const outBytes = n * 4; // i32 indices
+  const outBytes = n * 8; // f64 indices
 
   const outRegion = wasmMalloc(outBytes);
   if (!outRegion) return null;
@@ -131,7 +133,7 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
   }
 
   if (radixKernel) {
-    const scratchPtr = scratchAlloc(n * 4);
+    const scratchPtr = scratchAlloc(n * 8);
     radixKernel(flatBuf, numKeys, n, outRegion.ptr, scratchPtr);
   } else {
     kernel!(flatBuf, numKeys, n, outRegion.ptr);
@@ -139,10 +141,10 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
 
   return ArrayStorage.fromWasmRegion(
     [n],
-    'int32',
+    'float64',
     outRegion,
     n,
-    Int32Array as unknown as new (
+    Float64Array as unknown as new (
       buffer: ArrayBuffer,
       byteOffset: number,
       length: number

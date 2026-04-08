@@ -170,7 +170,7 @@ result = _result_orig.astype(np.float64)`;
         if (_r === 'both-reject') return;
       }
       const [hist] = np.histogram(array(data, dtype)) as [any, any];
-      expectMatchPre(hist, oracle.get(`stats_histogram_${dtype}`)!);
+      expectMatchPre(hist, oracle.get(`stats_histogram_${dtype}`)!, { indexResult: true });
     });
 
     it(`corrcoef ${dtype}`, () => {
@@ -238,7 +238,7 @@ result = _result_orig`;
         if (_r === 'both-reject') return;
       }
       const jsResult = np.digitize(array(data, dtype), array(bins, dtype));
-      expectMatchPre(jsResult, oracle.get(`stats_digitize_${dtype}`)!);
+      expectMatchPre(jsResult, oracle.get(`stats_digitize_${dtype}`)!, { indexResult: true });
     });
 
     it(`correlate ${dtype}`, () => {

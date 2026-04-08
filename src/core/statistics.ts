@@ -38,7 +38,8 @@ export function histogram(
     density,
     weightsArg
   );
-  return [fromStorage(result.hist), fromStorage(result.bin_edges)];
+  const hist = result.hist;
+  return [fromStorage(hist), fromStorage(result.bin_edges)];
 }
 
 /** Compute 2D histogram */

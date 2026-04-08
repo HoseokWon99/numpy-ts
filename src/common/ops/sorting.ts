@@ -257,7 +257,7 @@ export function argsort(storage: ArrayStorage, axis: number = -1): ArrayStorage 
 
   // Handle 0-d arrays
   if (ndim === 0) {
-    return ArrayStorage.zeros([0], 'int32');
+    return ArrayStorage.zeros([0], 'float64');
   }
 
   // Normalize axis
@@ -270,8 +270,8 @@ export function argsort(storage: ArrayStorage, axis: number = -1): ArrayStorage 
   }
 
   // Create output storage with int32 dtype
-  const result = ArrayStorage.zeros(Array.from(shape), 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros(Array.from(shape), 'float64');
+  const resultData = result.data as Float64Array;
 
   const axisSize = shape[normalizedAxis]!;
 
@@ -308,7 +308,7 @@ export function argsort(storage: ArrayStorage, axis: number = -1): ArrayStorage 
     if (
       wasmArgsortSlices(
         data as import('../dtype').TypedArray,
-        resultData,
+        resultData as Float64Array,
         baseOffsets,
         outBaseOffsets,
         axisSize,
@@ -435,7 +435,7 @@ export function argsort(storage: ArrayStorage, axis: number = -1): ArrayStorage 
  */
 export function lexsort(keys: ArrayStorage[]): ArrayStorage {
   if (keys.length === 0) {
-    return ArrayStorage.zeros([0], 'int32');
+    return ArrayStorage.zeros([0], 'float64');
   }
 
   // All keys must be 1D with the same length
@@ -518,8 +518,8 @@ export function lexsort(keys: ArrayStorage[]): ArrayStorage {
   });
 
   // Create result
-  const result = ArrayStorage.zeros([n], 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros([n], 'float64');
+  const resultData = result.data as Float64Array;
   for (let i = 0; i < n; i++) {
     resultData[i] = indices[i]!;
   }
@@ -866,7 +866,7 @@ export function argpartition(storage: ArrayStorage, kth: number, axis: number = 
 
   // Handle 0-d arrays
   if (ndim === 0) {
-    return ArrayStorage.zeros([0], 'int32');
+    return ArrayStorage.zeros([0], 'float64');
   }
 
   // Normalize axis
@@ -896,8 +896,8 @@ export function argpartition(storage: ArrayStorage, kth: number, axis: number = 
   }
 
   // Create output storage with int32 dtype
-  const result = ArrayStorage.zeros(Array.from(shape), 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros(Array.from(shape), 'float64');
+  const resultData = result.data as Float64Array;
 
   // Compute outer iteration
   const outputShape = Array.from(shape).filter((_, i) => i !== normalizedAxis);
@@ -926,7 +926,7 @@ export function argpartition(storage: ArrayStorage, kth: number, axis: number = 
     if (
       wasmArgpartitionSlices(
         data as import('../dtype').TypedArray,
-        resultData,
+        resultData as Float64Array,
         baseOffsets,
         outBaseOffsets,
         axisSize,
@@ -1093,8 +1093,8 @@ export function nonzero(storage: ArrayStorage): ArrayStorage[] {
 
   // Fast path: contiguous non-complex — single pass with max-size buffers, then trim
   if (contiguous && !isComplex && ndim >= 1) {
-    const bufs: Int32Array[] = [];
-    for (let dim = 0; dim < ndim; dim++) bufs.push(new Int32Array(size));
+    const bufs: Float64Array[] = [];
+    for (let dim = 0; dim < ndim; dim++) bufs.push(new Float64Array(size));
 
     let idx = 0;
     for (let i = 0; i < size; i++) {
@@ -1110,8 +1110,8 @@ export function nonzero(storage: ArrayStorage): ArrayStorage[] {
 
     const resultArrays: ArrayStorage[] = [];
     for (let dim = 0; dim < ndim; dim++) {
-      const arr = ArrayStorage.zeros([idx], 'int32');
-      (arr.data as Int32Array).set(bufs[dim]!.subarray(0, idx));
+      const arr = ArrayStorage.zeros([idx], 'float64');
+      (arr.data as Float64Array).set(bufs[dim]!.subarray(0, idx));
       resultArrays.push(arr);
     }
     return resultArrays;
@@ -1152,8 +1152,8 @@ export function nonzero(storage: ArrayStorage): ArrayStorage[] {
   const result: ArrayStorage[] = [];
 
   for (let dim = 0; dim < ndim; dim++) {
-    const arr = ArrayStorage.zeros([numNonzero], 'int32');
-    const arrData = arr.data as Int32Array;
+    const arr = ArrayStorage.zeros([numNonzero], 'float64');
+    const arrData = arr.data as Float64Array;
     for (let i = 0; i < numNonzero; i++) {
       arrData[i] = nonzeroIndices[dim]![i]!;
     }
@@ -1206,8 +1206,8 @@ export function argwhere(storage: ArrayStorage): ArrayStorage {
   }
 
   // Allocate result: shape (numNonzero, ndim)
-  const result = ArrayStorage.zeros([numNonzero, outNdim], 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros([numNonzero, outNdim], 'float64');
+  const resultData = result.data as Float64Array;
 
   // Pass 2: fill result directly — no intermediate arrays
   let row = 0;
@@ -1261,13 +1261,13 @@ export function flatnonzero(storage: ArrayStorage): ArrayStorage {
 
   // Fast path: contiguous non-complex — single pass, avoid isNonZero and Array.push
   if (contiguous && !isComplex) {
-    const buf = new Int32Array(size);
+    const buf = new Float64Array(size);
     let idx = 0;
     for (let i = 0; i < size; i++) {
       if (data[off + i]) buf[idx++] = i;
     }
-    const result = ArrayStorage.zeros([idx], 'int32');
-    (result.data as Int32Array).set(buf.subarray(0, idx));
+    const result = ArrayStorage.zeros([idx], 'float64');
+    (result.data as Float64Array).set(buf.subarray(0, idx));
     return result;
   }
 
@@ -1293,8 +1293,8 @@ export function flatnonzero(storage: ArrayStorage): ArrayStorage {
   }
 
   // Create result
-  const result = ArrayStorage.zeros([indices.length], 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros([indices.length], 'float64');
+  const resultData = result.data as Float64Array;
   for (let i = 0; i < indices.length; i++) {
     resultData[i] = indices[i]!;
   }
@@ -1592,8 +1592,8 @@ export function searchsorted(
   }
 
   // Create result array
-  const result = ArrayStorage.zeros([numValues], 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros([numValues], 'float64');
+  const resultData = result.data as Float64Array;
 
   if (isComplex) {
     if (storageContiguous && valuesContiguous) {
@@ -1910,8 +1910,8 @@ export function count_nonzero(storage: ArrayStorage, axis?: number): ArrayStorag
   }
 
   // Create result storage
-  const result = ArrayStorage.zeros(outputShape, 'int32');
-  const resultData = result.data as Int32Array;
+  const result = ArrayStorage.zeros(outputShape, 'float64');
+  const resultData = result.data as Float64Array;
 
   const axisSize = shape[normalizedAxis]!;
   const outerSize = outputShape.reduce((a, b) => a * b, 1);

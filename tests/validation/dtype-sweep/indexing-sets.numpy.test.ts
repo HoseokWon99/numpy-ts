@@ -221,7 +221,7 @@ describe('DType Sweep: Indexing', () => {
     it(`nonzero ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1] : [0, 1, 0, 2];
       const jsResult = np.nonzero(array(data, dtype));
-      expectMatchPre(jsResult[0]!, oracle.get(`nonzero_${dtype}`)!);
+      expectMatchPre(jsResult[0]!, oracle.get(`nonzero_${dtype}`)!, { indexResult: true });
     });
 
     it(`extract ${dtype}`, () => {
@@ -235,13 +235,13 @@ describe('DType Sweep: Indexing', () => {
     it(`flatnonzero ${dtype}`, () => {
       const data = dtype === 'bool' ? [0, 1, 0, 1, 0] : [0, 1, 0, 2, 0];
       const jsResult = np.flatnonzero(array(data, dtype));
-      expectMatchPre(jsResult, oracle.get(`flatnonzero_${dtype}`)!);
+      expectMatchPre(jsResult, oracle.get(`flatnonzero_${dtype}`)!, { indexResult: true });
     });
 
     it(`argwhere ${dtype}`, () => {
       const data = dtype === 'bool' ? [0, 1, 0, 1, 0] : [0, 1, 0, 2, 0];
       const jsResult = np.argwhere(array(data, dtype));
-      expectMatchPre(jsResult, oracle.get(`argwhere_${dtype}`)!);
+      expectMatchPre(jsResult, oracle.get(`argwhere_${dtype}`)!, { indexResult: true });
     });
   }
 });
