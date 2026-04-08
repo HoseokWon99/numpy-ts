@@ -33,6 +33,38 @@ export function npDtype(d: string) {
   return d === 'int64' ? 'np.int64' : d === 'uint64' ? 'np.uint64' : `np.${d}`;
 }
 
+/** Python cast expression for scalar results: complex() for complex dtypes, float() for real */
+export function pyScalarCast(dtype: string): string {
+  return isComplex(dtype) ? 'complex' : 'float';
+}
+
+/** Python astype target for array results: np.complex128 for complex, np.float64 for real */
+export function pyArrayCast(dtype: string): string {
+  return isComplex(dtype) ? 'np.complex128' : 'np.float64';
+}
+
+/** Convert NDArray to comparable value array — handles BigInt→Number, preserves Complex */
+export function toComparable(arr: any): any {
+  function walk(v: any): any {
+    if (typeof v === 'bigint') return Number(v);
+    if (Array.isArray(v)) return v.map(walk);
+    return v; // Complex objects pass through for arraysClose
+  }
+  return walk(arr.toArray());
+}
+
+/** Compare scalar results — handles both real (Number) and Complex */
+export function scalarClose(js: any, py: any, digits = 4): void {
+  if (js && typeof js === 'object' && 're' in js) {
+    const pyRe = py?.re ?? Number(py);
+    const pyIm = py?.im ?? 0;
+    expect(js.re).toBeCloseTo(pyRe, digits);
+    expect(js.im).toBeCloseTo(pyIm, digits);
+  } else {
+    expect(Number(js)).toBeCloseTo(Number(py), digits);
+  }
+}
+
 export const isInt = (d: string) => d.startsWith('int') || d.startsWith('uint');
 export const isFloat = (d: string) => d === 'float64' || d === 'float32';
 export const isComplex = (d: string) => d.startsWith('complex');
@@ -247,7 +279,15 @@ export function expectMatchPre(
 
   // --- Value check ---
   if (jsShape.length === 0 && typeof jsResult !== 'object') {
+    // Scalar real result
     expect(Number(jsResult)).toBeCloseTo(Number(pyResult.value), 4);
+  } else if (jsShape.length === 0 && jsResult?.re !== undefined) {
+    // Scalar complex result
+    const pyVal = pyResult.value;
+    const pyRe = pyVal?.re ?? Number(pyVal);
+    const pyIm = pyVal?.im ?? 0;
+    expect(jsResult.re).toBeCloseTo(pyRe, 4);
+    expect(jsResult.im).toBeCloseTo(pyIm, 4);
   } else {
     expect(_arraysClose(jsResult.toArray(), pyResult.value, rtol, atol), 'value mismatch').toBe(
       true

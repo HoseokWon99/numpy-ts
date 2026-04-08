@@ -11,6 +11,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyArrayCast,
   expectMatchPre,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
@@ -32,6 +33,7 @@ beforeAll(() => {
   const snippets: Record<string, string> = {};
 
   for (const dtype of ALL_DTYPES) {
+    const ac = pyArrayCast(dtype);
     const d = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
     const data2d =
       dtype === 'bool'
@@ -43,15 +45,15 @@ beforeAll(() => {
 
     snippets[`shape_roll_${dtype}`] =
       `_result_orig = np.roll(np.array(${JSON.stringify(d)}, dtype=${npDtype(dtype)}), 1)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`shape_flip_${dtype}`] =
       `_result_orig = np.flip(np.array(${JSON.stringify(d)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`shape_rot90_${dtype}`] =
       `_result_orig = np.rot90(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
   }
 
   oracle = runNumPyBatch(snippets);

@@ -11,6 +11,8 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyArrayCast,
+  scalarClose,
   expectMatchPre,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
@@ -26,12 +28,13 @@ beforeAll(() => {
   const snippets: Record<string, string> = {};
 
   for (const dtype of ALL_DTYPES) {
+    const ac = pyArrayCast(dtype);
     const data = dtype === 'bool' ? [1, 0, 1, 0, 1, 0] : [5, 2, 8, 1, 9, 3];
 
     snippets[`sort_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 _result_orig = np.sort(a)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`argsort_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
@@ -49,12 +52,12 @@ result = _result_orig`;
     snippets[`partition_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 r = np.partition(a, 2)
-result = np.array([r[2]]).astype(np.float64)`;
+result = np.array([r[2]]).astype(${ac})`;
 
     snippets[`argpartition_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 idx = np.argpartition(a, 2)
-result = np.array([a[idx[2]]]).astype(np.float64)`;
+result = np.array([a[idx[2]]]).astype(${ac})`;
 
     const sortComplexData = isComplex(dtype) ? [3, 1, 2] : dtype === 'bool' ? [1, 0, 1] : [3, 1, 2];
     snippets[`sort_complex_${dtype}`] = `
@@ -99,7 +102,7 @@ describe('DType Sweep: Sorting', () => {
       const jsResult = np.partition(array(data, dtype), 2);
       const py = oracle.get(`partition_${dtype}`)!;
       const jsKth = jsResult.toArray()[2];
-      expect(Number(jsKth)).toBeCloseTo(Number(py.value[0]), 4);
+      scalarClose(jsKth, py.value[0]);
     });
 
     it(`argpartition ${dtype}`, () => {
@@ -107,8 +110,8 @@ describe('DType Sweep: Sorting', () => {
       const jsResult = np.argpartition(a, 2);
       const py = oracle.get(`argpartition_${dtype}`)!;
       const jsIdx = Number(jsResult.toArray()[2]);
-      const jsKthVal = Number(a.toArray()[jsIdx]);
-      expect(jsKthVal).toBeCloseTo(Number(py.value[0]), 4);
+      const jsKthVal = a.toArray()[jsIdx];
+      scalarClose(jsKthVal, py.value[0]);
     });
 
     it(`sort_complex ${dtype}`, () => {

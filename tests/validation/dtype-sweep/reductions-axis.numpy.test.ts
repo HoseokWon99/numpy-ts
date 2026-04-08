@@ -10,6 +10,10 @@ import {
   runNumPyBatch,
   checkNumPyAvailable,
   npDtype,
+  isComplex,
+  pyScalarCast,
+  pyArrayCast,
+  scalarClose,
   expectBothReject,
   expectMatchPre,
 } from './_helpers';
@@ -33,6 +37,8 @@ beforeAll(() => {
   const snippets: Record<string, string> = {};
 
   for (const dtype of ALL_DTYPES) {
+    const sc = pyScalarCast(dtype);
+    const ac = pyArrayCast(dtype);
     const data = dtype === 'bool' ? [1, 0, 1, 1] : SMALL_DATA;
     const data2d =
       dtype === 'bool'
@@ -45,47 +51,47 @@ beforeAll(() => {
     // Quantile/percentile (scalar results)
     snippets[`quantile_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = float(np.quantile(a, 0.5))`;
+result = ${sc}(np.quantile(a, 0.5))`;
 
     snippets[`nanquantile_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = float(np.nanquantile(a, 0.5))`;
+result = ${sc}(np.nanquantile(a, 0.5))`;
 
     snippets[`percentile_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = float(np.percentile(a, 50))`;
+result = ${sc}(np.percentile(a, 50))`;
 
     snippets[`nanpercentile_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = float(np.nanpercentile(a, 50))`;
+result = ${sc}(np.nanpercentile(a, 50))`;
 
     // Cumulative (array results with _result_orig)
     snippets[`cumsum_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 _result_orig = np.cumsum(a)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const cumprodData = dtype === 'bool' ? [1, 1, 0, 1] : [1, 2, 3, 4];
     snippets[`cumprod_${dtype}`] = `
 a = np.array(${JSON.stringify(cumprodData)}, dtype=${npDtype(dtype)})
 _result_orig = np.cumprod(a)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`average_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = float(np.average(a))`;
+result = ${sc}(np.average(a))`;
 
     const ediffData = dtype === 'bool' ? [1, 0, 1, 0] : SMALL_DATA;
     snippets[`ediff1d_${dtype}`] = `
 a = np.array(${JSON.stringify(ediffData)}, dtype=${npDtype(dtype)})
 _result_orig = np.ediff1d(a)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     // Axis reductions
     snippets[`sum_axis0_${dtype}`] = `
 a = np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})
 _result_orig = np.sum(a, axis=0)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`mean_axis1_${dtype}`] = `
 a = np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})
@@ -95,7 +101,7 @@ result = _result_orig`;
     snippets[`max_axis0_${dtype}`] = `
 a = np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)})
 _result_orig = np.max(a, axis=0)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
   }
 
   oracle = runNumPyBatch(snippets);
@@ -116,7 +122,7 @@ describe('DType Sweep: Quantile/percentile', () => {
       }
       const jsResult = np.quantile(array(data, dtype), 0.5);
       const py = oracle.get(`quantile_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`nanquantile ${dtype}`, () => {
@@ -132,7 +138,7 @@ describe('DType Sweep: Quantile/percentile', () => {
       }
       const jsResult = np.nanquantile(array(data, dtype), 0.5);
       const py = oracle.get(`nanquantile_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`percentile ${dtype}`, () => {
@@ -148,7 +154,7 @@ describe('DType Sweep: Quantile/percentile', () => {
       }
       const jsResult = np.percentile(array(data, dtype), 50);
       const py = oracle.get(`percentile_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`nanpercentile ${dtype}`, () => {
@@ -164,7 +170,7 @@ describe('DType Sweep: Quantile/percentile', () => {
       }
       const jsResult = np.nanpercentile(array(data, dtype), 50);
       const py = oracle.get(`nanpercentile_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
   }
 });
@@ -187,7 +193,7 @@ describe('DType Sweep: Cumulative & misc reductions', () => {
       const data = dtype === 'bool' ? [1, 0, 1, 1] : SMALL_DATA;
       const jsResult = np.average(array(data, dtype));
       const py = oracle.get(`average_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`ediff1d ${dtype}`, () => {

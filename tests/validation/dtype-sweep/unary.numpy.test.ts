@@ -13,6 +13,7 @@ import {
   runNumPyBatch,
   expectBothReject,
   expectMatchPre,
+  pyArrayCast,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
 
@@ -87,23 +88,25 @@ beforeAll(() => {
 
   for (const name of allUnaryOps) {
     for (const dtype of ALL_DTYPES) {
+      const ac = pyArrayCast(dtype);
       const data = getData(name, dtype);
       snippets[`${name}_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 _result_orig = np.${name}(a)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
     }
   }
 
   // nextafter snippets
   for (const dtype of ALL_DTYPES) {
+    const ac = pyArrayCast(dtype);
     const data1 = dtype === 'bool' ? [1, 0] : [1, 2];
     const data2 = dtype === 'bool' ? [0, 1] : [2, 3];
     snippets[`nextafter_${dtype}`] = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.nextafter(a, b)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
   }
 
   oracle = runNumPyBatch(snippets);
@@ -164,10 +167,11 @@ describe('DType Sweep: Unary math', () => {
           const a = array(data, dtype);
           const BOOL_REJECTED = ['negative', 'positive', 'sign'];
           if (dtype === 'bool' && BOOL_REJECTED.includes(name)) {
+            const ac = pyArrayCast(dtype);
             const pyCode = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
 _result_orig = np.${name}(a)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
             const _r = expectBothReject(
               `${name} is not supported for boolean dtype`,
               () => fn(a),
@@ -191,11 +195,12 @@ describe('DType Sweep: Binary-like unary', () => {
       const data1 = dtype === 'bool' ? [1, 0] : [1, 2];
       const data2 = dtype === 'bool' ? [0, 1] : [2, 3];
       if (dtype.startsWith('complex')) {
+        const ac = pyArrayCast(dtype);
         const pyCode = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.nextafter(a, b)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
         const _r = expectBothReject(
           'nextafter is only defined for real floating-point numbers',
           () => np.nextafter(array(data1, dtype), array(data2, dtype)),

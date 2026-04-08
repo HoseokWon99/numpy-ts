@@ -11,6 +11,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyArrayCast,
   expectMatchPre,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
@@ -26,11 +27,13 @@ beforeAll(() => {
   const snippets: Record<string, string> = {};
 
   for (const dtype of ALL_DTYPES) {
+    const ac = pyArrayCast(dtype);
+
     // Indexing snippets
     const takeData = dtype === 'bool' ? [1, 0, 1, 0, 1] : [10, 20, 30, 40, 50];
     snippets[`take_${dtype}`] =
       `_result_orig = np.take(np.array(${JSON.stringify(takeData)}, dtype=${npDtype(dtype)}), [0,2,4])
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const takeAlongData = dtype === 'bool' ? [1, 0, 1] : [10, 20, 30];
     const takeAlongIndices = [2, 0, 1];
@@ -38,7 +41,7 @@ result = _result_orig.astype(np.float64)`;
 a = np.array(${JSON.stringify(takeAlongData)}, dtype=${npDtype(dtype)})
 idx = np.array(${JSON.stringify(takeAlongIndices)}, dtype=np.intp)
 _result_orig = np.take_along_axis(a, idx, axis=0)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const putData = dtype === 'bool' ? [1, 0, 1] : [10, 20, 30];
     const putVals = dtype === 'bool' ? [0, 1] : [99, 88];
@@ -46,7 +49,7 @@ result = _result_orig.astype(np.float64)`;
 a = np.array(${JSON.stringify(putData)}, dtype=${npDtype(dtype)})
 np.put(a, [0, 2], np.array(${JSON.stringify(putVals)}, dtype=${npDtype(dtype)}))
 _result_orig = a
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const putAlongData =
       dtype === 'bool'
@@ -63,22 +66,21 @@ result = _result_orig.astype(np.float64)`;
 a = np.array(${JSON.stringify(putAlongData)}, dtype=${npDtype(dtype)})
 np.put_along_axis(a, np.array([[0],[1]], dtype=np.intp), np.array(${JSON.stringify(putAlongVals)}, dtype=${npDtype(dtype)}), axis=1)
 _result_orig = a
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const diagData = dtype === 'bool' ? '[[True,False],[False,True]]' : '[[1,2],[3,4]]';
     snippets[`diag_${dtype}`] =
       `_result_orig = np.diag(np.array(${diagData}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const data1 = dtype === 'bool' ? [1, 1, 1, 1] : [1, 2, 3, 4];
     const data2 = dtype === 'bool' ? [0, 0, 0, 0] : [5, 6, 7, 8];
-    const castSuffix = isComplex(dtype) ? '.astype(np.complex128)' : '.astype(np.float64)';
     snippets[`where_${dtype}`] = `
 cond = np.array([True, False, True, False])
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.where(cond, a, b)
-result = _result_orig${castSuffix}`;
+result = _result_orig.astype(${ac})`;
 
     const nonzeroData = dtype === 'bool' ? [1, 0, 1] : [0, 1, 0, 2];
     snippets[`nonzero_${dtype}`] =
@@ -88,7 +90,7 @@ result = _result_orig`;
     const extractData = dtype === 'bool' ? [1, 0, 1, 0, 1] : [1, 2, 3, 4, 5];
     snippets[`extract_${dtype}`] =
       `_result_orig = np.extract(np.array([True,False,True,False,True]), np.array(${JSON.stringify(extractData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const flatnonzeroData = dtype === 'bool' ? [0, 1, 0, 1, 0] : [0, 1, 0, 2, 0];
     snippets[`flatnonzero_${dtype}`] =
@@ -108,35 +110,35 @@ result = _result_orig`;
 
       snippets[`unique_${dtype}`] =
         `_result_orig = np.unique(np.array(${JSON.stringify(d1)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
       snippets[`intersect1d_${dtype}`] =
         `_result_orig = np.intersect1d(np.array(${JSON.stringify(d3)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(d2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
       const union1 = dtype === 'bool' ? [1, 0] : [1, 2, 3];
       const union2 = dtype === 'bool' ? [0, 1] : [3, 4, 5];
       snippets[`union1d_${dtype}`] =
         `_result_orig = np.union1d(np.array(${JSON.stringify(union1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(union2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
       snippets[`setdiff1d_${dtype}`] =
         `_result_orig = np.setdiff1d(np.array(${JSON.stringify(d3)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(d2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
       snippets[`setxor1d_${dtype}`] =
         `_result_orig = np.setxor1d(np.array(${JSON.stringify(d3)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(d2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
       const in1d1 = dtype === 'bool' ? [1, 0] : [1, 2, 3];
       const in1d2 = dtype === 'bool' ? [1] : [2, 3, 4];
       snippets[`in1d_${dtype}`] =
         `_result_orig = np.in1d(np.array(${JSON.stringify(in1d1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(in1d2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
       snippets[`isin_${dtype}`] =
         `_result_orig = np.isin(np.array(${JSON.stringify(in1d1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(in1d2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
     }
   }
 

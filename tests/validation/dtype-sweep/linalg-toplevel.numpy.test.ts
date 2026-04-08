@@ -11,6 +11,11 @@ import {
   arraysClose,
   checkNumPyAvailable,
   npDtype,
+  isComplex,
+  pyScalarCast,
+  pyArrayCast,
+  toComparable,
+  scalarClose,
   expectBothReject,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
@@ -18,12 +23,6 @@ import type { NumPyResult } from '../numpy-oracle';
 const { array } = np;
 
 // Helper: convert bigint array values to numbers for comparison
-function toNumbers(arr: any): any {
-  const flat = arr.toArray();
-  return JSON.parse(
-    JSON.stringify(flat, (_k: string, v: any) => (typeof v === 'bigint' ? Number(v) : v))
-  );
-}
 
 // Pre-computed oracle results — filled in beforeAll
 let oracle: Map<string, NumPyResult & { error?: string }>;
@@ -36,21 +35,23 @@ beforeAll(() => {
   for (const dtype of ALL_DTYPES) {
     const dotA = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
     const dotB = dtype === 'bool' ? [0, 1, 0] : [4, 5, 6];
+    const sc = pyScalarCast(dtype);
+    const ac = pyArrayCast(dtype);
 
     snippets[`dot_${dtype}`] = `
 a = np.array(${JSON.stringify(dotA)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(dotB)}, dtype=${npDtype(dtype)})
-result = float(np.dot(a, b))`;
+result = ${sc}(np.dot(a, b))`;
 
     snippets[`inner_${dtype}`] = `
 a = np.array(${JSON.stringify(dotA)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(dotB)}, dtype=${npDtype(dtype)})
-result = float(np.inner(a, b))`;
+result = ${sc}(np.inner(a, b))`;
 
     const outerA = dtype === 'bool' ? [1, 0] : [1, 2, 3];
     snippets[`outer_${dtype}`] = `
 a = np.array(${JSON.stringify(outerA)}, dtype=${npDtype(dtype)})
-result = np.outer(a, a).astype(np.float64)`;
+result = np.outer(a, a).astype(${ac})`;
 
     const mat =
       dtype === 'bool'
@@ -65,43 +66,43 @@ result = np.outer(a, a).astype(np.float64)`;
 
     snippets[`matmul_${dtype}`] = `
 a = np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})
-result = np.matmul(a, a).astype(np.float64)`;
+result = np.matmul(a, a).astype(${ac})`;
 
     snippets[`cross_${dtype}`] = `
 a = np.array(${JSON.stringify(dotA)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(dotB)}, dtype=${npDtype(dtype)})
-result = np.cross(a, b).astype(np.float64)`;
+result = np.cross(a, b).astype(${ac})`;
 
     const kronA = dtype === 'bool' ? [1, 0] : [1, 2];
     const kronB = dtype === 'bool' ? [0, 1] : [3, 4];
     snippets[`kron_${dtype}`] = `
 a = np.array(${JSON.stringify(kronA)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(kronB)}, dtype=${npDtype(dtype)})
-result = np.kron(a, b).astype(np.float64)`;
+result = np.kron(a, b).astype(${ac})`;
 
     snippets[`trace_${dtype}`] =
-      `result = float(np.trace(np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})))`;
+      `result = ${sc}(np.trace(np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})))`;
 
     snippets[`tensordot_${dtype}`] = `
 a = np.array(${JSON.stringify(mat)}, dtype=${npDtype(dtype)})
-result = float(np.tensordot(a, a))`;
+result = ${sc}(np.tensordot(a, a))`;
 
     snippets[`vecdot_${dtype}`] = `
 a = np.array(${JSON.stringify(dotA)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(dotB)}, dtype=${npDtype(dtype)})
-result = float(np.vecdot(a, b))`;
+result = ${sc}(np.vecdot(a, b))`;
 
     const mvM = mat;
     const mvV = dtype === 'bool' ? [1, 0] : [5, 6];
     snippets[`matvec_${dtype}`] = `
 m = np.array(${JSON.stringify(mvM)}, dtype=${npDtype(dtype)})
 v = np.array(${JSON.stringify(mvV)}, dtype=${npDtype(dtype)})
-result = np.matvec(m, v).astype(np.float64)`;
+result = np.matvec(m, v).astype(${ac})`;
 
     snippets[`vecmat_${dtype}`] = `
 m = np.array(${JSON.stringify(mvM)}, dtype=${npDtype(dtype)})
 v = np.array(${JSON.stringify(mvV)}, dtype=${npDtype(dtype)})
-result = np.vecmat(v, m).astype(np.float64)`;
+result = np.vecmat(v, m).astype(${ac})`;
   }
 
   oracle = runNumPyBatch(snippets);
@@ -114,7 +115,7 @@ describe('DType Sweep: Top-level linalg', () => {
       const b = dtype === 'bool' ? [0, 1, 0] : [4, 5, 6];
       const jsResult = np.dot(array(a, dtype), array(b, dtype));
       const py = oracle.get(`dot_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`inner ${dtype}`, () => {
@@ -122,14 +123,14 @@ describe('DType Sweep: Top-level linalg', () => {
       const b = dtype === 'bool' ? [0, 1, 0] : [4, 5, 6];
       const jsResult = np.inner(array(a, dtype), array(b, dtype));
       const py = oracle.get(`inner_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`outer ${dtype}`, () => {
       const a = array(dtype === 'bool' ? [1, 0] : [1, 2, 3], dtype);
       const r = np.outer(a, a);
       const py = oracle.get(`outer_${dtype}`)!;
-      expect(arraysClose(toNumbers(r), py.value, 1e-4)).toBe(true);
+      expect(arraysClose(toComparable(r), py.value, 1e-4)).toBe(true);
     });
 
     it(`matmul ${dtype}`, () => {
@@ -145,7 +146,7 @@ describe('DType Sweep: Top-level linalg', () => {
             ];
       const jsResult = np.matmul(array(mat, dtype), array(mat, dtype));
       const py = oracle.get(`matmul_${dtype}`)!;
-      expect(arraysClose(toNumbers(jsResult), py.value, 1e-4)).toBe(true);
+      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
     });
 
     it(`cross ${dtype}`, () => {
@@ -166,7 +167,7 @@ result = np.cross(a, b).astype(np.float64)`;
       }
       const r = np.cross(array(a, dtype), array(b, dtype));
       const py = oracle.get(`cross_${dtype}`)!;
-      expect(arraysClose(toNumbers(r), py.value, 1e-4)).toBe(true);
+      expect(arraysClose(toComparable(r), py.value, 1e-4)).toBe(true);
     });
 
     it(`kron ${dtype}`, () => {
@@ -174,7 +175,7 @@ result = np.cross(a, b).astype(np.float64)`;
       const b = dtype === 'bool' ? [0, 1] : [3, 4];
       const r = np.kron(array(a, dtype), array(b, dtype));
       const py = oracle.get(`kron_${dtype}`)!;
-      expect(arraysClose(toNumbers(r), py.value, 1e-4)).toBe(true);
+      expect(arraysClose(toComparable(r), py.value, 1e-4)).toBe(true);
     });
 
     it(`trace ${dtype}`, () => {
@@ -190,7 +191,7 @@ result = np.cross(a, b).astype(np.float64)`;
             ];
       const jsResult = np.trace(array(mat, dtype));
       const py = oracle.get(`trace_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`tensordot ${dtype}`, () => {
@@ -206,7 +207,7 @@ result = np.cross(a, b).astype(np.float64)`;
             ];
       const r = np.tensordot(array(mat, dtype), array(mat, dtype));
       const py = oracle.get(`tensordot_${dtype}`)!;
-      expect(Number(r)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(r, py.value);
     });
 
     it(`vecdot ${dtype}`, () => {
@@ -214,7 +215,7 @@ result = np.cross(a, b).astype(np.float64)`;
       const b = dtype === 'bool' ? [0, 1, 0] : [4, 5, 6];
       const jsResult = np.vecdot(array(a, dtype), array(b, dtype));
       const py = oracle.get(`vecdot_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`matvec ${dtype}`, () => {
@@ -231,7 +232,7 @@ result = np.cross(a, b).astype(np.float64)`;
       const v = dtype === 'bool' ? [1, 0] : [5, 6];
       const jsResult = np.matvec(array(m, dtype), array(v, dtype));
       const py = oracle.get(`matvec_${dtype}`)!;
-      expect(arraysClose(toNumbers(jsResult), py.value, 1e-4)).toBe(true);
+      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
     });
 
     it(`vecmat ${dtype}`, () => {
@@ -248,7 +249,7 @@ result = np.cross(a, b).astype(np.float64)`;
       const v = dtype === 'bool' ? [1, 0] : [5, 6];
       const jsResult = np.vecmat(array(v, dtype), array(m, dtype));
       const py = oracle.get(`vecmat_${dtype}`)!;
-      expect(arraysClose(toNumbers(jsResult), py.value, 1e-4)).toBe(true);
+      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
     });
   }
 });

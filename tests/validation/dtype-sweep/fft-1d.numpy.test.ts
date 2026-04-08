@@ -11,6 +11,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyArrayCast,
   expectBothReject,
   expectMatchPre,
 } from './_helpers';
@@ -28,6 +29,9 @@ beforeAll(() => {
 
   for (const dtype of ALL_DTYPES) {
     const data = dtype === 'bool' ? [1, 0, 1, 0] : [1, 2, 3, 4];
+    // FFT results are complex → always cast to np.complex128 for value comparison
+    // fftshift/ifftshift preserve dtype → use pyArrayCast
+    const ac = pyArrayCast(dtype);
 
     snippets[`fft_${dtype}`] = `
 _result_orig = np.fft.fft(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
@@ -53,11 +57,11 @@ result = _result_orig.astype(np.complex128)`;
 
     snippets[`fftshift_${dtype}`] = `
 _result_orig = np.fft.fftshift(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`ifftshift_${dtype}`] = `
 _result_orig = np.fft.ifftshift(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
   }
 
   // fftfreq/rfftfreq are dtype-independent, just need one each

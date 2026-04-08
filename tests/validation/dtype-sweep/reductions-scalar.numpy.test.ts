@@ -11,6 +11,8 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyScalarCast,
+  scalarClose,
   expectBothReject,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
@@ -58,24 +60,21 @@ beforeAll(() => {
   const snippets: Record<string, string> = {};
 
   for (const dtype of ALL_DTYPES) {
+    const sc = pyScalarCast(dtype);
     const data =
       dtype === 'bool' ? [1, 0, 1, 1, 0, 1] : isComplex(dtype) ? [1, 2, 3, 4, 5, 6] : SMALL_DATA;
 
     for (const { name, npFn } of ops) {
-      const castExpr =
-        isComplex(dtype) && (name === 'sum' || name === 'prod')
-          ? `complex(np.${npFn || name}(a))`
-          : `float(np.${npFn || name}(a))`;
       snippets[`${name}_${dtype}`] = `
 a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
-result = ${castExpr}`;
+result = ${sc}(np.${npFn || name}(a))`;
     }
 
     const nanData = dtype === 'bool' ? [1, 0, 1, 1] : SMALL_DATA;
     for (const { name } of nanOps) {
       snippets[`${name}_${dtype}`] = `
 a = np.array(${JSON.stringify(nanData)}, dtype=${npDtype(dtype)})
-result = float(np.${name}(a))`;
+result = ${sc}(np.${name}(a))`;
     }
   }
 
@@ -108,7 +107,7 @@ result = float(np.ptp(a))`;
           }
           const jsResult = fn(a);
           const py = oracle.get(`${name}_${dtype}`)!;
-          expect(Number(jsResult)).toBeCloseTo(Number(py.value), 3);
+          scalarClose(jsResult, py.value, 3);
         });
       }
     });
@@ -124,7 +123,7 @@ describe('DType Sweep: Nan-aware reductions', () => {
           const a = array(data, dtype);
           const jsResult = fn(a);
           const py = oracle.get(`${name}_${dtype}`)!;
-          expect(Number(jsResult)).toBeCloseTo(Number(py.value), 3);
+          scalarClose(jsResult, py.value, 3);
         });
       }
     });

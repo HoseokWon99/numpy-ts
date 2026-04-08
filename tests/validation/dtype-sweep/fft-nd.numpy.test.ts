@@ -11,6 +11,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyArrayCast,
   expectBothReject,
   expectMatchPre,
 } from './_helpers';
@@ -38,6 +39,9 @@ beforeAll(() => {
             [5, 6, 7, 8],
           ];
 
+    const ac = pyArrayCast(dtype);
+
+    // FFT results are complex → always cast to np.complex128 for value comparison
     snippets[`fft2_${dtype}`] = `
 _result_orig = np.fft.fft2(np.array(${JSON.stringify(data2d)}, dtype=${npDtype(dtype)}))
 result = _result_orig.astype(np.complex128)`;

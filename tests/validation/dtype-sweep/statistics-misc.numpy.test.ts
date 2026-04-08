@@ -11,6 +11,9 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyScalarCast,
+  pyArrayCast,
+  scalarClose,
   expectBothReject,
   expectMatchPre,
   arraysClose,
@@ -28,12 +31,15 @@ beforeAll(() => {
   const snippets: Record<string, string> = {};
 
   for (const dtype of ALL_DTYPES) {
+    const sc = pyScalarCast(dtype);
+    const ac = pyArrayCast(dtype);
+
     // Statistics
     const histData = dtype === 'bool' ? [1, 0, 1, 0, 1] : [1, 2, 3, 4, 5];
     snippets[`stats_histogram_${dtype}`] = `
 h, e = np.histogram(np.array(${JSON.stringify(histData)}, dtype=${npDtype(dtype)}))
 _result_orig = h
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const corrData =
       dtype === 'bool'
@@ -54,7 +60,7 @@ result = _result_orig`;
 result = _result_orig`;
 
     snippets[`stats_bincount_${dtype}`] =
-      `result = np.bincount(np.array(${JSON.stringify(dtype === 'bool' ? [1, 0, 1, 0] : [0, 1, 1, 2, 3, 3, 3])}, dtype=${npDtype(dtype)})).astype(np.float64)`;
+      `result = np.bincount(np.array(${JSON.stringify(dtype === 'bool' ? [1, 0, 1, 0] : [0, 1, 1, 2, 3, 3, 3])}, dtype=${npDtype(dtype)})).astype(${ac})`;
 
     const digitizeData = dtype === 'bool' ? [0, 1, 0, 1] : [1, 3, 5, 7];
     const digitizeBins = dtype === 'bool' ? [0, 1] : [2, 4, 6];
@@ -66,24 +72,24 @@ result = _result_orig`;
     const corrD2 = dtype === 'bool' ? [0, 1] : [0, 1];
     snippets[`stats_correlate_${dtype}`] =
       `_result_orig = np.correlate(np.array(${JSON.stringify(corrD1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(corrD2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`stats_convolve_${dtype}`] =
       `_result_orig = np.convolve(np.array(${JSON.stringify(corrD1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(corrD2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const trapData = dtype === 'bool' ? [1, 0, 1, 0] : [1, 2, 3, 4];
     snippets[`stats_trapezoid_${dtype}`] =
-      `result = float(np.trapezoid(np.array(${JSON.stringify(trapData)}, dtype=${npDtype(dtype)})))`;
+      `result = ${sc}(np.trapezoid(np.array(${JSON.stringify(trapData)}, dtype=${npDtype(dtype)})))`;
 
     const diffData = dtype === 'bool' ? [1, 0, 1, 0, 1] : [1, 2, 4, 7, 11];
     snippets[`stats_diff_${dtype}`] =
       `_result_orig = np.diff(np.array(${JSON.stringify(diffData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`stats_gradient_${dtype}`] =
       `_result_orig = np.gradient(np.array(${JSON.stringify(diffData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const interpXp = dtype === 'bool' ? [0, 1] : [1, 2, 3, 4];
     const interpFp = dtype === 'bool' ? [0, 1] : [10, 20, 30, 40];
@@ -101,29 +107,29 @@ result = _result_orig`;
     const hi = dtype === 'bool' ? 1 : 8;
     snippets[`misc_clip_${dtype}`] =
       `_result_orig = np.clip(np.array(${JSON.stringify(clipData)}, dtype=${npDtype(dtype)}), ${lo}, ${hi})
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const fmodD1 = dtype === 'bool' ? [1, 1, 0] : [6, 7, 8, 9];
     const fmodD2 = dtype === 'bool' ? [1, 1, 1] : [4, 3, 5, 2];
     snippets[`misc_fmod_${dtype}`] =
       `_result_orig = np.fmod(np.array(${JSON.stringify(fmodD1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(fmodD2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const nanToNumData = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
     snippets[`misc_nan_to_num_${dtype}`] =
       `_result_orig = np.nan_to_num(np.array(${JSON.stringify(nanToNumData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const ldexpData = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
     snippets[`misc_ldexp_${dtype}`] =
       `_result_orig = np.ldexp(np.array(${JSON.stringify(ldexpData)}, dtype=${npDtype(dtype)}), np.array([1,2,3], dtype=np.int32))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const frexpData = dtype === 'bool' ? [1, 0, 1] : [1, 2, 4];
     snippets[`misc_frexp_${dtype}`] = `
 m, e = np.frexp(np.array(${JSON.stringify(frexpData)}, dtype=${npDtype(dtype)}))
 _result_orig = m
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     if (!isComplex(dtype)) {
       const aeData = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
@@ -135,19 +141,19 @@ result = _result_orig.astype(np.float64)`;
     const complexData = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
     snippets[`complex_real_${dtype}`] =
       `_result_orig = np.real(np.array(${JSON.stringify(complexData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`complex_imag_${dtype}`] =
       `_result_orig = np.imag(np.array(${JSON.stringify(complexData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`complex_conj_${dtype}`] =
       `_result_orig = np.conj(np.array(${JSON.stringify(complexData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     snippets[`complex_angle_${dtype}`] =
       `_result_orig = np.angle(np.array(${JSON.stringify(complexData)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
   }
 
   oracle = runNumPyBatch(snippets);
@@ -157,10 +163,11 @@ describe('DType Sweep: Statistics', () => {
   for (const dtype of ALL_DTYPES) {
     it(`histogram ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1, 0, 1] : [1, 2, 3, 4, 5];
+      const ac = pyArrayCast(dtype);
       const pyCode = `
 h, e = np.histogram(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
 _result_orig = h
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
       if (isComplex(dtype)) {
         const _r = expectBothReject(
           'histogram requires real-valued input',
@@ -257,7 +264,8 @@ result = _result_orig`;
 
     it(`trapezoid ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1, 0] : [1, 2, 3, 4];
-      const pyCode = `result = float(np.trapezoid(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})))`;
+      const sc = pyScalarCast(dtype);
+      const pyCode = `result = ${sc}(np.trapezoid(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})))`;
       if (isComplex(dtype)) {
         const _r = expectBothReject(
           'trapezoid is not defined for complex numbers',
@@ -268,7 +276,7 @@ result = _result_orig`;
       }
       const jsResult = np.trapezoid(array(data, dtype));
       const py = oracle.get(`stats_trapezoid_${dtype}`)!;
-      expect(Number(jsResult)).toBeCloseTo(Number(py.value), 4);
+      scalarClose(jsResult, py.value);
     });
 
     it(`diff ${dtype}`, () => {
@@ -279,8 +287,9 @@ result = _result_orig`;
 
     it(`gradient ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1, 0, 1] : [1, 2, 4, 7, 11];
+      const ac = pyArrayCast(dtype);
       const pyCode = `_result_orig = np.gradient(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
       if (dtype === 'bool') {
         const _r = expectBothReject(
           'gradient uses subtract internally, not supported for bool',
@@ -323,8 +332,9 @@ describe('DType Sweep: Misc', () => {
       const data = dtype === 'bool' ? [1, 0, 1] : [1, 5, 10];
       const lo = dtype === 'bool' ? 0 : 2;
       const hi = dtype === 'bool' ? 1 : 8;
+      const ac = pyArrayCast(dtype);
       const pyCode = `_result_orig = np.clip(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}), ${lo}, ${hi})
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
       if (isComplex(dtype)) {
         const _r = expectBothReject(
           'clip is not defined for complex numbers (requires ordering)',
@@ -340,8 +350,9 @@ result = _result_orig.astype(np.float64)`;
     it(`fmod ${dtype}`, () => {
       const d1 = dtype === 'bool' ? [1, 1, 0] : [6, 7, 8, 9];
       const d2 = dtype === 'bool' ? [1, 1, 1] : [4, 3, 5, 2];
+      const ac = pyArrayCast(dtype);
       const pyCode = `_result_orig = np.fmod(np.array(${JSON.stringify(d1)}, dtype=${npDtype(dtype)}), np.array(${JSON.stringify(d2)}, dtype=${npDtype(dtype)}))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
       if (isComplex(dtype)) {
         const _r = expectBothReject(
           'fmod is not defined for complex numbers',
@@ -362,8 +373,9 @@ result = _result_orig.astype(np.float64)`;
 
     it(`ldexp ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1] : [1, 2, 3];
+      const ac = pyArrayCast(dtype);
       const pyCode = `_result_orig = np.ldexp(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}), np.array([1,2,3], dtype=np.int32))
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
       if (isComplex(dtype)) {
         const _r = expectBothReject(
           'ldexp is only defined for real floating-point types',
@@ -378,10 +390,11 @@ result = _result_orig.astype(np.float64)`;
 
     it(`frexp ${dtype}`, () => {
       const data = dtype === 'bool' ? [1, 0, 1] : [1, 2, 4];
+      const ac = pyArrayCast(dtype);
       const pyCode = `
 m, e = np.frexp(np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)}))
 _result_orig = m
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
       if (isComplex(dtype)) {
         const _r = expectBothReject(
           'frexp is only defined for real floating-point types',

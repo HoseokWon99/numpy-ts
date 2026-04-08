@@ -10,6 +10,7 @@ import {
   runNumPyBatch,
   checkNumPyAvailable,
   npDtype,
+  pyArrayCast,
   expectBothReject,
   expectMatchPre,
 } from './_helpers';
@@ -73,13 +74,14 @@ beforeAll(() => {
 
   for (const { name } of binaryOps) {
     for (const dtype of ALL_DTYPES) {
+      const ac = pyArrayCast(dtype);
       const data1 = dtype === 'bool' ? [1, 1, 0, 1] : [6, 7, 8, 9];
       const data2 = dtype === 'bool' ? [1, 0, 1, 0] : [1, 2, 3, 4];
       snippets[`${name}_${dtype}`] = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.${name}(a, b)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
     }
   }
 
@@ -91,13 +93,14 @@ describe('DType Sweep: Binary arithmetic', () => {
     describe(name, () => {
       for (const dtype of ALL_DTYPES) {
         it(`${dtype}`, () => {
+          const ac = pyArrayCast(dtype);
           const data1 = dtype === 'bool' ? [1, 1, 0, 1] : [6, 7, 8, 9];
           const data2 = dtype === 'bool' ? [1, 0, 1, 0] : [1, 2, 3, 4];
           const pyCode = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.${name}(a, b)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
           // complex128/complex64: real-only ops throw TypeError in both JS and NumPy
           if (dtype.startsWith('complex') && REAL_ONLY.has(name)) {

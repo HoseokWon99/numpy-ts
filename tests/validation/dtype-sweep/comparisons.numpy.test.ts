@@ -10,6 +10,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isComplex,
+  pyArrayCast,
   runNumPyBatch,
   expectMatchPre,
 } from './_helpers';
@@ -29,6 +30,7 @@ beforeAll(() => {
 
   for (const name of compOps) {
     for (const dtype of ALL_DTYPES) {
+      const ac = pyArrayCast(dtype);
       const data1 =
         dtype === 'bool' ? [1, 0, 1, 0] : isComplex(dtype) ? [1, 2, 3, 4] : [1, 2, 3, 4];
       const data2 =
@@ -37,18 +39,19 @@ beforeAll(() => {
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.${name}(a, b)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
     }
   }
 
   for (const dtype of ALL_DTYPES) {
+    const ac = pyArrayCast(dtype);
     const data1 = dtype === 'bool' ? [1, 0, 1] : [1.0, 2.0, 3.0];
     const data2 = dtype === 'bool' ? [1, 0, 1] : [1.0, 2.0, 3.0];
     snippets[`isclose_${dtype}`] = `
 a = np.array(${JSON.stringify(data1)}, dtype=${npDtype(dtype)})
 b = np.array(${JSON.stringify(data2)}, dtype=${npDtype(dtype)})
 _result_orig = np.isclose(a, b)
-result = _result_orig.astype(np.float64)`;
+result = _result_orig.astype(${ac})`;
 
     const data = dtype === 'bool' ? [1, 0, 1] : [1.0, 2.0, 3.0];
     snippets[`allclose_${dtype}`] = `
