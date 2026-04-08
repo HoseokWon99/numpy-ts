@@ -17,7 +17,7 @@
 
 import { ArrayStorage } from '../storage';
 import { Complex } from '../complex';
-import { isComplexDType, type DType } from '../dtype';
+import { isComplexDType, fftResultDtype, fftRealResultDtype, type DType } from '../dtype';
 import { roll as shapeRoll } from './shape';
 import {
   wasmFft,
@@ -411,23 +411,24 @@ function fftnd(
 ): ArrayStorage {
   const shape = Array.from(a.shape);
   const ndim = shape.length;
+  const cDtype = fftResultDtype(a.dtype as DType);
 
   // Handle empty arrays
   if (a.size === 0) {
-    return ArrayStorage.zeros(shape, 'complex128');
+    return ArrayStorage.zeros(shape, cDtype);
   }
 
   // Handle 0-D arrays
   if (ndim === 0) {
-    const result = ArrayStorage.zeros([1], 'complex128');
+    const result = ArrayStorage.zeros([1], cDtype);
     const val = a.iget(0);
     const re = val instanceof Complex ? val.re : Number(val);
     const im = val instanceof Complex ? val.im : 0;
-    const data = result.data as Float64Array;
+    const data = result.data as Float64Array | Float32Array;
     data[0] = re;
     data[1] = im;
     // Reshape to scalar
-    return ArrayStorage.fromData(result.data, [], 'complex128');
+    return ArrayStorage.fromData(result.data, [], cDtype);
   }
 
   // Normalize axes
@@ -481,7 +482,7 @@ function fftnd(
       const outData = wasmFft2(srcData, rows, cols, inverse);
       if (outData) {
         result.dispose();
-        return ArrayStorage.fromData(outData, [rows, cols], 'complex128');
+        return ArrayStorage.fromData(outData, [rows, cols], cDtype);
       }
     }
   }
@@ -504,14 +505,14 @@ function toComplex(a: ArrayStorage): ArrayStorage {
   const dtype = a.dtype as DType;
   const shape = Array.from(a.shape);
   const size = a.size;
+  const outDtype = fftResultDtype(dtype);
 
   if (dtype === 'complex128' || dtype === 'complex64') {
-    // Already complex, just copy
-    const result = ArrayStorage.zeros(shape, 'complex128');
-    const resultData = result.data as Float64Array;
+    // Already complex — promote to target complex dtype
+    const result = ArrayStorage.zeros(shape, outDtype);
+    const resultData = result.data as Float64Array | Float32Array;
     const srcData = a.data as Float64Array | Float32Array;
 
-    // Use optimized copy for complex data (interleaved real/imag)
     for (let i = 0; i < size * 2; i++) {
       resultData[i] = srcData[i]!;
     }
@@ -519,8 +520,8 @@ function toComplex(a: ArrayStorage): ArrayStorage {
   }
 
   // Real array: convert to complex using direct typed array access
-  const result = ArrayStorage.zeros(shape, 'complex128');
-  const resultData = result.data as Float64Array;
+  const result = ArrayStorage.zeros(shape, outDtype);
+  const resultData = result.data as Float64Array | Float32Array;
   const srcData = a.data;
 
   // Direct typed array access based on dtype
@@ -614,9 +615,9 @@ function padAxis(a: ArrayStorage, axis: number, newSize: number): ArrayStorage {
   const oldSize = shape[axis]!;
   shape[axis] = newSize;
 
-  const result = ArrayStorage.zeros(shape, 'complex128');
-  const resultData = result.data as Float64Array;
-  const srcData = a.data as Float64Array;
+  const result = ArrayStorage.zeros(shape, a.dtype);
+  const resultData = result.data as Float64Array | Float32Array;
+  const srcData = a.data as Float64Array | Float32Array;
 
   // Calculate strides for iteration
   const outerSize = shape.slice(0, axis).reduce((a, b) => a * b, 1);
@@ -644,8 +645,8 @@ function truncateAxis(a: ArrayStorage, axis: number, newSize: number): ArrayStor
   const oldSize = shape[axis]!;
   shape[axis] = newSize;
 
-  const result = ArrayStorage.zeros(shape, 'complex128');
-  const resultData = result.data as Float64Array;
+  const result = ArrayStorage.zeros(shape, a.dtype);
+  const resultData = result.data as Float64Array | Float32Array;
   const srcData = a.data as Float64Array;
 
   const outerSize = shape.slice(0, axis).reduce((a, b) => a * b, 1);
@@ -695,7 +696,7 @@ function wasmBatchRfft(a: ArrayStorage, n: number): ArrayStorage | null {
 
   const outShape = [...shape];
   outShape[ndim - 1] = outLen;
-  return ArrayStorage.fromData(outData, outShape, 'complex128');
+  return ArrayStorage.fromData(outData, outShape, fftResultDtype(a.dtype as DType));
 }
 
 /**
@@ -733,9 +734,9 @@ function fft1dAlongAxis(
 
   if (n === 0) return a;
 
-  const result = ArrayStorage.zeros(shape, 'complex128');
-  const resultData = result.data as Float64Array;
-  const srcData = a.data as Float64Array;
+  const result = ArrayStorage.zeros(shape, a.dtype);
+  const resultData = result.data as Float64Array | Float32Array;
+  const srcData = a.data as Float64Array | Float32Array;
 
   // Calculate dimensions
   const outerSize = shape.slice(0, axis).reduce((acc, s) => acc * s, 1);
@@ -983,10 +984,11 @@ export function irfft(
   const fullShape = [...shape];
   fullShape[ax] = outLen;
 
-  const full = ArrayStorage.zeros(fullShape, 'complex128');
-  const fullData = full.data as Float64Array;
+  const cDtype = fftResultDtype(a.dtype as DType);
+  const full = ArrayStorage.zeros(fullShape, cDtype);
+  const fullData = full.data as Float64Array | Float32Array;
   const complexA = toComplex(a);
-  const srcData = complexA.data as Float64Array;
+  const srcData = complexA.data as Float64Array | Float32Array;
 
   const outerSize = shape.slice(0, ax).reduce((acc, s) => acc * s, 1);
   const innerSize = shape.slice(ax + 1).reduce((acc, s) => acc * s, 1);
@@ -1065,7 +1067,7 @@ export function rfft2(
             );
       const outData = wasmRfft2(inputData, rows, cols);
       if (outData) {
-        return ArrayStorage.fromData(outData, [rows, halfCols], 'complex128');
+        return ArrayStorage.fromData(outData, [rows, halfCols], fftResultDtype(a.dtype as DType));
       }
     }
   }
@@ -1330,9 +1332,9 @@ export function ihfft(
 function conjugate(a: ArrayStorage): ArrayStorage {
   const shape = Array.from(a.shape);
   const size = a.size;
-  const result = ArrayStorage.zeros(shape, 'complex128');
-  const resultData = result.data as Float64Array;
-  const srcData = a.data as Float64Array;
+  const result = ArrayStorage.zeros(shape, a.dtype);
+  const resultData = result.data as Float64Array | Float32Array;
+  const srcData = a.data as Float64Array | Float32Array;
 
   for (let i = 0; i < size; i++) {
     resultData[i * 2] = srcData[i * 2]!;
