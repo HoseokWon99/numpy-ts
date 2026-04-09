@@ -1449,8 +1449,10 @@ export function histogram_bin_edges(
   // Ensure at least 1 bin
   numBins = Math.max(1, Math.round(numBins));
 
-  // Compute bin edges
-  const edgeStorage = ArrayStorage.empty([numBins + 1], 'float64');
+  // Compute bin edges — preserve float dtype
+  const edgeDtype =
+    a.dtype === 'float32' ? 'float32' : a.dtype === 'float16' ? 'float16' : 'float64';
+  const edgeStorage = ArrayStorage.empty([numBins + 1], edgeDtype);
   const binEdges = edgeStorage.data as Float64Array;
   const step = (maxVal - minVal) / numBins;
   for (let i = 0; i <= numBins; i++) {

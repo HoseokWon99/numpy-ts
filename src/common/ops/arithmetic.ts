@@ -23,6 +23,7 @@ import {
   boolArithmeticDtype,
   hasFloat16,
 } from '../dtype';
+import type { DType } from '../dtype';
 import { elementwiseBinaryOp } from '../internal/compute';
 import { wasmAdd, wasmAddScalar } from '../wasm/add';
 import { wasmSub, wasmSubScalar } from '../wasm/sub';
@@ -2399,17 +2400,18 @@ export function ldexp(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
  */
 export function modf(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
   throwIfComplex(x.dtype, 'modf', 'modf is not defined for complex numbers.');
-  const fractional = ArrayStorage.empty(Array.from(x.shape), 'float64');
-  const integral = ArrayStorage.empty(Array.from(x.shape), 'float64');
-  const fractionalData = fractional.data as Float64Array;
-  const integralData = integral.data as Float64Array;
+  const outDtype = mathResultDtype(x.dtype);
+  const fractional = ArrayStorage.empty(Array.from(x.shape), outDtype);
+  const integral = ArrayStorage.empty(Array.from(x.shape), outDtype);
+  const fractionalData = fractional.data;
+  const integralData = integral.data;
   const size = x.size;
 
   for (let i = 0; i < size; i++) {
     const val = Number(x.iget(i));
     const intPart = Math.trunc(val);
-    integralData[i] = intPart;
-    fractionalData[i] = val - intPart;
+    (integralData as Float64Array)[i] = intPart;
+    (fractionalData as Float64Array)[i] = val - intPart;
   }
 
   return [fractional, integral];
@@ -3076,10 +3078,14 @@ export function unwrap(
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${ndim}`);
   }
 
+  // unwrap preserves float types, promotes int/bool to float64
+  const outDtype: DType =
+    p.dtype === 'float32' ? 'float32' : p.dtype === 'float16' ? 'float16' : 'float64';
+
   // For 1D arrays, simple implementation
   if (ndim === 1) {
     const size = p.size;
-    const result = ArrayStorage.empty(shape, 'float64');
+    const result = ArrayStorage.empty(shape, outDtype);
     const resultData = result.data as Float64Array;
     const pData = p.data;
 
@@ -3112,7 +3118,7 @@ export function unwrap(
 
   // For multi-dimensional arrays, we need to process along the axis
   // This is a simplified implementation for 2D case
-  const result = ArrayStorage.empty(shape, 'float64');
+  const result = ArrayStorage.empty(shape, outDtype);
   const resultData = result.data as Float64Array;
   const pData = p.data;
 

@@ -28,13 +28,17 @@ const showMissing = process.argv.includes('--missing');
 const showSummary = process.argv.includes('--summary');
 
 /** Normalize function names from tests to match core/index.ts exports */
-const FN_ALIASES: Record<string, string> = {
-  var: 'variance',
-};
+const FN_ALIASES: Record<string, string> = {};
 
 function normalizeFnName(name: string): string {
   // Strip axis variants: "sum axis=0" → "sum"
   name = name.replace(/\s+axis=\d+.*$/, '');
+  // Strip argument/context suffixes: "indices((3,3))" → "indices", "broadcast_shapes([2,3], [3])" → "broadcast_shapes"
+  name = name.replace(/\s*\(.*$/, '');
+  // Strip descriptive suffixes: "may_share_memory — same array" → "may_share_memory"
+  name = name.replace(/\s+[—–-]\s+.*$/, '');
+  // Strip extra words after function name: "einsum trace" → "einsum"
+  name = name.replace(/\s+\w+$/, '');
   return FN_ALIASES[name] ?? name;
 }
 
@@ -124,108 +128,26 @@ const EXCLUDED = new Set([
   'genfromtxt',
   'fromregex',
   'serializeTxt',
-  // Aliases (tracked under their canonical name)
-  'abs',
-  'pow',
-  'true_divide',
-  'amax',
-  'amin',
-  'var_',
-  'var',
-  'asin',
-  'acos',
-  'atan',
-  'atan2',
-  'asinh',
-  'acosh',
-  'atanh',
-  'conjugate',
-  'row_stack',
-  'concat',
-  'cumulative_sum',
-  'cumulative_prod',
-  'nancumsum',
-  'nancumprod',
-  'bitwise_invert',
-  'bitwise_left_shift',
-  'bitwise_right_shift',
-  'round',
-  // Index utilities (not dtype-parametric)
-  'indices',
-  'ix_',
-  'ravel_multi_index',
-  'unravel_index',
-  'diag_indices',
-  'diag_indices_from',
-  'tril_indices',
-  'tril_indices_from',
-  'triu_indices',
-  'triu_indices_from',
-  'mask_indices',
-  // Advanced utilities
-  'apply_along_axis',
-  'apply_over_axes',
-  'may_share_memory',
-  'shares_memory',
-  'place',
-  'putmask',
-  'copyto',
-  'iindex',
-  'bindex',
-  'broadcast_shapes',
   // Creation from special sources (not dtype-sweep)
   'frombuffer',
   'fromfunction',
   'fromiter',
   'fromstring',
   'fromfile',
-  'meshgrid',
-  'vander',
-  // Niche creation
-  'zeros_like',
-  'ones_like',
+  // Uninitialized memory — can't validate values
   'empty_like',
-  'full_like',
-  'copy',
-  'asanyarray',
-  'asarray_chkfinite',
+  // Contiguity check, not dtype-parametric
   'require',
-  'tri',
-  'tril',
-  'triu',
-  // Polynomial
-  'poly',
-  'polyadd',
-  'polyder',
-  'polydiv',
-  'polyfit',
-  'polyint',
-  'polymul',
-  'polysub',
-  'polyval',
-  'roots',
-  // Einsum
-  'einsum',
-  'einsum_path',
-  // Misc
-  'vdot',
-  'matrix_transpose',
-  'permute_dims',
-  'rollaxis',
-  'block',
-  'array_equal',
-  // Unique variants (tracked under 'unique')
-  'unique_all',
-  'unique_counts',
-  'unique_inverse',
-  'unique_values',
-  // Histogram variants
-  'histogram2d',
-  'histogramdd',
-  'histogram_bin_edges',
-  // Misc extra
-  'modf',
-  'unwrap',
+  // Internal indexing helpers, not user-facing dtype-parametric ops
+  'bindex',
+  'iindex',
+  // Pure integer/shape args — no dtype input or output variation
+  'diag_indices',
+  'tril_indices',
+  'triu_indices',
+  'broadcast_shapes',
+  // var_ is not reachable from the full package (re-export issue)
+  'var_',
   // Namespace objects (methods tracked separately as linalg.*, fft.*)
   'linalg',
   'fft',
@@ -445,6 +367,28 @@ function parseTestFile(filePath: string): CoverageEntry[] {
 
   type ForLoop = { varName: string; dtypes: readonly string[] };
 
+  /** Extract function name from describe stack — prefers inner non-prefix describe,
+   *  falls back to extracting from "DType Sweep: funcName ..." patterns */
+  function resolveFnName(): string | null {
+    for (let d = describeStack.length - 1; d >= 0; d--) {
+      const desc = describeStack[d]!;
+      if (
+        !desc.name.startsWith('DType Sweep') &&
+        !desc.name.startsWith('$') &&
+        !desc.name.startsWith('Misc')
+      ) {
+        return desc.name;
+      }
+    }
+    // Fallback: extract from "DType Sweep: func_name ..." (lowercase/underscore only)
+    for (let d = describeStack.length - 1; d >= 0; d--) {
+      const desc = describeStack[d]!;
+      const m = desc.name.match(/^DType Sweep:\s+([a-z_]\w*)/);
+      if (m) return m[1]!;
+    }
+    return null;
+  }
+
   const forLoopStack: ForLoop[] = [];
   const describeStack: { name: string }[] = [];
   let braceDepth = 0;
@@ -500,12 +444,58 @@ function parseTestFile(filePath: string): CoverageEntry[] {
       describeBraceDepth.push(braceDepth - 1);
     }
 
-    // Match it() block
+    // Match it() block — string literal or bare variable (e.g. `it(dtype, ...`)
     const itM = trimmed.match(/it\s*\(\s*(?:`([^`]*)`|'([^']*)'|"([^"]*)")\s*[,)]/);
-    if (!itM) continue;
+    const itVarM = !itM ? trimmed.match(/it\s*\(\s*(\w+)\s*,/) : null;
+    if (!itM && !itVarM) continue;
 
     const isStructural = trimmed.includes('// structural');
-    const testName = (itM[1] ?? itM[2] ?? itM[3])!;
+    // If it(varName, ...) and varName is a dtype-loop variable, treat test name as that variable
+    let testName: string;
+    if (itVarM) {
+      const varName = itVarM[1]!;
+      const loop = forLoopStack.find((l) => l.varName === varName);
+      if (loop) {
+        // Variable is a dtype from a for-loop — resolve function name from describe stack
+        let fnName = resolveFnName();
+        if (fnName) {
+          // Scan for oracle
+          let hasOracle = false;
+          let bodyBrace = braceDepth;
+          for (let j = i; j < Math.min(i + 30, lines.length); j++) {
+            if (
+              lines[j]!.includes('runNumPy(') ||
+              lines[j]!.includes('runNumPy`') ||
+              lines[j]!.includes('expectMatch') ||
+              lines[j]!.includes('oracle.get(')
+            ) {
+              hasOracle = true;
+              break;
+            }
+            if (j > i) {
+              for (const ch of lines[j]!) {
+                if (ch === '{') bodyBrace++;
+                else if (ch === '}') bodyBrace--;
+              }
+              if (bodyBrace < braceDepth) break;
+            }
+          }
+          for (const dtype of loop.dtypes) {
+            entries.push({
+              fn: fnName,
+              dtype,
+              oracle: hasOracle,
+              structural: isStructural,
+              file: fileName,
+            });
+          }
+        }
+        continue;
+      }
+      // If not a dtype-loop variable, skip
+      continue;
+    }
+    testName = (itM![1] ?? itM![2] ?? itM![3])!;
 
     // Scan the test body for runNumPy
     let hasOracle = false;
@@ -541,13 +531,7 @@ function parseTestFile(filePath: string): CoverageEntry[] {
       let fnName = fnPart || null;
 
       if (!fnName) {
-        for (let d = describeStack.length - 1; d >= 0; d--) {
-          const desc = describeStack[d]!;
-          if (!desc.name.startsWith('DType Sweep') && !desc.name.startsWith('$')) {
-            fnName = desc.name;
-            break;
-          }
-        }
+        fnName = resolveFnName();
       }
 
       if (loop && fnName) {
@@ -566,14 +550,7 @@ function parseTestFile(filePath: string): CoverageEntry[] {
 
     // Test name IS a dtype
     if (allDtypeSet.has(testName)) {
-      let fnName: string | null = null;
-      for (let d = describeStack.length - 1; d >= 0; d--) {
-        const desc = describeStack[d]!;
-        if (!desc.name.startsWith('DType Sweep') && !desc.name.startsWith('$')) {
-          fnName = desc.name;
-          break;
-        }
-      }
+      const fnName = resolveFnName();
       if (fnName) {
         entries.push({
           fn: fnName,
@@ -612,6 +589,19 @@ function parseTestFile(filePath: string): CoverageEntry[] {
         file: fileName,
       });
       continue;
+    }
+
+    // Fallback: standalone test with function name (no dtype loop).
+    // Record as structural coverage for the default dtype (float64).
+    const normalizedName = normalizeFnName(testName);
+    if (/^[a-z_]\w*$/i.test(normalizedName) && !allDtypeSet.has(normalizedName)) {
+      entries.push({
+        fn: normalizedName,
+        dtype: 'float64',
+        oracle: hasOracle,
+        structural: true,
+        file: fileName,
+      });
     }
   }
 

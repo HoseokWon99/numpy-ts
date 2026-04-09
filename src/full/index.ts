@@ -98,10 +98,7 @@ export function select(
   return up(core.select(condlist, choicelist, defaultVal));
 }
 
-export function indices(
-  dimensions: number[],
-  dtype: 'int32' | 'int64' | 'float64' = 'float64'
-): NDArray {
+export function indices(dimensions: number[], dtype: string = 'float64'): NDArray {
   return up(core.indices(dimensions, dtype));
 }
 
@@ -143,7 +140,7 @@ export function triu_indices_from(a: NDArrayCore, k: number = 0): NDArray[] {
 
 export function mask_indices(
   n: number,
-  mask_func: (n: number, k: number) => NDArrayCore,
+  mask_func: (m: NDArrayCore, k: number) => NDArrayCore,
   k: number = 0
 ): NDArray[] {
   return core.mask_indices(n, mask_func, k).map(up);

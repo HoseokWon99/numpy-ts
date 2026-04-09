@@ -2333,6 +2333,8 @@ function computeEinsumScalar(
   if (resultIsComplex) {
     return new Complex(sumRe, sumIm);
   }
+  // Bool: clamp to 0/1 (NumPy bool arithmetic wraps)
+  if (operands.every((op) => op.dtype === 'bool')) return sumRe ? 1 : 0;
   return sumRe;
 }
 
@@ -5266,7 +5268,12 @@ export function vdot(a: ArrayStorage, b: ArrayStorage): number | bigint | Comple
   const bFlat = shapeOps.flatten(b);
 
   try {
-    return vdotImpl(aFlat, bFlat, a.dtype, b.dtype);
+    const result = vdotImpl(aFlat, bFlat, a.dtype, b.dtype);
+    // Bool: clamp to 0/1 (NumPy bool arithmetic wraps)
+    if (a.dtype === 'bool' && b.dtype === 'bool' && typeof result === 'number') {
+      return result ? 1 : 0;
+    }
+    return result;
   } finally {
     aFlat.dispose();
     bFlat.dispose();
@@ -5291,7 +5298,11 @@ function vdotImpl(
   // WASM path: real/integer types use dot kernel, complex uses conjugate kernel
   if (!isComplex) {
     const wasmResult = wasmDot1D(aFlat, bFlat);
-    if (wasmResult !== null) return wasmResult;
+    if (wasmResult !== null) {
+      // Bool: clamp to 0/1 (NumPy bool arithmetic wraps)
+      if (aDtype === 'bool' && bDtype === 'bool') return wasmResult ? 1 : 0;
+      return wasmResult;
+    }
   } else {
     const wasmResult = wasmVdotComplex(aFlat, bFlat);
     if (wasmResult !== null) return wasmResult;

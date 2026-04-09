@@ -19,13 +19,7 @@ import {
   lexsort_i8,
   lexsort_u8,
 } from './bins/lexsort.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  scratchAlloc,
-  getSharedMemory,
-  f16InputToScratchF32,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, scratchAlloc, getSharedMemory } from './runtime';
 import { ArrayStorage } from '../storage';
 import { effectiveDType, type DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -113,11 +107,14 @@ export function wasmLexsort(keys: ArrayStorage[]): ArrayStorage | null {
   const isF16 = dtype === 'float16';
   let flatBuf: number;
   if (isF16) {
-    // f16→f32: each key converted via bump allocator (contiguous since all same size)
-    flatBuf = 0;
+    // f16→f32: allocate one contiguous block, then convert each key into its slot
+    const keyF32Bytes = n * 4;
+    flatBuf = scratchAlloc(numKeys * keyF32Bytes);
+    const mem = getSharedMemory();
     for (let k = 0; k < numKeys; k++) {
-      const ptr = f16InputToScratchF32(keys[k]!, n);
-      if (k === 0) flatBuf = ptr;
+      const destView = new Float32Array(mem.buffer, flatBuf + k * keyF32Bytes, n);
+      const key = keys[k]!;
+      destView.set(key.data.subarray(key.offset, key.offset + n) as unknown as ArrayLike<number>);
     }
   } else {
     flatBuf = scratchAlloc(keysBytes);

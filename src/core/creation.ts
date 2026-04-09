@@ -101,6 +101,12 @@ export function full(
     (data as BigInt64Array | BigUint64Array).fill(bigintValue);
   } else if (actualDtype === 'bool') {
     (data as Uint8Array).fill(fill_value ? 1 : 0);
+  } else if (isComplexDType(actualDtype)) {
+    const v = Number(fill_value);
+    for (let i = 0; i < data.length; i += 2) {
+      (data as Float64Array)[i] = v;
+      (data as Float64Array)[i + 1] = 0;
+    }
   } else {
     (data as Exclude<TypedArray, BigInt64Array | BigUint64Array>).fill(Number(fill_value));
   }
@@ -260,12 +266,7 @@ export function array(data: unknown, dtype?: DType): NDArrayCore {
 /**
  * Create array with evenly spaced values within a given interval
  */
-export function arange(
-  start: number,
-  stop?: number,
-  step: number = 1,
-  dtype?: DType
-): NDArrayCore {
+export function arange(start: number, stop?: number, step: number = 1, dtype?: DType): NDArrayCore {
   let actualStart = start;
   let actualStop = stop;
 
@@ -762,11 +763,21 @@ export function tri(
   const cols = M ?? N;
   const result = zeros([N, cols], dtype);
   const data = result.data;
+  const complexDtype = dtype === 'complex128' || dtype === 'complex64';
+  const bigIntDtype = dtype === 'int64' || dtype === 'uint64';
 
   for (let i = 0; i < N; i++) {
     for (let j = 0; j <= Math.min(i + k, cols - 1); j++) {
       if (j >= 0) {
-        (data as Float64Array)[i * cols + j] = 1;
+        const idx = i * cols + j;
+        if (complexDtype) {
+          (data as Float64Array)[idx * 2] = 1;
+          (data as Float64Array)[idx * 2 + 1] = 0;
+        } else if (bigIntDtype) {
+          (data as unknown as BigInt64Array)[idx] = 1n;
+        } else {
+          (data as Float64Array)[idx] = 1;
+        }
       }
     }
   }
@@ -787,14 +798,26 @@ export function tril(m: NDArrayCore, k: number = 0): NDArrayCore {
   const batchSize = shape.slice(0, -2).reduce((a, b) => a * b, 1);
   const matrixSize = rows * cols;
   const isBigInt = data instanceof BigInt64Array || data instanceof BigUint64Array;
+  const isComplex = m.dtype === 'complex128' || m.dtype === 'complex64';
 
   // Zero the upper triangle using bulk fill per row segment
   for (let b = 0; b < batchSize; b++) {
     const offset = b * matrixSize;
     for (let i = 0; i < rows; i++) {
-      const start = offset + i * cols + Math.max(0, Math.min(i + k + 1, cols));
-      const end = offset + i * cols + cols;
-      if (start < end) data.fill(isBigInt ? (0n as never) : (0 as never), start, end);
+      const logicalStart = Math.max(0, Math.min(i + k + 1, cols));
+      const logicalEnd = cols;
+      if (logicalStart < logicalEnd) {
+        if (isComplex) {
+          // Complex: each element is 2 entries in the typed array
+          const physStart = (offset + i * cols + logicalStart) * 2;
+          const physEnd = (offset + i * cols + logicalEnd) * 2;
+          data.fill(0 as never, physStart, physEnd);
+        } else {
+          const start = offset + i * cols + logicalStart;
+          const end = offset + i * cols + logicalEnd;
+          data.fill(isBigInt ? (0n as never) : (0 as never), start, end);
+        }
+      }
     }
   }
 
@@ -814,14 +837,25 @@ export function triu(m: NDArrayCore, k: number = 0): NDArrayCore {
   const batchSize = shape.slice(0, -2).reduce((a, b) => a * b, 1);
   const matrixSize = rows * cols;
   const isBigInt = data instanceof BigInt64Array || data instanceof BigUint64Array;
+  const isComplex = m.dtype === 'complex128' || m.dtype === 'complex64';
 
   // Zero the lower triangle using bulk fill per row segment
   for (let b = 0; b < batchSize; b++) {
     const offset = b * matrixSize;
     for (let i = 0; i < rows; i++) {
-      const end = offset + i * cols + Math.max(0, Math.min(i + k, cols));
-      const start = offset + i * cols;
-      if (start < end) data.fill(isBigInt ? (0n as never) : (0 as never), start, end);
+      const logicalEnd = Math.max(0, Math.min(i + k, cols));
+      const logicalStart = 0;
+      if (logicalStart < logicalEnd) {
+        if (isComplex) {
+          const physStart = (offset + i * cols + logicalStart) * 2;
+          const physEnd = (offset + i * cols + logicalEnd) * 2;
+          data.fill(0 as never, physStart, physEnd);
+        } else {
+          const start = offset + i * cols + logicalStart;
+          const end = offset + i * cols + logicalEnd;
+          data.fill(isBigInt ? (0n as never) : (0 as never), start, end);
+        }
+      }
     }
   }
 
@@ -832,14 +866,35 @@ export function vander(x: NDArrayCore, N?: number, increasing: boolean = false):
   const n = x.size;
   const cols = N ?? n;
   const data = x.data;
-  const result = zeros([n, cols], x.dtype as DType);
+  // NumPy vander promotes: float→float64, int/bool→int64, complex64→complex128
+  const dt = x.dtype as DType;
+  const outDtype: DType =
+    dt === 'complex128'
+      ? 'complex128'
+      : dt === 'complex64'
+        ? 'complex128'
+        : dt === 'float64' || dt === 'float32' || dt === 'float16' || dt === 'uint64'
+          ? 'float64'
+          : 'int64';
+  const result = zeros([n, cols], outDtype);
   const resultData = result.data;
+  const isBigInt = outDtype === 'int64';
+  const isComplex = outDtype === 'complex128';
 
   for (let i = 0; i < n; i++) {
-    const val = data[i] as number;
+    const val = Number(typeof data[i] === 'bigint' ? data[i] : data[isComplex ? i * 2 : i]);
     for (let j = 0; j < cols; j++) {
       const exp = increasing ? j : cols - 1 - j;
-      (resultData as Float64Array)[i * cols + j] = Math.pow(val, exp);
+      const v = Math.pow(val, exp);
+      const idx = i * cols + j;
+      if (isBigInt) {
+        (resultData as unknown as BigInt64Array)[idx] = BigInt(Math.round(v));
+      } else if (isComplex) {
+        (resultData as Float64Array)[idx * 2] = v;
+        (resultData as Float64Array)[idx * 2 + 1] = 0;
+      } else {
+        (resultData as Float64Array)[idx] = v;
+      }
     }
   }
 
@@ -889,6 +944,11 @@ export function fromfunction(
   dtype: DType = DEFAULT_DTYPE
 ): NDArrayCore {
   const size = shape.reduce((a, b) => a * b, 1);
+  if (dtype === 'bool' && size > 2) {
+    throw new TypeError(
+      'arange() is only supported for booleans when the result has at most length 2.'
+    );
+  }
   const storage = ArrayStorage.empty(shape, dtype);
   const data = storage.data;
 
@@ -899,6 +959,9 @@ export function fromfunction(
     strideVal *= shape[i]!;
   }
 
+  const complexDtype = isComplexDType(dtype);
+  const bigIntDtype = isBigIntDType(dtype);
+
   for (let flatIdx = 0; flatIdx < size; flatIdx++) {
     const indices: number[] = [];
     let remaining = flatIdx;
@@ -906,7 +969,15 @@ export function fromfunction(
       indices.push(Math.floor(remaining / strides[i]!));
       remaining = remaining % strides[i]!;
     }
-    (data as Float64Array)[flatIdx] = func(...indices);
+    const val = func(...indices);
+    if (complexDtype) {
+      (data as Float64Array)[flatIdx * 2] = val;
+      (data as Float64Array)[flatIdx * 2 + 1] = 0;
+    } else if (bigIntDtype) {
+      (data as unknown as BigInt64Array)[flatIdx] = BigInt(Math.round(val));
+    } else {
+      (data as Float64Array)[flatIdx] = val;
+    }
   }
 
   return fromStorage(storage);

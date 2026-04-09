@@ -6,7 +6,7 @@
  */
 
 import { ArrayStorage, computeStrides } from '../storage';
-import { isBigIntDType, isComplexDType, type TypedArray } from '../dtype';
+import { isBigIntDType, isComplexDType, type DType, type TypedArray } from '../dtype';
 import { computeBroadcastShape, broadcastTo, broadcastShapes } from '../broadcasting';
 import { Complex } from '../complex';
 import { wasmIndices } from '../wasm/indices';
@@ -325,6 +325,22 @@ export function array_equal(a: ArrayStorage, b: ArrayStorage, equal_nan: boolean
   for (let i = 0; i < size; i++) {
     const aVal = a.iget(i);
     const bVal = b.iget(i);
+
+    // Complex: compare re/im parts
+    const aIsComplex = typeof aVal === 'object' && aVal !== null && 're' in aVal;
+    const bIsComplex = typeof bVal === 'object' && bVal !== null && 're' in bVal;
+    if (aIsComplex || bIsComplex) {
+      const aRe = aIsComplex ? (aVal as { re: number; im: number }).re : Number(aVal);
+      const aIm = aIsComplex ? (aVal as { re: number; im: number }).im : 0;
+      const bRe = bIsComplex ? (bVal as { re: number; im: number }).re : Number(bVal);
+      const bIm = bIsComplex ? (bVal as { re: number; im: number }).im : 0;
+
+      if (equal_nan && isNaN(aRe) && isNaN(bRe) && isNaN(aIm) && isNaN(bIm)) continue;
+      if (equal_nan && aRe === bRe && isNaN(aIm) && isNaN(bIm)) continue;
+      if (equal_nan && isNaN(aRe) && isNaN(bRe) && aIm === bIm) continue;
+      if (aRe !== bRe || aIm !== bIm) return false;
+      continue;
+    }
 
     // Handle NaN comparison
     if (equal_nan) {
@@ -988,11 +1004,13 @@ export function triu_indices_from(storage: ArrayStorage, k: number = 0): ArraySt
  */
 export function mask_indices(
   n: number,
-  mask_func: (n: number, k: number) => ArrayStorage,
+  mask_func: (m: ArrayStorage, k: number) => ArrayStorage,
   k: number = 0
 ): ArrayStorage[] {
-  // Generate the mask using the mask function
-  const mask = mask_func(n, k);
+  // Generate the mask by applying mask_func to an n×n ones matrix (matches NumPy)
+  const ones = ArrayStorage.empty([n, n], 'float64');
+  (ones.data as Float64Array).fill(1);
+  const mask = mask_func(ones, k);
   const maskShape = mask.shape;
 
   if (maskShape.length !== 2 || maskShape[0] !== n || maskShape[1] !== n) {
@@ -1021,44 +1039,50 @@ export function mask_indices(
 /**
  * Return array representing indices of a grid
  */
-export function indices(
-  dimensions: number[],
-  dtype: 'int32' | 'int64' | 'float64' = 'float64'
-): ArrayStorage {
+export function indices(dimensions: number[], dtype: string = 'float64'): ArrayStorage {
   // WASM fast path for 2D/3D int32 grids
-  const wasmResult = wasmIndices(dimensions, dtype);
-  if (wasmResult) return wasmResult;
+  if (dtype === 'int32' || dtype === 'int64' || dtype === 'float64') {
+    const wasmResult = wasmIndices(dimensions, dtype);
+    if (wasmResult) return wasmResult;
+  }
 
   const ndim = dimensions.length;
-  const outputShape = [ndim, ...dimensions];
-
-  const indicesResult = ArrayStorage.empty(outputShape, dtype);
-  const outputData = indicesResult.data;
   const gridSize = dimensions.reduce((a, b) => a * b, 1);
 
+  if (dtype === 'bool' && gridSize > 2) {
+    throw new TypeError(
+      'arange() is only supported for booleans when the result has at most length 2.'
+    );
+  }
+
+  const outputShape = [ndim, ...dimensions];
+  const isComplex = dtype === 'complex128' || dtype === 'complex64';
+  const isBigInt = dtype === 'int64' || dtype === 'uint64';
+
+  const indicesResult = ArrayStorage.empty(outputShape, dtype as DType);
+  const outputData = indicesResult.data;
+
   // Precompute strides for converting flat index → per-dimension index
-  // stride[d] = product of dimensions[d+1..ndim-1]
   const strides = new Array(ndim);
   strides[ndim - 1] = 1;
   for (let i = ndim - 2; i >= 0; i--) {
     strides[i] = strides[i + 1]! * dimensions[i + 1]!;
   }
 
-  // For each dimension, fill its grid slice using stride arithmetic (no allocation per element)
   for (let d = 0; d < ndim; d++) {
     const sliceOffset = d * gridSize;
     const dimSize = dimensions[d]!;
     const stride = strides[d]!;
 
-    if (dtype === 'int64') {
-      const typed = outputData as BigInt64Array;
-      for (let gridIdx = 0; gridIdx < gridSize; gridIdx++) {
-        typed[sliceOffset + gridIdx] = BigInt(Math.floor(gridIdx / stride) % dimSize);
-      }
-    } else {
-      const typed = outputData as Float64Array | Int32Array;
-      for (let gridIdx = 0; gridIdx < gridSize; gridIdx++) {
-        typed[sliceOffset + gridIdx] = Math.floor(gridIdx / stride) % dimSize;
+    for (let gridIdx = 0; gridIdx < gridSize; gridIdx++) {
+      const val = Math.floor(gridIdx / stride) % dimSize;
+      if (isComplex) {
+        (outputData as Float64Array)[(sliceOffset + gridIdx) * 2] = val;
+        (outputData as Float64Array)[(sliceOffset + gridIdx) * 2 + 1] = 0;
+      } else if (isBigInt) {
+        (outputData as unknown as BigInt64Array)[sliceOffset + gridIdx] = BigInt(val);
+      } else {
+        (outputData as Float64Array)[sliceOffset + gridIdx] = val;
       }
     }
   }
@@ -1074,7 +1098,21 @@ export function ix_(...args: ArrayStorage[]): ArrayStorage[] {
   const result: ArrayStorage[] = [];
 
   for (let i = 0; i < ndim; i++) {
-    const arr = args[i]!;
+    let arr = args[i]!;
+
+    // Bool arrays: treat as mask — convert to indices where True (matches NumPy)
+    if (arr.dtype === 'bool') {
+      const indices: number[] = [];
+      for (let j = 0; j < arr.size; j++) {
+        if (arr.iget(j)) indices.push(j);
+      }
+      const idxArr = ArrayStorage.empty([indices.length], 'int64');
+      for (let j = 0; j < indices.length; j++) {
+        (idxArr.data as unknown as BigInt64Array)[j] = BigInt(indices[j]!);
+      }
+      arr = idxArr;
+    }
+
     const arrSize = arr.size;
     const dtype = arr.dtype;
 
@@ -1083,14 +1121,8 @@ export function ix_(...args: ArrayStorage[]): ArrayStorage[] {
     shape[i] = arrSize;
 
     const ixResult = ArrayStorage.empty(shape, dtype);
-    const data = ixResult.data;
     for (let j = 0; j < arrSize; j++) {
-      const value = arr.iget(j);
-      if (isBigIntDType(dtype)) {
-        (data as BigInt64Array | BigUint64Array)[j] = value as bigint;
-      } else {
-        (data as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[j] = value as number;
-      }
+      ixResult.iset(j, arr.iget(j) as number);
     }
 
     result.push(ixResult);
@@ -1391,6 +1423,54 @@ export function apply_along_axis(
   }
 
   // For simplicity, we'll handle the 2D case directly
+  const inputDtype = arr.dtype;
+
+  /** Extract a 1D slice and call the function, collecting results */
+  function extractSlice1D(
+    size: number,
+    getFn: (idx: number) => number | bigint | { re: number; im: number }
+  ): ArrayStorage {
+    const slice = ArrayStorage.empty([size], inputDtype);
+    for (let i = 0; i < size; i++) {
+      slice.iset(i, getFn(i) as number);
+    }
+    return slice;
+  }
+
+  const isBigIntOut = (dt: DType) => dt === 'int64' || dt === 'uint64';
+  /** Write a scalar value to a result array, converting to BigInt if needed */
+  function writeScalar(
+    arr: ArrayStorage,
+    idx: number,
+    val: number | bigint | { re: number; im: number } | ArrayStorage
+  ): void {
+    if (typeof val === 'number' && isBigIntOut(arr.dtype as DType)) {
+      arr.iset(idx, BigInt(Math.round(val)));
+    } else {
+      arr.iset(idx, val as number);
+    }
+  }
+
+  /** Determine output dtype: if callback returns ArrayStorage use its dtype,
+   *  otherwise probe the first result to get the scalar dtype from the reduction */
+  /** Check if a callback result is a scalar (number or Complex object) */
+  function isScalarResult(val: ArrayStorage | number | { re: number; im: number }): boolean {
+    if (typeof val === 'number') return true;
+    if (typeof val === 'object' && val !== null && 're' in val && !('size' in val)) return true;
+    return false;
+  }
+
+  function probeOutputDtype(firstResult: ArrayStorage | number): DType {
+    if (!isScalarResult(firstResult)) return (firstResult as ArrayStorage).dtype as DType;
+    // For scalar returns, determine accumulation dtype:
+    // NumPy promotes int→int64, uint→uint64, bool→int64 for reductions; float/complex preserved
+    const dt = inputDtype;
+    if (dt === 'complex128' || dt === 'complex64') return dt as DType;
+    if (dt === 'bool' || dt.startsWith('int')) return 'int64';
+    if (dt.startsWith('uint')) return 'uint64';
+    return dt as DType;
+  }
+
   if (ndim === 2) {
     const [rows, cols] = shape;
 
@@ -1398,35 +1478,28 @@ export function apply_along_axis(
       // Apply function to each column
       const results: (ArrayStorage | number)[] = [];
       for (let c = 0; c < cols!; c++) {
-        // Extract column as 1D array
-        const colArr = ArrayStorage.empty([rows!], 'float64');
-        const colData = colArr.data as Float64Array;
-        for (let r = 0; r < rows!; r++) {
-          colData[r] = Number(arr.get(r, c));
-        }
-        results.push(func1d(colArr));
+        results.push(func1d(extractSlice1D(rows!, (r) => arr.get(r, c)!)));
       }
 
-      // Determine output shape and build result
       const firstResult = results[0];
       if (firstResult === undefined) {
-        return ArrayStorage.zeros([0], 'float64');
+        return ArrayStorage.zeros([0], inputDtype);
       }
-      if (typeof firstResult === 'number') {
-        // Scalar output for each slice
-        const resultArr = ArrayStorage.zeros([cols!], 'float64');
+      const outDtype = probeOutputDtype(firstResult);
+      if (isScalarResult(firstResult)) {
+        const resultArr = ArrayStorage.zeros([cols!], outDtype);
         for (let c = 0; c < cols!; c++) {
-          resultArr.data[c] = results[c] as number;
+          writeScalar(resultArr, c, results[c] as number);
         }
         return resultArr;
       } else {
-        // Array output for each slice
-        const resultShape = [firstResult.size, cols!];
-        const resultArr = ArrayStorage.zeros(resultShape, 'float64');
+        const arrFirst = firstResult as ArrayStorage;
+        const resultShape = [arrFirst.size, cols!];
+        const resultArr = ArrayStorage.zeros(resultShape, outDtype);
         for (let c = 0; c < cols!; c++) {
           const res = results[c] as ArrayStorage;
           for (let r = 0; r < res.size; r++) {
-            resultArr.data[r * cols! + c] = Number(res.iget(r));
+            resultArr.iset(r * cols! + c, res.iget(r) as number);
           }
         }
         return resultArr;
@@ -1435,35 +1508,28 @@ export function apply_along_axis(
       // Apply function to each row
       const results: (ArrayStorage | number)[] = [];
       for (let r = 0; r < rows!; r++) {
-        // Extract row as 1D array
-        const rowArr = ArrayStorage.empty([cols!], 'float64');
-        const rowData = rowArr.data as Float64Array;
-        for (let c = 0; c < cols!; c++) {
-          rowData[c] = Number(arr.get(r, c));
-        }
-        results.push(func1d(rowArr));
+        results.push(func1d(extractSlice1D(cols!, (c) => arr.get(r, c)!)));
       }
 
-      // Determine output shape and build result
       const firstResult = results[0];
       if (firstResult === undefined) {
-        return ArrayStorage.zeros([0], 'float64');
+        return ArrayStorage.zeros([0], inputDtype);
       }
-      if (typeof firstResult === 'number') {
-        // Scalar output for each slice
-        const resultArr = ArrayStorage.zeros([rows!], 'float64');
+      const outDtype = probeOutputDtype(firstResult);
+      if (isScalarResult(firstResult)) {
+        const resultArr = ArrayStorage.zeros([rows!], outDtype);
         for (let r = 0; r < rows!; r++) {
-          resultArr.data[r] = results[r] as number;
+          writeScalar(resultArr, r, results[r] as number);
         }
         return resultArr;
       } else {
-        // Array output for each slice
-        const resultShape = [rows!, firstResult.size];
-        const resultArr = ArrayStorage.zeros(resultShape, 'float64');
+        const arrFirst = firstResult as ArrayStorage;
+        const resultShape = [rows!, arrFirst.size];
+        const resultArr = ArrayStorage.zeros(resultShape, outDtype);
         for (let r = 0; r < rows!; r++) {
           const res = results[r] as ArrayStorage;
           for (let c = 0; c < res.size; c++) {
-            resultArr.data[r * res.size + c] = Number(res.iget(c));
+            resultArr.iset(r * res.size + c, res.iget(c) as number);
           }
         }
         return resultArr;
@@ -1524,18 +1590,20 @@ export function apply_along_axis(
   if (firstResult === undefined) {
     return ArrayStorage.zeros([0], 'float64');
   }
-  if (typeof firstResult === 'number') {
+  if (isScalarResult(firstResult)) {
     // Scalar output: shape = iterShape
-    const resultArr = ArrayStorage.zeros(iterShape, 'float64');
+    const outDtype = probeOutputDtype(firstResult as number);
+    const resultArr = ArrayStorage.zeros(iterShape, outDtype);
     for (let fi = 0; fi < iterSize; fi++) {
-      resultArr.data[fi] = results[fi] as number;
+      writeScalar(resultArr, fi, results[fi] as number);
     }
     return resultArr;
   } else {
     // Array output: shape = iterShape + firstResult.shape
-    const outShape = [...iterShape, ...Array.from(firstResult.shape)];
-    const resultArr = ArrayStorage.zeros(outShape, 'float64');
-    const sliceSize = firstResult.size;
+    const arrResult = firstResult as ArrayStorage;
+    const outShape = [...iterShape, ...Array.from(arrResult.shape)];
+    const resultArr = ArrayStorage.zeros(outShape, arrResult.dtype);
+    const sliceSize = arrResult.size;
     for (let fi = 0; fi < iterSize; fi++) {
       const res = results[fi] as ArrayStorage;
       for (let si = 0; si < sliceSize; si++) {

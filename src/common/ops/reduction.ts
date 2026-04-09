@@ -5104,11 +5104,11 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
     return result;
   }
 
-  // Non-complex path
+  // Non-complex path — preserve float dtype
   if (axis === undefined) {
     // Flatten and cumsum
     const size = storage.size;
-    const result = ArrayStorage.empty([size], 'float64');
+    const result = ArrayStorage.empty([size], dtype);
     const resultData = result.data as Float64Array;
     let sum = 0;
     const contiguous = storage.isCContiguous;
@@ -5141,8 +5141,8 @@ export function nancumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${ndim}`);
   }
 
-  // Create result with same shape
-  const result = ArrayStorage.empty([...shape], 'float64');
+  // Create result with same shape — preserve float dtype
+  const result = ArrayStorage.empty([...shape], dtype);
   const resultData = result.data as Float64Array;
   const axisSize = shape[normalizedAxis]!;
 
@@ -5323,11 +5323,11 @@ export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
     return result;
   }
 
-  // Non-complex path
+  // Non-complex path — preserve float dtype
   if (axis === undefined) {
     // Flatten and cumprod
     const size = storage.size;
-    const result = ArrayStorage.empty([size], 'float64');
+    const result = ArrayStorage.empty([size], dtype);
     const resultData = result.data as Float64Array;
     let prod = 1;
     const contiguous = storage.isCContiguous;
@@ -5360,8 +5360,8 @@ export function nancumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
     throw new Error(`axis ${axis} is out of bounds for array of dimension ${ndim}`);
   }
 
-  // Create result with same shape
-  const result = ArrayStorage.empty([...shape], 'float64');
+  // Create result with same shape — preserve float dtype
+  const result = ArrayStorage.empty([...shape], dtype);
   const resultData = result.data as Float64Array;
   const axisSize = shape[normalizedAxis]!;
 

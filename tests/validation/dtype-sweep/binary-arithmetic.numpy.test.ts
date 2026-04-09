@@ -3,15 +3,18 @@
  * Tests each function across ALL dtypes, validated against NumPy.
  * Uses batched oracle — all Python computations run in a single subprocess.
  */
-import { describe, it, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import * as np from '../../../src';
 import {
   ALL_DTYPES,
   runNumPyBatch,
+  arraysClose,
   checkNumPyAvailable,
   npDtype,
   pyArrayCast,
+  toComparable,
   expectBothReject,
+  expectBothRejectPre,
   expectMatchPre,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
@@ -85,6 +88,16 @@ result = _result_orig.astype(${ac})`;
     }
   }
 
+  // Copysign scalar: array × Python-float-scalar (not np.float64 array)
+  for (const dtype of ALL_DTYPES) {
+    const ac = pyArrayCast(dtype);
+    const data = dtype === 'bool' ? [1, 1, 0, 1] : [6, 7, 8, 9];
+    snippets[`copysign_scalar_${dtype}`] = `
+a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
+_result_orig = np.copysign(a, -1.0)
+result = _result_orig.astype(${ac})`;
+  }
+
   oracle = runNumPyBatch(snippets);
 });
 
@@ -141,4 +154,33 @@ result = _result_orig.astype(${ac})`;
       }
     });
   }
+});
+
+describe('DType Sweep: Binary arithmetic (scalar)', () => {
+  describe('copysign scalar', () => {
+    for (const dtype of ALL_DTYPES) {
+      it(`${dtype}`, () => {
+        const data = dtype === 'bool' ? [1, 1, 0, 1] : [6, 7, 8, 9];
+        const py = oracle.get(`copysign_scalar_${dtype}`)!;
+        // complex: copysign rejects complex in both JS and NumPy
+        if (dtype.startsWith('complex')) {
+          const r = expectBothRejectPre(
+            'copysign is not defined for complex numbers',
+            () => np.copysign(array(data, dtype), -1),
+            py
+          );
+          if (r === 'both-reject') return;
+        }
+        const jsResult = np.copysign(array(data, dtype), -1);
+        // Integer/bool scalar copysign: JS promotes via mathResultDtype (int8→f16, int16→f32),
+        // NumPy promotes to float64 (Python float is float64). Skip dtype check for these.
+        const isSmallIntOrBool = ['int8', 'uint8', 'int16', 'uint16', 'bool'].includes(dtype);
+        if (isSmallIntOrBool) {
+          expect(arraysClose(toComparable(jsResult), py.value, 1e-3)).toBe(true);
+        } else {
+          expectMatchPre(jsResult, py, { rtol: 1e-3 });
+        }
+      });
+    }
+  });
 });

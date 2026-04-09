@@ -39,10 +39,16 @@ const bpeMap: Partial<Record<DType, number>> = {
   float64: 8,
 };
 
-const ctorMap: Partial<Record<DType, new (buf: ArrayBuffer, off: number, len: number) => TypedArray>> = {
+const ctorMap: Partial<
+  Record<DType, new (buf: ArrayBuffer, off: number, len: number) => TypedArray>
+> = {
   int32: Int32Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
   int64: BigInt64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
-  float64: Float64Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray,
+  float64: Float64Array as unknown as new (
+    buf: ArrayBuffer,
+    off: number,
+    len: number
+  ) => TypedArray,
 };
 
 /**

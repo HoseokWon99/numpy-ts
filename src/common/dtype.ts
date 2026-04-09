@@ -558,7 +558,8 @@ export function reductionAccumDtype(inputDtype: DType): DType {
  * float32 → complex64, everything else → complex128.
  */
 export function fftResultDtype(inputDtype: DType): DType {
-  if (inputDtype === 'float16' || inputDtype === 'float32' || inputDtype === 'complex64') return 'complex64';
+  if (inputDtype === 'float16' || inputDtype === 'float32' || inputDtype === 'complex64')
+    return 'complex64';
   return 'complex128';
 }
 
@@ -567,7 +568,8 @@ export function fftResultDtype(inputDtype: DType): DType {
  * float16/float32/complex64 → float32, everything else → float64.
  */
 export function fftRealResultDtype(inputDtype: DType): DType {
-  if (inputDtype === 'float16' || inputDtype === 'float32' || inputDtype === 'complex64') return 'float32';
+  if (inputDtype === 'float16' || inputDtype === 'float32' || inputDtype === 'complex64')
+    return 'float32';
   return 'float64';
 }
 
