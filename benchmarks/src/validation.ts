@@ -1468,11 +1468,7 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
                 npDtype === 'int64'
               ) {
                 // Accepted: we use float64 for histogram counts to avoid BigInt ergonomics
-              } else if (
-                spec.operation === 'copysign' &&
-                !spec.setup.b &&
-                npDtype === 'float64'
-              ) {
+              } else if (spec.operation === 'copysign' && !spec.setup.b && npDtype === 'float64') {
                 // Accepted: Python float scalar is float64, forcing promotion.
                 // JS scalar copysign preserves input dtype (no implicit float64 scalar type).
               } else if (tsDtype !== npDtype) {

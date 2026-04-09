@@ -29,7 +29,7 @@ import {
   resetScratchAllocator,
   resolveInputPtr,
   f16InputToScratchF32,
-  f32OutputToF16Region,
+  f32ToF16InPlace,
 } from './runtime';
 import { ArrayStorage } from '../storage';
 import { effectiveDType, hasFloat16, promoteDTypes, type DType, type TypedArray } from '../dtype';
@@ -142,13 +142,11 @@ export function wasmHypot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
     floatKernel(aPtr, bPtr, outRegion.ptr, size);
 
     if (dtype === 'float16') {
-      const f16Region = f32OutputToF16Region(outRegion, size);
-      outRegion.release();
-      if (!f16Region) return null;
+      f32ToF16InPlace(outRegion, size);
       return ArrayStorage.fromWasmRegion(
         Array.from(a.shape),
         dtype,
-        f16Region,
+        outRegion,
         size,
         Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
       );
@@ -180,13 +178,11 @@ export function wasmHypot(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null
     smallKernel(aPtr, bPtr, outRegion.ptr, size);
 
     if (hasFloat16 && (dtype === 'int8' || dtype === 'uint8')) {
-      const f16Region = f32OutputToF16Region(outRegion, size);
-      outRegion.release();
-      if (!f16Region) return null;
+      f32ToF16InPlace(outRegion, size);
       return ArrayStorage.fromWasmRegion(
         Array.from(a.shape),
         'float16',
-        f16Region,
+        outRegion,
         size,
         Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
       );
@@ -275,13 +271,11 @@ export function wasmHypotScalar(a: ArrayStorage, scalar: number): ArrayStorage |
     floatKernel(aPtr, outRegion.ptr, size, scalar);
 
     if (dtype === 'float16') {
-      const f16Region = f32OutputToF16Region(outRegion, size);
-      outRegion.release();
-      if (!f16Region) return null;
+      f32ToF16InPlace(outRegion, size);
       return ArrayStorage.fromWasmRegion(
         Array.from(a.shape),
         dtype,
-        f16Region,
+        outRegion,
         size,
         Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
       );
@@ -312,13 +306,11 @@ export function wasmHypotScalar(a: ArrayStorage, scalar: number): ArrayStorage |
     smallKernel(aPtr, outRegion.ptr, size, scalar);
 
     if (hasFloat16 && (dtype === 'int8' || dtype === 'uint8')) {
-      const f16Region = f32OutputToF16Region(outRegion, size);
-      outRegion.release();
-      if (!f16Region) return null;
+      f32ToF16InPlace(outRegion, size);
       return ArrayStorage.fromWasmRegion(
         Array.from(a.shape),
         'float16',
-        f16Region,
+        outRegion,
         size,
         Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
       );

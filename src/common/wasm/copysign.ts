@@ -30,12 +30,7 @@ import {
   copysign_f16,
   copysign_scalar_f16,
 } from './bins/copysign.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  resolveInputPtr,
-  f32OutputToF16Region,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr, f32ToF16InPlace } from './runtime';
 import { ArrayStorage } from '../storage';
 import { effectiveDType, hasFloat16, type DType, TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -166,15 +161,13 @@ export function wasmCopysign(x1: ArrayStorage, x2: ArrayStorage): ArrayStorage |
 
   kernel(x1Ptr, x2Ptr, outRegion.ptr, size);
 
-  // i8/u8 → downcast f32 to f16 (matches NumPy: int8/uint8 → float16)
+  // i8/u8 → convert f32 to f16 in-place (matches NumPy: int8/uint8 → float16)
   if (hasFloat16 && (dtype === 'int8' || dtype === 'uint8')) {
-    const f16Region = f32OutputToF16Region(outRegion, size);
-    outRegion.release();
-    if (!f16Region) return null;
+    f32ToF16InPlace(outRegion, size);
     return ArrayStorage.fromWasmRegion(
       Array.from(x1.shape),
       'float16',
-      f16Region,
+      outRegion,
       size,
       Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
     );
@@ -218,15 +211,13 @@ export function wasmCopysignScalar(x1: ArrayStorage, scalar: number): ArrayStora
     kernel(x1Ptr, outRegion.ptr, size, scalar);
   }
 
-  // i8/u8 → downcast f32 to f16 (matches NumPy: int8/uint8 → float16)
+  // i8/u8 → convert f32 to f16 in-place (matches NumPy: int8/uint8 → float16)
   if (hasFloat16 && (dtype === 'int8' || dtype === 'uint8')) {
-    const f16Region = f32OutputToF16Region(outRegion, size);
-    outRegion.release();
-    if (!f16Region) return null;
+    f32ToF16InPlace(outRegion, size);
     return ArrayStorage.fromWasmRegion(
       Array.from(x1.shape),
       'float16',
-      f16Region,
+      outRegion,
       size,
       Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
     );

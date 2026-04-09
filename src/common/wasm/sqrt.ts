@@ -17,12 +17,7 @@ import {
   sqrt_i16_f32,
   sqrt_i8_f32,
 } from './bins/sqrt.wasm';
-import {
-  wasmMalloc,
-  resetScratchAllocator,
-  resolveInputPtr,
-  f32OutputToF16Region,
-} from './runtime';
+import { wasmMalloc, resetScratchAllocator, resolveInputPtr, f32ToF16InPlace } from './runtime';
 import { ArrayStorage } from '../storage';
 import { isComplexDType, hasFloat16, type DType, type TypedArray } from '../dtype';
 import { wasmConfig } from './config';
@@ -125,13 +120,11 @@ export function wasmSqrt(a: ArrayStorage): ArrayStorage | null {
 
     // i8/u8 → downcast f32 to f16 (matching NumPy's bool/int8/uint8 → float16)
     if (hasFloat16 && (dtype === 'int8' || dtype === 'uint8' || dtype === 'bool')) {
-      const f16Region = f32OutputToF16Region(outRegion, size);
-      outRegion.release();
-      if (!f16Region) return null;
+      f32ToF16InPlace(outRegion, size);
       return ArrayStorage.fromWasmRegion(
         Array.from(a.shape),
         'float16',
-        f16Region,
+        outRegion,
         size,
         Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
       );

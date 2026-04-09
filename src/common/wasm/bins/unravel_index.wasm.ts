@@ -3,7 +3,7 @@
 import { getSharedMemory, setHeapBase } from '../runtime';
 
 const B64 =
-  'AGFzbQEAAAABCgFgBn9/f39/fwACDwEDZW52Bm1lbW9yeQIAcgMCAQAGCQF/AUGAgMgDCwcVARF1bnJhdmVsX2luZGV4X2Y2NAAACp4BAZsBBAJ/AX4EfwJ+AkAgAkUNACAFRQ0AIAJBA3QhBkEAIQcDQCAAIAdBA3RqKwMA/AYhCCADIQkgASEKIAQhCyAFIQwDQCAKIAggCSgCAKwiDX8iDiALNAIAgbk5AwAgCUEEaiEJIAogBmohCiALQQRqIQsgCCAOIA1+fSEIIAxBf2oiDA0ACyABQQhqIQEgB0EBaiIHIAJHDQALCws=';
+  'AGFzbQEAAAABCgFgBn9/f39/fwACDwEDZW52Bm1lbW9yeQIAcgMEAwAAAAYJAX8BQYCAyAMLB0UDFXVucmF2ZWxfaW5kZXhfaTMyX2Y2NAAAFXVucmF2ZWxfaW5kZXhfaTY0X2Y2NAABEXVucmF2ZWxfaW5kZXhfZjY0AAIKzAMDkgEBCX8CQCACRQ0AIAVFDQAgAkEDdCEGQQAhBwNAIAAgB0ECdGooAgAhCCADIQkgASEKIAQhCyAFIQwDQCAKIAggCSgCACINbSIOIAsoAgBvtzkDACAJQQRqIQkgCiAGaiEKIAtBBGohCyAIIA4gDWxrIQggDEF/aiIMDQALIAFBCGohASAHQQFqIgcgAkcNAAsLC5gBBAJ/AX4EfwJ+AkAgAkUNACAFRQ0AIAJBA3QhBkEAIQcDQCAAIAdBA3RqKQMAIQggAyEJIAEhCiAEIQsgBSEMA0AgCiAIIAkpAwAiDX8iDiALKQMAgbk5AwAgCUEIaiEJIAogBmohCiALQQhqIQsgCCAOIA1+fSEIIAxBf2oiDA0ACyABQQhqIQEgB0EBaiIHIAJHDQALCwubAQQCfwF+BH8CfgJAIAJFDQAgBUUNACACQQN0IQZBACEHA0AgACAHQQN0aisDAPwGIQggAyEJIAEhCiAEIQsgBSEMA0AgCiAIIAkoAgCsIg1/Ig4gCzQCAIG5OQMAIAlBBGohCSAKIAZqIQogC0EEaiELIAggDiANfn0hCCAMQX9qIgwNAAsgAUEIaiEBIAdBAWoiByACRw0ACwsL';
 
 let inst: WebAssembly.Instance | null = null;
 
@@ -21,6 +21,44 @@ function init(): WebAssembly.Instance {
     setHeapBase((heapBase as WebAssembly.Global).value as number);
   }
   return inst;
+}
+
+export function unravel_index_i32_f64(
+  indices: number,
+  out: number,
+  N: number,
+  strides: number,
+  shape: number,
+  ndim: number
+): void {
+  const i = init();
+  (i.exports['unravel_index_i32_f64'] as (...args: number[]) => void)(
+    indices,
+    out,
+    N,
+    strides,
+    shape,
+    ndim
+  );
+}
+
+export function unravel_index_i64_f64(
+  indices: number,
+  out: number,
+  N: number,
+  strides: number,
+  shape: number,
+  ndim: number
+): void {
+  const i = init();
+  (i.exports['unravel_index_i64_f64'] as (...args: number[]) => void)(
+    indices,
+    out,
+    N,
+    strides,
+    shape,
+    ndim
+  );
 }
 
 export function unravel_index_f64(

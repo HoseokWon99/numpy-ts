@@ -391,3 +391,18 @@ export function f32OutputToF16Region(outRegion: WasmRegion, size: number): WasmR
   f16View.set(f32View);
   return f16Region;
 }
+
+/**
+ * Convert f32 WASM output to f16 in-place within the same region.
+ * Safe because f16[i] at byte 2i never reaches unread f32[j>i] at byte 4j.
+ * Avoids extra wasmMalloc + release overhead of f32OutputToF16Region.
+ * The region retains its original (f32-sized) allocation; the extra bytes are unused.
+ */
+export function f32ToF16InPlace(outRegion: WasmRegion, size: number): void {
+  const mem = getSharedMemory();
+  const f32View = new Float32Array(mem.buffer, outRegion.ptr, size);
+  const f16View = new Float16Array(mem.buffer, outRegion.ptr, size);
+  for (let i = 0; i < size; i++) {
+    f16View[i] = f32View[i]!;
+  }
+}

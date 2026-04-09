@@ -2019,8 +2019,18 @@ export function float_power(x1: ArrayStorage, x2: ArrayStorage | number): ArrayS
   const result = ArrayStorage.empty(Array.from(x1.shape), 'float64');
   const resultData = result.data as Float64Array;
   const size = x1.size;
-  for (let i = 0; i < size; i++) {
-    resultData[i] = Math.pow(Number(x1.iget(i)), Number(x2.iget(i)));
+  if (x1.isCContiguous && x2.isCContiguous) {
+    const x1Data = x1.data;
+    const x1Off = x1.offset;
+    const x2Data = x2.data;
+    const x2Off = x2.offset;
+    for (let i = 0; i < size; i++) {
+      resultData[i] = Math.pow(Number(x1Data[x1Off + i]!), Number(x2Data[x2Off + i]!));
+    }
+  } else {
+    for (let i = 0; i < size; i++) {
+      resultData[i] = Math.pow(Number(x1.iget(i)), Number(x2.iget(i)));
+    }
   }
   return result;
 }
@@ -2291,8 +2301,16 @@ export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
     const size = x1.size;
     const x2Int = Math.abs(Math.trunc(x2));
 
-    for (let i = 0; i < size; i++) {
-      resultData[i] = lcmSingle(Number(x1.iget(i)), x2Int);
+    if (x1.isCContiguous) {
+      const x1Data = x1.data;
+      const x1Off = x1.offset;
+      for (let i = 0; i < size; i++) {
+        resultData[i] = lcmSingle(Number(x1Data[x1Off + i]!), x2Int);
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        resultData[i] = lcmSingle(Number(x1.iget(i)), x2Int);
+      }
     }
 
     return result;
@@ -2335,8 +2353,18 @@ export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
       (resultData as BigInt64Array | BigUint64Array)[i] = lcmBig(aVal, bVal);
     }
   } else {
-    for (let i = 0; i < size; i++) {
-      resultData[i] = lcmSingle(Number(x1.iget(i)), Number(x2.iget(i)));
+    if (x1.isCContiguous && x2.isCContiguous) {
+      const x1Data = x1.data;
+      const x1Off = x1.offset;
+      const x2Data = x2.data;
+      const x2Off = x2.offset;
+      for (let i = 0; i < size; i++) {
+        resultData[i] = lcmSingle(Number(x1Data[x1Off + i]!), Number(x2Data[x2Off + i]!));
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        resultData[i] = lcmSingle(Number(x1.iget(i)), Number(x2.iget(i)));
+      }
     }
   }
 
@@ -2409,8 +2437,18 @@ export function ldexp(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
   const result = ArrayStorage.empty(Array.from(x1.shape), resultDtype);
   const resultData = result.data;
   const size = x1.size;
-  for (let i = 0; i < size; i++) {
-    resultData[i] = Number(x1.iget(i)) * Math.pow(2, Number(x2.iget(i)));
+  if (x1.isCContiguous && x2.isCContiguous) {
+    const x1Data = x1.data;
+    const x1Off = x1.offset;
+    const x2Data = x2.data;
+    const x2Off = x2.offset;
+    for (let i = 0; i < size; i++) {
+      resultData[i] = Number(x1Data[x1Off + i]!) * Math.pow(2, Number(x2Data[x2Off + i]!));
+    }
+  } else {
+    for (let i = 0; i < size; i++) {
+      resultData[i] = Number(x1.iget(i)) * Math.pow(2, Number(x2.iget(i)));
+    }
   }
   return result;
 }

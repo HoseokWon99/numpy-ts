@@ -2453,19 +2453,38 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
       return result;
     }
     const accumDtype = reductionAccumDtype(dtype);
-    if (isBigIntDType(accumDtype)) {
+    if (isBigIntDType(dtype)) {
+      // Input is already BigInt (int64/uint64) — must use BigInt arithmetic
       const result = ArrayStorage.empty([size], accumDtype);
       const resultData = result.data as BigInt64Array | BigUint64Array;
       let sum = 0n;
       if (contiguous) {
         for (let i = 0; i < size; i++) {
-          sum += BigInt(Number(data[off + i]));
+          sum += data[off + i] as bigint;
           resultData[i] = sum;
         }
       } else {
         for (let i = 0; i < size; i++) {
-          sum += BigInt(Number(storage.iget(i)));
+          sum += storage.iget(i) as bigint;
           resultData[i] = sum;
+        }
+      }
+      return result;
+    }
+    if (isBigIntDType(accumDtype)) {
+      // Non-bigint input promoted to int64/uint64 output — accumulate as Number (fast)
+      const result = ArrayStorage.empty([size], accumDtype);
+      const resultData = result.data as BigInt64Array | BigUint64Array;
+      let sum = 0;
+      if (contiguous) {
+        for (let i = 0; i < size; i++) {
+          sum += data[off + i] as number;
+          resultData[i] = BigInt(sum);
+        }
+      } else {
+        for (let i = 0; i < size; i++) {
+          sum += Number(storage.iget(i));
+          resultData[i] = BigInt(sum);
         }
       }
       return result;
@@ -2531,6 +2550,34 @@ export function cumsum(storage: ArrayStorage, axis?: number): ArrayStorage {
       for (let k = 0; k < axisSize; k++) {
         axisAcc[0] += Number(data[inIdx]);
         resultData[outIdx] = axisAcc[0]!;
+        inIdx += inStride;
+        outIdx += outStride;
+      }
+    }
+  } else if (isBigIntDType(dtype)) {
+    // Input is already BigInt — use BigInt arithmetic
+    const bigResultData = resultData as unknown as BigInt64Array | BigUint64Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let inIdx = inBase[outerIdx]!;
+      let outIdx = outBase[outerIdx]!;
+      let sum = 0n;
+      for (let k = 0; k < axisSize; k++) {
+        sum += data[inIdx] as bigint;
+        bigResultData[outIdx] = sum;
+        inIdx += inStride;
+        outIdx += outStride;
+      }
+    }
+  } else if (isBigIntDType(outDtype2)) {
+    // Non-bigint input promoted to int64/uint64 output — accumulate as Number
+    const bigResultData = resultData as unknown as BigInt64Array | BigUint64Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let inIdx = inBase[outerIdx]!;
+      let outIdx = outBase[outerIdx]!;
+      let sum = 0;
+      for (let k = 0; k < axisSize; k++) {
+        sum += data[inIdx] as number;
+        bigResultData[outIdx] = BigInt(sum);
         inIdx += inStride;
         outIdx += outStride;
       }
@@ -2666,19 +2713,38 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
     // Flatten and cumprod
     const size = storage.size;
     const accumDtype = reductionAccumDtype(dtype);
-    if (isBigIntDType(accumDtype)) {
+    if (isBigIntDType(dtype)) {
+      // Input is already BigInt (int64/uint64) — must use BigInt arithmetic
       const result = ArrayStorage.empty([size], accumDtype);
       const resultData = result.data as BigInt64Array | BigUint64Array;
       let prod = 1n;
       if (contiguous) {
         for (let i = 0; i < size; i++) {
-          prod *= BigInt(Number(data[off + i]));
+          prod *= data[off + i] as bigint;
           resultData[i] = prod;
         }
       } else {
         for (let i = 0; i < size; i++) {
-          prod *= BigInt(Number(storage.iget(i)));
+          prod *= storage.iget(i) as bigint;
           resultData[i] = prod;
+        }
+      }
+      return result;
+    }
+    if (isBigIntDType(accumDtype)) {
+      // Non-bigint input promoted to int64/uint64 output — accumulate as Number (fast)
+      const result = ArrayStorage.empty([size], accumDtype);
+      const resultData = result.data as BigInt64Array | BigUint64Array;
+      let prod = 1;
+      if (contiguous) {
+        for (let i = 0; i < size; i++) {
+          prod *= data[off + i] as number;
+          resultData[i] = BigInt(prod);
+        }
+      } else {
+        for (let i = 0; i < size; i++) {
+          prod *= Number(storage.iget(i));
+          resultData[i] = BigInt(prod);
         }
       }
       return result;
@@ -2712,7 +2778,7 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   // Create result with same shape
   const cumprodAccumDtype = reductionAccumDtype(dtype);
   const result = ArrayStorage.empty([...shape], cumprodAccumDtype);
-  const resultData = result.data as Float64Array;
+  const resultData = result.data;
   const axisSize = shape[normalizedAxis]!;
 
   // Precompute offsets for outer iteration
@@ -2735,15 +2801,45 @@ export function cumprod(storage: ArrayStorage, axis?: number): ArrayStorage {
   );
 
   // Perform cumprod along axis
-  for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
-    let inIdx = inBase[outerIdx]!;
-    let outIdx = outBase[outerIdx]!;
-    let prod = 1;
-    for (let k = 0; k < axisSize; k++) {
-      prod *= Number(data[inIdx]);
-      resultData[outIdx] = prod;
-      inIdx += inStride;
-      outIdx += outStride;
+  if (isBigIntDType(dtype)) {
+    // Input is already BigInt — use BigInt arithmetic
+    const bigResultData = resultData as unknown as BigInt64Array | BigUint64Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let inIdx = inBase[outerIdx]!;
+      let outIdx = outBase[outerIdx]!;
+      let prod = 1n;
+      for (let k = 0; k < axisSize; k++) {
+        prod *= data[inIdx] as bigint;
+        bigResultData[outIdx] = prod;
+        inIdx += inStride;
+        outIdx += outStride;
+      }
+    }
+  } else if (isBigIntDType(cumprodAccumDtype)) {
+    // Non-bigint input promoted to int64/uint64 output — accumulate as Number
+    const bigResultData = resultData as unknown as BigInt64Array | BigUint64Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let inIdx = inBase[outerIdx]!;
+      let outIdx = outBase[outerIdx]!;
+      let prod = 1;
+      for (let k = 0; k < axisSize; k++) {
+        prod *= data[inIdx] as number;
+        bigResultData[outIdx] = BigInt(prod);
+        inIdx += inStride;
+        outIdx += outStride;
+      }
+    }
+  } else {
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      let inIdx = inBase[outerIdx]!;
+      let outIdx = outBase[outerIdx]!;
+      let prod = 1;
+      for (let k = 0; k < axisSize; k++) {
+        prod *= Number(data[inIdx]);
+        resultData[outIdx] = prod;
+        inIdx += inStride;
+        outIdx += outStride;
+      }
     }
   }
 

@@ -766,18 +766,28 @@ export function tri(
   const complexDtype = dtype === 'complex128' || dtype === 'complex64';
   const bigIntDtype = dtype === 'int64' || dtype === 'uint64';
 
-  for (let i = 0; i < N; i++) {
-    for (let j = 0; j <= Math.min(i + k, cols - 1); j++) {
-      if (j >= 0) {
-        const idx = i * cols + j;
-        if (complexDtype) {
-          (data as Float64Array)[idx * 2] = 1;
-          (data as Float64Array)[idx * 2 + 1] = 0;
-        } else if (bigIntDtype) {
-          (data as unknown as BigInt64Array)[idx] = 1n;
-        } else {
-          (data as Float64Array)[idx] = 1;
+  if (complexDtype) {
+    const f64 = data as Float64Array;
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j <= Math.min(i + k, cols - 1); j++) {
+        if (j >= 0) {
+          const idx = (i * cols + j) * 2;
+          f64[idx] = 1;
+          f64[idx + 1] = 0;
         }
+      }
+    }
+  } else if (bigIntDtype) {
+    const big = data as unknown as BigInt64Array;
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j <= Math.min(i + k, cols - 1); j++) {
+        if (j >= 0) big[i * cols + j] = 1n;
+      }
+    }
+  } else {
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j <= Math.min(i + k, cols - 1); j++) {
+        if (j >= 0) (data as Float64Array)[i * cols + j] = 1;
       }
     }
   }

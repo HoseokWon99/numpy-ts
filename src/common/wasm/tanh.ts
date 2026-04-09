@@ -26,7 +26,7 @@ import {
   resetScratchAllocator,
   resolveInputPtr,
   f16InputToScratchF32,
-  f32OutputToF16Region,
+  f32ToF16InPlace,
 } from './runtime';
 import { ArrayStorage } from '../storage';
 import { effectiveDType, isComplexDType, hasFloat16, type DType, type TypedArray } from '../dtype';
@@ -96,13 +96,11 @@ export function wasmTanh(a: ArrayStorage): ArrayStorage | null {
 
     tanh_f32(aPtr, outRegion.ptr, size);
 
-    const f16Region = f32OutputToF16Region(outRegion, size);
-    outRegion.release();
-    if (!f16Region) return null;
+    f32ToF16InPlace(outRegion, size);
     return ArrayStorage.fromWasmRegion(
       Array.from(a.shape),
       dtype,
-      f16Region,
+      outRegion,
       size,
       Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
     );
@@ -153,13 +151,11 @@ export function wasmTanh(a: ArrayStorage): ArrayStorage | null {
 
     // i8/u8 → downcast f32 to f16 (matching NumPy's bool/int8/uint8 → float16)
     if (hasFloat16 && (dtype === 'int8' || dtype === 'uint8' || dtype === 'bool')) {
-      const f16Region = f32OutputToF16Region(outRegion, size);
-      outRegion.release();
-      if (!f16Region) return null;
+      f32ToF16InPlace(outRegion, size);
       return ArrayStorage.fromWasmRegion(
         Array.from(a.shape),
         'float16',
-        f16Region,
+        outRegion,
         size,
         Float16Array as unknown as new (buf: ArrayBuffer, off: number, len: number) => TypedArray
       );
