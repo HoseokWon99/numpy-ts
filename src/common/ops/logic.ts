@@ -1157,6 +1157,17 @@ export function spacing(a: ArrayStorage): ArrayStorage {
     return result;
   }
 
+  // float16 preserves float16 (compute spacing in float16 precision)
+  if (a.dtype === 'float16' && hasFloat16) {
+    const size = a.size;
+    const result = ArrayStorage.zeros(Array.from(a.shape), 'float16');
+    const resultData = result.data;
+    for (let i = 0; i < size; i++) {
+      resultData[i] = float16Spacing(Number(a.iget(i)));
+    }
+    return result;
+  }
+
   // float32 preserves float32, everything else → float64
   const resultDtype = a.dtype === 'float32' ? ('float32' as const) : ('float64' as const);
   const result = ArrayStorage.zeros(Array.from(a.shape), resultDtype);

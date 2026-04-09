@@ -551,12 +551,7 @@ export function array(data: unknown, dtype?: DType): NDArray {
 /**
  * Create array with evenly spaced values within a given interval
  */
-export function arange(
-  start: number,
-  stop?: number,
-  step: number = 1,
-  dtype: DType = DEFAULT_DTYPE
-): NDArray {
+export function arange(start: number, stop?: number, step: number = 1, dtype?: DType): NDArray {
   return up(core.arange(start, stop, step, dtype));
 }
 

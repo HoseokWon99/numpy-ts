@@ -123,7 +123,7 @@ describe('DType Sweep: Nan-aware reductions', () => {
           const a = array(data, dtype);
           const jsResult = fn(a);
           const py = oracle.get(`${name}_${dtype}`)!;
-          scalarClose(jsResult, py.value, 3);
+          scalarClose(jsResult, py.value, dtype === 'float16' ? 2 : 3);
         });
       }
     });

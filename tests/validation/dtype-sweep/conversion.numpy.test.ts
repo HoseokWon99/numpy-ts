@@ -30,6 +30,7 @@ const DTYPE_RANGE: Record<string, { min: number; max: number }> = {
   uint32: { min: 0, max: 4294967295 },
   int64: { min: -2147483648, max: 2147483647 },
   uint64: { min: 0, max: 4294967295 },
+  float16: { min: -65504, max: 65504 },
   float32: { min: -1e38, max: 1e38 },
   float64: { min: -1e100, max: 1e100 },
   complex64: { min: -1e38, max: 1e38 },

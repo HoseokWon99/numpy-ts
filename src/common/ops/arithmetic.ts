@@ -21,6 +21,7 @@ import {
   isFloatDType,
   mathResultDtype,
   boolArithmeticDtype,
+  hasFloat16,
 } from '../dtype';
 import { elementwiseBinaryOp } from '../internal/compute';
 import { wasmAdd, wasmAddScalar } from '../wasm/add';
@@ -691,15 +692,17 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
   }
 
   // Determine result float dtype (NumPy: integer division always promotes to float)
+  // float16 inputs → compute in float32, downcast to float16
   const aIsFloat64 = a.dtype === 'float64';
   const bIsFloat64 = b.dtype === 'float64';
-  const aIsFloat32 = a.dtype === 'float32';
-  const bIsFloat32 = b.dtype === 'float32';
+  const aIsSmallFloat = a.dtype === 'float32' || a.dtype === 'float16';
+  const bIsSmallFloat = b.dtype === 'float32' || b.dtype === 'float16';
+  const needFloat16Downcast = a.dtype === 'float16' && b.dtype === 'float16';
 
   let targetDtype: 'float64' | 'float32';
-  if (aIsFloat32 && bIsFloat32) {
+  if (aIsSmallFloat && bIsSmallFloat && !aIsFloat64 && !bIsFloat64) {
     targetDtype = 'float32';
-  } else if ((aIsFloat32 || bIsFloat32) && !aIsFloat64 && !bIsFloat64) {
+  } else if ((aIsSmallFloat || bIsSmallFloat) && !aIsFloat64 && !bIsFloat64) {
     targetDtype = 'float32';
   } else {
     targetDtype = 'float64';
@@ -710,12 +713,21 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
   const bFloat = b.dtype === targetDtype ? b : convertToFloatDType(b, targetDtype);
 
   try {
+    let result: ArrayStorage;
     if (canUseFastPath(aFloat, bFloat)) {
       const wasmResult = wasmDiv(aFloat, bFloat);
-      if (wasmResult) return wasmResult;
+      result = wasmResult ?? elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
+    } else {
+      result = elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
     }
 
-    return elementwiseBinaryOp(aFloat, bFloat, (x, y) => x / y, 'divide');
+    if (needFloat16Downcast && hasFloat16) {
+      const f16 = ArrayStorage.empty(Array.from(result.shape), 'float16');
+      (f16.data as unknown as Float16Array).set(result.data as Float32Array);
+      result.dispose();
+      return f16;
+    }
+    return result;
   } finally {
     if (aFloat !== a) aFloat.dispose();
     if (bFloat !== b) bFloat.dispose();
@@ -3226,8 +3238,8 @@ export function sinc(x: ArrayStorage): ArrayStorage {
 
   const shape = Array.from(x.shape);
   const size = x.size;
-  // NumPy: sinc preserves float32, all other types → float64
-  const resultDtype = x.dtype === 'float32' ? 'float32' : 'float64';
+  // NumPy: sinc preserves float16/float32, all other types → float64
+  const resultDtype = x.dtype === 'float16' || x.dtype === 'float32' ? x.dtype : 'float64';
   const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const xData = x.data;
@@ -3258,8 +3270,8 @@ export function i0(x: ArrayStorage): ArrayStorage {
 
   const shape = Array.from(x.shape);
   const size = x.size;
-  // NumPy: i0 preserves float32, all other types → float64
-  const resultDtype = x.dtype === 'float32' ? 'float32' : 'float64';
+  // NumPy: i0 preserves float16/float32, all other types → float64
+  const resultDtype = x.dtype === 'float16' || x.dtype === 'float32' ? x.dtype : 'float64';
   const result = ArrayStorage.empty(shape, resultDtype);
   const resultData = result.data;
   const xData = x.data;

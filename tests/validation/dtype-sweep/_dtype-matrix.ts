@@ -1,6 +1,5 @@
 /**
- * All 13 dtypes to test for every public API function.
- * (Excluding float16 which is platform-conditional.)
+ * All 14 dtypes to test for every public API function.
  *
  * Every function is tested with every dtype — even when it doesn't make
  * semantic sense (e.g., sin(bool)) — to verify that numpy-ts either fails
@@ -9,6 +8,7 @@
 export const ALL_DTYPES = [
   'float64',
   'float32',
+  'float16',
   'complex128',
   'complex64',
   'int64',

@@ -86,7 +86,7 @@ export function full(
     } else if (typeof fill_value === 'boolean') {
       actualDtype = 'bool';
     } else if (Number.isInteger(fill_value)) {
-      actualDtype = 'int32';
+      actualDtype = fill_value >= -2147483648 && fill_value <= 2147483647 ? 'int32' : 'float64';
     } else {
       actualDtype = DEFAULT_DTYPE;
     }
@@ -264,7 +264,7 @@ export function arange(
   start: number,
   stop?: number,
   step: number = 1,
-  dtype: DType = DEFAULT_DTYPE
+  dtype?: DType
 ): NDArrayCore {
   let actualStart = start;
   let actualStop = stop;
@@ -280,24 +280,37 @@ export function arange(
 
   const length = Math.max(0, Math.ceil((actualStop - actualStart) / step));
 
-  if (dtype === 'bool' && length > 2) {
+  // Infer dtype from arguments: all integers that fit in int32 → int32, else float64
+  const INT32_MAX = 2147483647;
+  const INT32_MIN = -2147483648;
+  const allInt =
+    Number.isInteger(actualStart) && Number.isInteger(actualStop) && Number.isInteger(step);
+  const lastVal = length > 0 ? actualStart + (length - 1) * step : actualStart;
+  const fitsInt32 =
+    actualStart >= INT32_MIN &&
+    actualStart <= INT32_MAX &&
+    lastVal >= INT32_MIN &&
+    lastVal <= INT32_MAX;
+  const actualDtype = dtype ?? (allInt && fitsInt32 ? 'int32' : DEFAULT_DTYPE);
+
+  if (actualDtype === 'bool' && length > 2) {
     throw new TypeError(
       'arange() is only supported for booleans when the result has at most length 2.'
     );
   }
 
-  const storage = ArrayStorage.empty([length], dtype);
+  const storage = ArrayStorage.empty([length], actualDtype);
   const data = storage.data;
 
-  if (isBigIntDType(dtype)) {
+  if (isBigIntDType(actualDtype)) {
     for (let i = 0; i < length; i++) {
       (data as BigInt64Array | BigUint64Array)[i] = BigInt(Math.trunc(actualStart + i * step));
     }
-  } else if (dtype === 'bool') {
+  } else if (actualDtype === 'bool') {
     for (let i = 0; i < length; i++) {
       (data as Uint8Array)[i] = actualStart + i * step !== 0 ? 1 : 0;
     }
-  } else if (isComplexDType(dtype)) {
+  } else if (isComplexDType(actualDtype)) {
     // Complex arrays store interleaved [re, im] pairs
     for (let i = 0; i < length; i++) {
       (data as Float64Array | Float32Array)[i * 2] = actualStart + i * step;

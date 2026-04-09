@@ -210,9 +210,10 @@ result = _result_orig.astype(${ac})`;
             if (_r === 'both-reject') return;
           }
           const jsResult = fn(a);
+          const isVeryLowPrecision = dtype === 'float16';
           const isLowPrecision = dtype === 'float32' || dtype === 'complex64';
-          const rtol = isLowPrecision ? 1e-2 : 1e-3;
-          const atol = isLowPrecision ? 1e-5 : 1e-8;
+          const rtol = isVeryLowPrecision ? 5e-2 : isLowPrecision ? 1e-2 : 1e-3;
+          const atol = isVeryLowPrecision ? 1e-2 : isLowPrecision ? 1e-5 : 1e-8;
           expectMatchPre(jsResult, oracle.get(`${name}_${dtype}`)!, { rtol, atol });
         });
       }

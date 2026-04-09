@@ -336,8 +336,8 @@ function gradientAlongAxis(f: ArrayStorage, axis: number, spacing: number): Arra
   const isComplex = isComplexDType(dtype);
   const resultDtype = isBigIntDType(dtype)
     ? 'float64'
-    : dtype === 'float32'
-      ? 'float32'
+    : dtype === 'float16' || dtype === 'float32'
+      ? dtype
       : isComplex
         ? dtype
         : 'float64';

@@ -18,6 +18,7 @@ import {
   toComparable,
   scalarClose,
   expectBothReject,
+  expectBothRejectPre,
 } from './_helpers';
 import type { NumPyResult } from '../numpy-oracle';
 
@@ -150,40 +151,47 @@ describe('DType Sweep: linalg ops', () => {
     const vec = dtype === 'bool' ? [1, 0] : [3, 4];
 
     it(`linalg.matrix_rank ${dtype}`, () => {
-      const jsResult = np.linalg.matrix_rank(array(mat, dtype));
       const py = oracle.get(`linalg_matrix_rank_${dtype}`)!;
-      expect(Number(jsResult)).toBe(Number(py.value));
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.matrix_rank(array(mat, dtype)), py);
+      if (r === 'both-reject') return;
+      expect(Number(np.linalg.matrix_rank(array(mat, dtype)))).toBe(Number(py.value));
     });
 
     it(`linalg.matrix_power ${dtype}`, () => {
-      const jsResult = np.linalg.matrix_power(array(mat, dtype), 2);
       const py = oracle.get(`linalg_matrix_power_${dtype}`)!;
-      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.matrix_power(array(mat, dtype), 2), py);
+      if (r === 'both-reject') return;
+      expect(arraysClose(toComparable(np.linalg.matrix_power(array(mat, dtype), 2)), py.value, 1e-4)).toBe(true);
     });
 
     it(`linalg.pinv ${dtype}`, () => {
-      const jsResult = np.linalg.pinv(array(mat, dtype));
       const py = oracle.get(`linalg_pinv_${dtype}`)!;
-      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.pinv(array(mat, dtype)), py);
+      if (r === 'both-reject') return;
+      expect(arraysClose(toComparable(np.linalg.pinv(array(mat, dtype))), py.value, 1e-4)).toBe(true);
     });
 
     it(`linalg.cond ${dtype}`, () => {
-      const jsResult = np.linalg.cond(array(mat, dtype));
       const py = oracle.get(`linalg_cond_${dtype}`)!;
-      scalarClose(jsResult, py.value);
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.cond(array(mat, dtype)), py);
+      if (r === 'both-reject') return;
+      scalarClose(np.linalg.cond(array(mat, dtype)), py.value);
     });
 
     it(`linalg.slogdet ${dtype}`, () => {
-      const { sign, logabsdet } = np.linalg.slogdet(array(mat, dtype)) as any;
       const py = oracle.get(`linalg_slogdet_${dtype}`)!;
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.slogdet(array(mat, dtype)), py);
+      if (r === 'both-reject') return;
+      const { sign, logabsdet } = np.linalg.slogdet(array(mat, dtype)) as any;
       scalarClose(sign, py.value[0]);
       scalarClose(logabsdet, py.value[1]);
     });
 
     it(`linalg.svdvals ${dtype}`, () => {
-      const jsResult = np.linalg.svdvals(array(mat, dtype));
       const py = oracle.get(`linalg_svdvals_${dtype}`)!;
-      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.svdvals(array(mat, dtype)), py);
+      if (r === 'both-reject') return;
+      expect(arraysClose(toComparable(np.linalg.svdvals(array(mat, dtype))), py.value, 1e-4)).toBe(true);
     });
 
     it(`linalg.multi_dot ${dtype}`, () => {
@@ -202,7 +210,7 @@ describe('DType Sweep: linalg ops', () => {
     it(`linalg.matrix_norm ${dtype}`, () => {
       const jsResult = np.linalg.matrix_norm(array(mat, dtype));
       const py = oracle.get(`linalg_matrix_norm_${dtype}`)!;
-      scalarClose(jsResult, py.value);
+      scalarClose(jsResult, py.value, dtype === 'float16' ? 2 : 4);
     });
 
     it(`linalg.tensorinv ${dtype}`, () => {
@@ -210,9 +218,10 @@ describe('DType Sweep: linalg ops', () => {
         [1, 0],
         [0, 1],
       ];
-      const jsResult = np.linalg.tensorinv(array(id, dtype), 1);
       const py = oracle.get(`linalg_tensorinv_${dtype}`)!;
-      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.tensorinv(array(id, dtype), 1), py);
+      if (r === 'both-reject') return;
+      expect(arraysClose(toComparable(np.linalg.tensorinv(array(id, dtype), 1)), py.value, 1e-4)).toBe(true);
     });
 
     it(`linalg.tensorsolve ${dtype}`, () => {
@@ -221,9 +230,10 @@ describe('DType Sweep: linalg ops', () => {
         [0, 1],
       ];
       const b = dtype === 'bool' ? [1, 0] : [1, 2];
-      const jsResult = np.linalg.tensorsolve(array(id, dtype), array(b, dtype));
       const py = oracle.get(`linalg_tensorsolve_${dtype}`)!;
-      expect(arraysClose(toComparable(jsResult), py.value, 1e-4)).toBe(true);
+      const r = expectBothRejectPre('float16 unsupported in linalg', () => np.linalg.tensorsolve(array(id, dtype), array(b, dtype)), py);
+      if (r === 'both-reject') return;
+      expect(arraysClose(toComparable(np.linalg.tensorsolve(array(id, dtype), array(b, dtype))), py.value, 1e-4)).toBe(true);
     });
 
     it(`linalg.cross ${dtype}`, () => {

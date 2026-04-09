@@ -17,7 +17,7 @@
 
 import { ArrayStorage } from '../storage';
 import { Complex } from '../complex';
-import { isComplexDType, throwIfComplex, fftResultDtype, type DType } from '../dtype';
+import { isComplexDType, throwIfComplex, fftResultDtype, hasFloat16, type DType } from '../dtype';
 import { roll as shapeRoll } from './shape';
 import {
   wasmFft,
@@ -1266,7 +1266,8 @@ export function irfftn(
     s === undefined &&
     a.isCContiguous &&
     isComplexDType(a.dtype) &&
-    outLens[2]! % 2 === 0
+    outLens[2]! % 2 === 0 &&
+    (a.dtype === 'complex128' || a.dtype === 'float64')
   ) {
     const d0 = outLens[0]!;
     const d1 = outLens[1]!;
@@ -1318,6 +1319,7 @@ export function hfft(
   const outLen = n ?? (inputLen - 1) * 2;
 
   // hfft = irfft(conj(a))
+  const inputDtype = a.dtype;
   const complexA = toComplex(a);
   const conjA = conjugate(complexA);
   complexA.dispose();
@@ -1325,9 +1327,17 @@ export function hfft(
   conjA.dispose();
 
   // Scale by n for correct normalization
-  const resultData = result.data as Float64Array;
+  const resultData = result.data as Float64Array | Float32Array;
   for (let i = 0; i < result.size; i++) {
     resultData[i] = resultData[i]! * outLen;
+  }
+
+  // NumPy: hfft(float16) → float16
+  if (inputDtype === 'float16' && hasFloat16) {
+    const f16 = ArrayStorage.empty(Array.from(result.shape), 'float16');
+    (f16.data as unknown as Float16Array).set(result.data as Float32Array);
+    result.dispose();
+    return f16;
   }
 
   return result;

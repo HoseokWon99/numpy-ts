@@ -11,6 +11,7 @@ import {
   isComplexDType,
   isBigIntDType,
   hasFloat16,
+  type DType,
   type TypedArray,
 } from '../dtype';
 import { Complex } from '../complex';
@@ -32,7 +33,13 @@ import { wasmQr } from '../wasm/qr';
 import { wasmCholesky, wasmCholeskyF32 } from '../wasm/cholesky';
 import { wasmSvd } from '../wasm/svd';
 import * as shapeOps from './shape';
-import type { DType } from '../dtype';
+
+/** Match NumPy: reject float16 for linalg decomposition/solve ops. */
+function throwIfFloat16(dtype: DType): void {
+  if (dtype === 'float16') {
+    throw new TypeError(`array type float16 is unsupported in linalg`);
+  }
+}
 
 // 1-element typed-array accumulators for wrapping integer arithmetic.
 // Writing to acc[0] implicitly truncates/wraps to the dtype's range,
@@ -3132,6 +3139,7 @@ export function qr(
   a: ArrayStorage,
   mode: 'reduced' | 'complete' | 'r' | 'raw' = 'reduced'
 ): { q: ArrayStorage; r: ArrayStorage } | ArrayStorage | { h: ArrayStorage; tau: ArrayStorage } {
+  throwIfFloat16(a.dtype);
   if (a.ndim > 2) {
     // Batch mode: iterate over leading dims
     const batchShape = a.shape.slice(0, -2);
@@ -3325,6 +3333,7 @@ export function qr(
  * @returns Lower (or upper) triangular Cholesky factor
  */
 export function cholesky(a: ArrayStorage, upper: boolean = false): ArrayStorage {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`cholesky: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -3667,6 +3676,7 @@ export function svd(
   full_matrices: boolean = true,
   compute_uv: boolean = true
 ): { u: ArrayStorage; s: ArrayStorage; vt: ArrayStorage } | ArrayStorage {
+  throwIfFloat16(a.dtype);
   // Batch mode: iterate over leading dims
   if (a.ndim > 2) {
     const batchShape = a.shape.slice(0, -2);
@@ -3765,6 +3775,7 @@ export function svd(
  * @returns Determinant
  */
 export function det(a: ArrayStorage): number | Complex | ArrayStorage {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`det: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -4080,6 +4091,7 @@ function luDecompositionComplex(
  * @returns Inverse matrix
  */
 export function inv(a: ArrayStorage): ArrayStorage {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`inv: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -4421,6 +4433,7 @@ function solveVectorComplex(a: ArrayStorage, b: ArrayStorage, size: number): Arr
  * @returns Solution x with same shape as b
  */
 export function solve(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
+  throwIfFloat16(a.dtype);
   if (a.ndim !== 2) {
     throw new Error(`solve: coefficient matrix must be 2D, got ${a.ndim}D`);
   }
@@ -4548,6 +4561,7 @@ export function lstsq(
   b: ArrayStorage,
   rcond: number | null = null
 ): { x: ArrayStorage; residuals: ArrayStorage; rank: number; s: ArrayStorage } {
+  throwIfFloat16(a.dtype);
   if (a.ndim !== 2) {
     throw new Error(`lstsq: coefficient matrix must be 2D, got ${a.ndim}D`);
   }
@@ -4651,6 +4665,7 @@ export function lstsq(
  * @returns Condition number
  */
 export function cond(a: ArrayStorage, p: number | 'fro' | 'nuc' = 2): number {
+  throwIfFloat16(a.dtype);
   if (a.ndim !== 2) {
     throw new Error(`cond: input must be 2D, got ${a.ndim}D`);
   }
@@ -4698,6 +4713,7 @@ export function cond(a: ArrayStorage, p: number | 'fro' | 'nuc' = 2): number {
  * @returns Matrix rank
  */
 export function matrix_rank(a: ArrayStorage, tol?: number): number {
+  throwIfFloat16(a.dtype);
   if (a.ndim === 0) {
     return absValue(a.get()) !== 0 ? 1 : 0;
   }
@@ -4834,6 +4850,7 @@ export function matrix_power(a: ArrayStorage, n: number): ArrayStorage {
  * @returns Pseudo-inverse of a
  */
 export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`pinv: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -4924,6 +4941,7 @@ export function pinv(a: ArrayStorage, rcond: number = 1e-15): ArrayStorage {
  * @returns { w, v } - Eigenvalues (real only) and eigenvector matrix
  */
 export function eig(a: ArrayStorage): { w: ArrayStorage; v: ArrayStorage } {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`eig: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -5117,6 +5135,7 @@ function qrEigendecomposition(a: ArrayStorage): {
  * @returns { w, v } - Eigenvalues (sorted ascending) and eigenvector matrix
  */
 export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage; v: ArrayStorage } {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`eigh: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -5209,6 +5228,7 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
  * @returns Array of eigenvalues (real only)
  */
 export function eigvals(a: ArrayStorage): ArrayStorage {
+  throwIfFloat16(a.dtype);
   const { w } = eig(a);
   return w;
 }
@@ -5225,6 +5245,7 @@ export function eigvals(a: ArrayStorage): ArrayStorage {
  * @returns Array of eigenvalues (sorted ascending)
  */
 export function eigvalsh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): ArrayStorage {
+  throwIfFloat16(a.dtype);
   const { w } = eigh(a, UPLO);
   return w;
 }
@@ -5814,6 +5835,7 @@ export function slogdet(a: ArrayStorage): {
   sign: number | ArrayStorage;
   logabsdet: number | ArrayStorage;
 } {
+  throwIfFloat16(a.dtype);
   if (a.ndim < 2) {
     throw new Error(`slogdet: input must be at least 2D, got ${a.ndim}D`);
   }
@@ -5948,6 +5970,7 @@ export function slogdet(a: ArrayStorage): {
  * @returns 1D array of singular values in descending order
  */
 export function svdvals(a: ArrayStorage): ArrayStorage {
+  throwIfFloat16(a.dtype);
   // Fast path: Golub-Kahan (values only, no U/V)
   const wasmResult = wasmSvdValues(a);
   if (wasmResult) return wasmResult;
@@ -6000,6 +6023,7 @@ export function multi_dot(arrays: ArrayStorage[]): ArrayStorage {
  * @returns Tensor inverse
  */
 export function tensorinv(a: ArrayStorage, ind: number = 2): ArrayStorage {
+  throwIfFloat16(a.dtype);
   if (ind <= 0) {
     throw new Error(`tensorinv: ind must be positive, got ${ind}`);
   }
@@ -6053,6 +6077,7 @@ export function tensorsolve(
   b: ArrayStorage,
   axes?: number[] | null
 ): ArrayStorage {
+  throwIfFloat16(a.dtype);
   const aShape = a.shape;
   const bShape = b.shape;
   const aDim = a.ndim;

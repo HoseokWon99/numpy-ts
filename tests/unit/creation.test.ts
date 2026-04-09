@@ -76,6 +76,26 @@ describe('Array Creation Functions', () => {
       expect(arr.shape).toEqual([0]);
       expect(arr.toArray()).toEqual([]);
     });
+
+    it('infers int32 dtype for integer args', () => {
+      expect(arange(10).dtype).toBe('int32');
+    });
+
+    it('infers int32 dtype for all-integer start/stop/step', () => {
+      expect(arange(0, 10, 1).dtype).toBe('int32');
+    });
+
+    it('infers float64 dtype for float step', () => {
+      expect(arange(0, 10, 0.5).dtype).toBe('float64');
+    });
+
+    it('infers float64 dtype when args overflow int32', () => {
+      expect(arange(0, 3e9, 1e8).dtype).toBe('float64');
+    });
+
+    it('respects explicit dtype over inference', () => {
+      expect(arange(10, undefined, 1, 'float64').dtype).toBe('float64');
+    });
   });
 
   describe('linspace', () => {
@@ -326,6 +346,18 @@ describe('Array Creation Functions', () => {
     it('infers float64 dtype for float fill values', () => {
       const arr = full([2, 2], 3.14);
       expect(arr.dtype).toBe('float64');
+    });
+
+    it('infers float64 dtype for overflow fill value', () => {
+      expect(full([2], 3e9).dtype).toBe('float64');
+    });
+
+    it('infers int32 dtype for max int32 fill value', () => {
+      expect(full([2], 2147483647).dtype).toBe('int32');
+    });
+
+    it('infers float64 dtype for int32 overflow fill value', () => {
+      expect(full([2], 2147483648).dtype).toBe('float64');
     });
   });
 
