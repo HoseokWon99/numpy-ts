@@ -23,11 +23,28 @@ import { wasmSqrt } from '../wasm/sqrt';
 
 /** Convert bool storage to int8 (NumPy promotes bool → int8 for arithmetic). */
 function boolToInt8(a: ArrayStorage): ArrayStorage {
-  const result = ArrayStorage.empty(Array.from(a.shape), 'int8');
+  return boolToType(a, 'int8');
+}
+
+/** Convert bool array to a target dtype. */
+function boolToType(a: ArrayStorage, dtype: DType): ArrayStorage {
+  const result = ArrayStorage.empty(Array.from(a.shape), dtype);
   const src = a.data as Uint8Array;
-  const dst = result.data as Int8Array;
   const off = a.offset;
-  for (let i = 0; i < a.size; i++) dst[i] = src[off + i]!;
+  const size = a.size;
+  if (isBigIntDType(dtype)) {
+    const dst = result.data as unknown as BigInt64Array;
+    for (let i = 0; i < size; i++) dst[i] = BigInt(src[off + i]!);
+  } else if (isComplexDType(dtype)) {
+    const dst = result.data as Float64Array;
+    for (let i = 0; i < size; i++) {
+      dst[i * 2] = src[off + i]!;
+      dst[i * 2 + 1] = 0;
+    }
+  } else {
+    const dst = result.data;
+    for (let i = 0; i < size; i++) dst[i] = src[off + i]! as number;
+  }
   return result;
 }
 
@@ -114,12 +131,17 @@ export function sqrt(a: ArrayStorage): ArrayStorage {
  * @returns Result storage with power applied
  */
 export function power(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
-  // NumPy promotes bool → int8 for power
+  // NumPy promotes bool to the other operand's type for power (bool+bool → int8)
+  if (a.dtype === 'bool' && typeof b !== 'number' && b.dtype !== 'bool') {
+    return power(boolToType(a, b.dtype), b);
+  }
   if (a.dtype === 'bool') {
     const a8 = boolToInt8(a);
     return power(a8, typeof b === 'number' ? b : b.dtype === 'bool' ? boolToInt8(b) : b);
   }
-  if (typeof b !== 'number' && b.dtype === 'bool') return power(a, boolToInt8(b));
+  if (typeof b !== 'number' && b.dtype === 'bool') {
+    return power(a, boolToType(b, a.dtype));
+  }
   if (typeof b === 'number') {
     return powerScalar(a, b);
   }
@@ -132,8 +154,8 @@ export function power(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
     return complexPowerArray(a, b);
   }
 
-  // Scalar broadcast: if b is a single element, use the faster scalar path
-  if (b.size === 1) {
+  // Scalar broadcast: if b is a single element and same dtype, use the faster scalar path
+  if (b.size === 1 && a.dtype === b.dtype) {
     return powerScalar(a, Number(b.iget(0)));
   }
 
@@ -151,11 +173,8 @@ function complexPowerArray(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
   const aIsComplex = isComplexDType(a.dtype);
   const bIsComplex = isComplexDType(b.dtype);
 
-  // Result dtype: complex128 if any is complex128 or float64, else complex64
-  const resultDtype: DType =
-    a.dtype === 'complex128' || b.dtype === 'complex128' || b.dtype === 'float64'
-      ? 'complex128'
-      : 'complex64';
+  // Use standard promotion rules for complex result dtype
+  const resultDtype: DType = promoteDTypes(a.dtype, b.dtype);
 
   const shape = Array.from(a.shape);
   const size = a.size;
@@ -199,6 +218,24 @@ function complexPowerArray(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
     } else {
       expRe = Number(b.iget(i));
       expIm = 0;
+    }
+
+    // Special case: 0^w (avoid NaN from 0 * -Infinity in log path)
+    if (baseRe === 0 && baseIm === 0) {
+      if (expRe > 0 && expIm === 0) {
+        // 0^(positive real) = 0
+        dstData[i * 2] = 0;
+        dstData[i * 2 + 1] = 0;
+      } else if (expRe === 0 && expIm === 0) {
+        // 0^0 = 1
+        dstData[i * 2] = 1;
+        dstData[i * 2 + 1] = 0;
+      } else {
+        // 0^(negative or complex exponent) → NaN or inf per IEEE
+        dstData[i * 2] = NaN;
+        dstData[i * 2 + 1] = NaN;
+      }
+      continue;
     }
 
     // z^w = exp(w * ln(z))

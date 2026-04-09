@@ -5982,9 +5982,21 @@ export function slogdet(a: ArrayStorage): {
  */
 export function svdvals(a: ArrayStorage): ArrayStorage {
   throwIfFloat16(a.dtype);
+  const inputDtype = a.dtype;
   // Fast path: Golub-Kahan (values only, no U/V)
   const wasmResult = wasmSvdValues(a);
-  if (wasmResult) return wasmResult;
+  if (wasmResult) {
+    // Downcast to input dtype if needed (WASM computes in f64)
+    if (inputDtype === 'float32' && wasmResult.dtype === 'float64') {
+      const f32 = ArrayStorage.empty(Array.from(wasmResult.shape), 'float32');
+      const src = wasmResult.data as Float64Array;
+      const dst = f32.data as Float32Array;
+      for (let i = 0; i < wasmResult.size; i++) dst[i] = src[i]!;
+      wasmResult.dispose();
+      return f32;
+    }
+    return wasmResult;
+  }
 
   // Fallback: full SVD, extract S
   const result = svd(a, true, false);

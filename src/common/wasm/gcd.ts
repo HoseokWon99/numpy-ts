@@ -84,6 +84,8 @@ export function wasmGcdScalar(a: ArrayStorage, scalar: number): ArrayStorage | n
 
 export function wasmGcd(a: ArrayStorage, b: ArrayStorage): ArrayStorage | null {
   if (!a.isCContiguous || !b.isCContiguous) return null;
+  // WASM kernels expect same-dtype inputs — bail on mixed dtypes
+  if (a.dtype !== b.dtype) return null;
   const size = a.size;
   if (size < BASE_THRESHOLD * wasmConfig.thresholdMultiplier) return null;
 

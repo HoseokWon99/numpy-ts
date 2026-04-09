@@ -852,9 +852,10 @@ function runNumpyTsOperation(spec: BenchmarkCase): any {
     case 'linalg_slogdet': {
       const result = np.linalg.slogdet(arrays.a);
       // Convert {sign, logabsdet} to array format to match Python output
+      // Preserve input dtype (NumPy returns float32 for float32 input)
       const sign = (result as { sign: number }).sign;
       const logabsdet = (result as { logabsdet: number }).logabsdet;
-      return np.array([sign, logabsdet]);
+      return np.array([sign, logabsdet], arrays.a.dtype as string);
     }
     case 'linalg_svdvals':
       return np.linalg.svdvals(arrays.a);
@@ -1461,6 +1462,19 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
                 // Accepted: index ops return float64 for JS ergonomics
               } else if (isIntCreation && tsDtype === 'int32' && npDtype === 'int64') {
                 // Accepted: int32 is our int64 equivalent for non-BigInt JS numbers
+              } else if (
+                (spec.operation === 'histogram' || spec.operation === 'histogram2d') &&
+                tsDtype === 'float64' &&
+                npDtype === 'int64'
+              ) {
+                // Accepted: we use float64 for histogram counts to avoid BigInt ergonomics
+              } else if (
+                spec.operation === 'copysign' &&
+                !spec.setup.b &&
+                npDtype === 'float64'
+              ) {
+                // Accepted: Python float scalar is float64, forcing promotion.
+                // JS scalar copysign preserves input dtype (no implicit float64 scalar type).
               } else if (tsDtype !== npDtype) {
                 failed++;
                 console.error(

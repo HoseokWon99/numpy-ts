@@ -45,8 +45,8 @@ function deserializeValue(val: any): any {
   } else if (val === '__NaN__') {
     return NaN;
   } else if (typeof val === 'object' && val !== null && '__complex__' in val) {
-    // Deserialize complex numbers from Python
-    return new Complex(val.re, val.im);
+    // Deserialize complex numbers from Python (re/im may be special markers)
+    return new Complex(deserializeValue(val.re) as number, deserializeValue(val.im) as number);
   } else {
     return val;
   }
@@ -221,7 +221,7 @@ export function runNumPyBatch(
     '    elif isinstance(val, (bool, np.bool_)):',
     '        return bool(val)',
     '    elif isinstance(val, (complex, np.complexfloating)):',
-    '        return {"__complex__": True, "re": val.real, "im": val.imag}',
+    '        return {"__complex__": True, "re": serialize_value(float(val.real)), "im": serialize_value(float(val.imag))}',
     '    elif isinstance(val, (float, np.floating)):',
     '        if math.isnan(val):',
     '            return "__NaN__"',

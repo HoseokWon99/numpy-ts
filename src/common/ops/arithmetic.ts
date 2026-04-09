@@ -391,11 +391,13 @@ function addArraysFast(a: ArrayStorage, b: ArrayStorage): ArrayStorage {
  * @returns Result storage
  */
 export function subtract(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
-  throwIfBool(
-    a.dtype,
-    'subtract',
-    'The `-` operator is not supported for booleans, use `bitwise_xor` instead.'
-  );
+  // NumPy only rejects subtract(bool, bool) — mixed bool+other promotes bool to the other type
+  if (a.dtype === 'bool' && (typeof b === 'number' ? false : b.dtype === 'bool')) {
+    throw new TypeError(
+      "ufunc 'subtract' not supported for boolean dtype. " +
+        'The `-` operator is not supported for booleans, use `bitwise_xor` instead.'
+    );
+  }
   if (typeof b === 'number') {
     return subtractScalar(a, b);
   }
@@ -644,8 +646,8 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
     return divideScalar(a, b);
   }
 
-  // Extract scalar from size-1 array for scalar WASM path
-  if (b.size === 1 && !isComplexDType(b.dtype) && !isComplexDType(a.dtype)) {
+  // Extract scalar from size-1 array for scalar WASM path (only when same dtype to preserve promotion)
+  if (b.size === 1 && !isComplexDType(b.dtype) && !isComplexDType(a.dtype) && a.dtype === b.dtype) {
     const scalarVal = Number(b.iget(0));
     return divideScalar(a, scalarVal);
   }
@@ -694,16 +696,11 @@ export function divide(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage 
 
   // Determine result float dtype (NumPy: integer division always promotes to float)
   // float16 inputs → compute in float32, downcast to float16
-  const aIsFloat64 = a.dtype === 'float64';
-  const bIsFloat64 = b.dtype === 'float64';
-  const aIsSmallFloat = a.dtype === 'float32' || a.dtype === 'float16';
-  const bIsSmallFloat = b.dtype === 'float32' || b.dtype === 'float16';
-  const needFloat16Downcast = a.dtype === 'float16' && b.dtype === 'float16';
-
+  // Use standard promotion rules, then map to a float dtype for divide
+  const promoted = promoteDTypes(a.dtype, b.dtype);
+  const needFloat16Downcast = promoted === 'float16';
   let targetDtype: 'float64' | 'float32';
-  if (aIsSmallFloat && bIsSmallFloat && !aIsFloat64 && !bIsFloat64) {
-    targetDtype = 'float32';
-  } else if ((aIsSmallFloat || bIsSmallFloat) && !aIsFloat64 && !bIsFloat64) {
+  if (promoted === 'float32' || promoted === 'float16') {
     targetDtype = 'float32';
   } else {
     targetDtype = 'float64';
@@ -1300,10 +1297,9 @@ export function mod(a: ArrayStorage, b: ArrayStorage | number): ArrayStorage {
   if (typeof b !== 'number') {
     throwIfComplex(b.dtype, 'mod', 'Modulo is not defined for complex numbers.');
   }
-  // NumPy promotes bool → int8 for mod
-  if (a.dtype === 'bool')
-    return mod(boolToInt8(a), typeof b === 'number' ? b : b.dtype === 'bool' ? boolToInt8(b) : b);
-  if (typeof b !== 'number' && b.dtype === 'bool') return mod(a, boolToInt8(b));
+  // NumPy promotes bool → int8 for mod(bool, bool), otherwise bool promotes via promoteDTypes
+  if (a.dtype === 'bool' && (typeof b === 'number' || b.dtype === 'bool'))
+    return mod(boolToInt8(a), typeof b === 'number' ? b : boolToInt8(b));
   if (typeof b === 'number') {
     return modScalar(a, b);
   }
@@ -1372,12 +1368,9 @@ export function floorDivide(a: ArrayStorage, b: ArrayStorage | number): ArraySto
   if (typeof b !== 'number') {
     throwIfComplex(b.dtype, 'floor_divide', 'Floor division is not defined for complex numbers.');
   }
-  if (a.dtype === 'bool')
-    return floorDivide(
-      boolToInt8(a),
-      typeof b === 'number' ? b : b.dtype === 'bool' ? boolToInt8(b) : b
-    );
-  if (typeof b !== 'number' && b.dtype === 'bool') return floorDivide(a, boolToInt8(b));
+  // NumPy promotes bool → int8 for floor_divide(bool, bool), otherwise bool promotes via promoteDTypes
+  if (a.dtype === 'bool' && (typeof b === 'number' || b.dtype === 'bool'))
+    return floorDivide(boolToInt8(a), typeof b === 'number' ? b : boolToInt8(b));
   if (typeof b === 'number') {
     return floorDivideScalar(a, b);
   }
@@ -1765,11 +1758,12 @@ export function heaviside(x1: ArrayStorage, x2: ArrayStorage | number): ArraySto
       'Heaviside step function is not defined for complex numbers.'
     );
   }
-  const dtype = x1.dtype;
+  const x2Dtype = typeof x2 === 'number' ? x1.dtype : x2.dtype;
   const shape = Array.from(x1.shape);
   const size = x1.size;
 
-  const resultDtype = mathResultDtype(dtype);
+  // Apply mathResultDtype to each input independently, then promote
+  const resultDtype = promoteDTypes(mathResultDtype(x1.dtype), mathResultDtype(x2Dtype));
   // float16 result (int8/uint8): compute in float32, downcast after
   const wasmDtype = resultDtype === 'float16' ? 'float32' : resultDtype;
 
@@ -1883,6 +1877,17 @@ export function float_power(x1: ArrayStorage, x2: ArrayStorage | number): ArrayS
   const dtype1 = x1.dtype;
 
   // Complex float_power: z1^z2 = exp(z2 * log(z1))
+  const x2IsComplex = typeof x2 !== 'number' && isComplexDType(x2.dtype);
+  if (!isComplexDType(dtype1) && x2IsComplex) {
+    // Real x1 with complex x2: promote x1 to complex128, then recurse
+    const x1c = ArrayStorage.empty(Array.from(x1.shape), 'complex128');
+    const x1cData = x1c.data as Float64Array;
+    for (let i = 0; i < x1.size; i++) {
+      x1cData[i * 2] = Number(x1.iget(i));
+      x1cData[i * 2 + 1] = 0;
+    }
+    return float_power(x1c, x2);
+  }
   if (isComplexDType(dtype1)) {
     const size = x1.size;
     // float_power always returns complex128 (like NumPy)
@@ -2122,19 +2127,28 @@ export function frexp(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
  */
 export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   throwIfComplex(x1.dtype, 'gcd', 'GCD is only defined for integers.');
-  throwIfBool(x1.dtype, 'gcd', 'GCD is only defined for integer dtypes.');
   if (isFloatDType(x1.dtype))
     throw new TypeError(
       `ufunc 'gcd' not supported for float dtype '${x1.dtype}'. GCD is only defined for integer dtypes.`
     );
   if (typeof x2 !== 'number') {
     throwIfComplex(x2.dtype, 'gcd', 'GCD is only defined for integers.');
-    throwIfBool(x2.dtype, 'gcd', 'GCD is only defined for integer dtypes.');
     if (isFloatDType(x2.dtype))
       throw new TypeError(
         `ufunc 'gcd' not supported for float dtype '${x2.dtype}'. GCD is only defined for integer dtypes.`
       );
+    // NumPy rejects gcd(bool, bool) but allows gcd(int, bool) by promoting bool→int
+    if (x1.dtype === 'bool' && x2.dtype === 'bool')
+      throw new TypeError("ufunc 'gcd' not supported for boolean dtype.");
   }
+  // Reject when promoted dtype is float (e.g., signed × uint64)
+  if (typeof x2 !== 'number' && isFloatDType(promoteDTypes(x1.dtype, x2.dtype)))
+    throw new TypeError(
+      `ufunc 'gcd' not supported for mixed types '${x1.dtype}' and '${x2.dtype}'.`
+    );
+  // For gcd(bool, bool), promote both to int8. For mixed bool+int, let promoteDTypes handle it.
+  if (x1.dtype === 'bool' && (typeof x2 === 'number' || x2.dtype === 'bool'))
+    return gcd(boolToInt8(x1), typeof x2 === 'number' ? x2 : boolToInt8(x2));
   const gcdSingle = (a: number, b: number): number => {
     a = Math.abs(Math.trunc(a));
     b = Math.abs(Math.trunc(b));
@@ -2201,15 +2215,14 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
       }
       return a;
     };
-    const x1Data = x1.data as BigInt64Array | BigUint64Array;
-    const x2Data = (x2 as ArrayStorage).data as BigInt64Array | BigUint64Array;
-    const x1Off = x1.offset;
-    const x2Off = (x2 as ArrayStorage).offset;
+    const x1IsBig = isBigIntDType(x1.dtype);
+    const x2IsBig = isBigIntDType((x2 as ArrayStorage).dtype);
     for (let i = 0; i < size; i++) {
-      (resultData as BigInt64Array | BigUint64Array)[i] = gcdBig(
-        x1Data[x1Off + i]!,
-        x2Data[x2Off + i]!
-      );
+      const aRaw = x1.iget(i);
+      const bRaw = (x2 as ArrayStorage).iget(i);
+      const aVal = x1IsBig ? (aRaw as bigint) : BigInt(Math.round(Number(aRaw)));
+      const bVal = x2IsBig ? (bRaw as bigint) : BigInt(Math.round(Number(bRaw)));
+      (resultData as BigInt64Array | BigUint64Array)[i] = gcdBig(aVal, bVal);
     }
   } else {
     for (let i = 0; i < size; i++) {
@@ -2228,19 +2241,29 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
  */
 export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   throwIfComplex(x1.dtype, 'lcm', 'LCM is only defined for integers.');
-  throwIfBool(x1.dtype, 'lcm', 'LCM is only defined for integer dtypes.');
   if (isFloatDType(x1.dtype))
     throw new TypeError(
       `ufunc 'lcm' not supported for float dtype '${x1.dtype}'. LCM is only defined for integer dtypes.`
     );
+  throwIfComplex(x1.dtype, 'lcm', 'LCM is only defined for integers.');
   if (typeof x2 !== 'number') {
     throwIfComplex(x2.dtype, 'lcm', 'LCM is only defined for integers.');
-    throwIfBool(x2.dtype, 'lcm', 'LCM is only defined for integer dtypes.');
     if (isFloatDType(x2.dtype))
       throw new TypeError(
         `ufunc 'lcm' not supported for float dtype '${x2.dtype}'. LCM is only defined for integer dtypes.`
       );
+    if (x1.dtype === 'bool' && x2.dtype === 'bool')
+      throw new TypeError("ufunc 'lcm' not supported for boolean dtype.");
   }
+  // Reject signed × uint64 (promoted dtype is float64, not valid for lcm)
+  // Must check BEFORE bool→int8 conversion to avoid false rejection on uint64×bool
+  if (typeof x2 !== 'number' && isFloatDType(promoteDTypes(x1.dtype, x2.dtype)))
+    throw new TypeError(
+      `ufunc 'lcm' not supported for mixed types '${x1.dtype}' and '${x2.dtype}'.`
+    );
+  // For lcm(bool, bool), promote both to int8. For mixed bool+int, let promoteDTypes handle it.
+  if (x1.dtype === 'bool' && (typeof x2 === 'number' || x2.dtype === 'bool'))
+    return lcm(boolToInt8(x1), typeof x2 === 'number' ? x2 : boolToInt8(x2));
   const gcdSingle = (a: number, b: number): number => {
     a = Math.abs(Math.trunc(a));
     b = Math.abs(Math.trunc(b));
@@ -2302,15 +2325,14 @@ export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
       if (a === 0n || b === 0n) return 0n;
       return (a * b) / gcdBig(a, b);
     };
-    const x1Data = x1.data as BigInt64Array | BigUint64Array;
-    const x2Data = x2.data as BigInt64Array | BigUint64Array;
-    const x1Off = x1.offset;
-    const x2Off = x2.offset;
+    const x1IsBig = isBigIntDType(x1.dtype);
+    const x2IsBig = isBigIntDType(x2.dtype);
     for (let i = 0; i < size; i++) {
-      (resultData as BigInt64Array | BigUint64Array)[i] = lcmBig(
-        x1Data[x1Off + i]!,
-        x2Data[x2Off + i]!
-      );
+      const aRaw = x1.iget(i);
+      const bRaw = x2.iget(i);
+      const aVal = x1IsBig ? (aRaw as bigint) : BigInt(Math.round(Number(aRaw)));
+      const bVal = x2IsBig ? (bRaw as bigint) : BigInt(Math.round(Number(bRaw)));
+      (resultData as BigInt64Array | BigUint64Array)[i] = lcmBig(aVal, bVal);
     }
   } else {
     for (let i = 0; i < size; i++) {
