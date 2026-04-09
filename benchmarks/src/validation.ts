@@ -211,6 +211,14 @@ function resultsMatch(
     return numpytsResult === numpyResult;
   }
 
+  // Bool ↔ number equivalence: TS bool arrays serialize as 0/1, Python as true/false
+  if (typeof numpytsResult === 'number' && typeof numpyResult === 'boolean') {
+    return numpytsResult === (numpyResult ? 1 : 0);
+  }
+  if (typeof numpytsResult === 'boolean' && typeof numpyResult === 'number') {
+    return (numpytsResult ? 1 : 0) === numpyResult;
+  }
+
   // Both strings (e.g., dtype names)
   if (typeof numpytsResult === 'string' && typeof numpyResult === 'string') {
     return numpytsResult === numpyResult;
@@ -389,6 +397,14 @@ function arraysEqual(a: any, b: any, tolerance: number = FLOAT64_TOLERANCE): boo
   // Compare booleans
   if (typeof a === 'boolean' && typeof b === 'boolean') {
     return a === b;
+  }
+
+  // Bool ↔ number equivalence: TS bool arrays serialize as 0/1, Python as true/false
+  if (typeof a === 'number' && typeof b === 'boolean') {
+    return a === (b ? 1 : 0);
+  }
+  if (typeof a === 'boolean' && typeof b === 'number') {
+    return (a ? 1 : 0) === b;
   }
 
   return a === b;
@@ -1312,7 +1328,6 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
         for (let i = 0; i < specs.length; i++) {
           const spec = specs[i]!;
           const numpyResult = numpyResults[i];
-
           let numpytsResult: any;
           try {
             numpytsResult = runNumpyTsOperation(spec);
@@ -1330,6 +1345,9 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
               }
               return val;
             }
+
+            // Track TS dtype for comparison
+            let tsDtype: string | undefined;
 
             if (typeof numpytsResult === 'number' || typeof numpytsResult === 'boolean') {
               tsValue = numpytsResult;
@@ -1365,12 +1383,92 @@ export async function validateBenchmarks(specs: BenchmarkCase[]): Promise<void> 
               }
               // Convert array data, handling Complex objects
               const rawData = numpytsResult.toArray();
+              tsDtype = numpytsResult.dtype;
               tsValue = {
                 shape: Array.from(numpytsResult.shape),
                 data: complexToReal(rawData),
               };
             } else {
               tsValue = numpytsResult;
+            }
+
+            // --- Shape check ---
+            if (tsValue?.shape && numpyResult?.shape) {
+              const tsShape = JSON.stringify(tsValue.shape);
+              const npShape = JSON.stringify(numpyResult.shape);
+              if (tsShape !== npShape) {
+                failed++;
+                console.error(
+                  `  ❌ ${spec.name}: Shape mismatch: TS ${tsShape} vs NumPy ${npShape}`
+                );
+                numpytsResult?.dispose?.();
+                continue;
+              }
+            }
+
+            // --- Dtype check ---
+            // NumPy dtype map: numpy names → our names
+            const NP_DTYPE_MAP: Record<string, string> = {
+              float64: 'float64',
+              float32: 'float32',
+              float16: 'float16',
+              int64: 'int64',
+              int32: 'int32',
+              int16: 'int16',
+              int8: 'int8',
+              uint64: 'uint64',
+              uint32: 'uint32',
+              uint16: 'uint16',
+              uint8: 'uint8',
+              bool_: 'bool',
+              bool: 'bool',
+              complex128: 'complex128',
+              complex64: 'complex64',
+            };
+            if (tsDtype && numpyResult?.dtype) {
+              const npDtype = NP_DTYPE_MAP[numpyResult.dtype] ?? numpyResult.dtype;
+              // Index-returning functions: we return float64, NumPy returns int64
+              const INDEX_OPS = new Set([
+                'argsort',
+                'argpartition',
+                'argmax',
+                'argmin',
+                'searchsorted',
+                'nonzero',
+                'count_nonzero',
+                'lexsort',
+                'argwhere',
+                'flatnonzero',
+                'bincount',
+                'digitize',
+                'diag_indices',
+                'tril_indices',
+                'triu_indices',
+                'indices',
+                'ravel_multi_index',
+                'unravel_index',
+                'random_permutation',
+              ]);
+              // Integer creation functions: we return int32, NumPy returns int64
+              const INT_CREATION_OPS = new Set(['arange', 'full', 'full_like']);
+              const isIndexOp = INDEX_OPS.has(spec.operation);
+              const isIntCreation = INT_CREATION_OPS.has(spec.operation);
+              if (
+                isIndexOp &&
+                tsDtype === 'float64' &&
+                (npDtype === 'int64' || npDtype === 'uint64')
+              ) {
+                // Accepted: index ops return float64 for JS ergonomics
+              } else if (isIntCreation && tsDtype === 'int32' && npDtype === 'int64') {
+                // Accepted: int32 is our int64 equivalent for non-BigInt JS numbers
+              } else if (tsDtype !== npDtype) {
+                failed++;
+                console.error(
+                  `  ❌ ${spec.name}: Dtype mismatch: TS '${tsDtype}' vs NumPy '${npDtype}'`
+                );
+                numpytsResult?.dispose?.();
+                continue;
+              }
             }
 
             // For partition/argpartition, check partition property instead of exact equality
