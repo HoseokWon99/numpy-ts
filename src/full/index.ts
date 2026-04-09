@@ -1737,7 +1737,7 @@ export function trapezoid(
   x?: NDArrayCore,
   dx?: number,
   axis?: number
-): NDArray | number {
+): NDArray | number | Complex {
   const r = core.trapezoid(y, x, dx, axis);
   return r instanceof NDArrayCore ? up(r) : r;
 }

@@ -3,7 +3,7 @@
  * Tests each function across ALL dtypes, validated against NumPy.
  * Uses batched oracle — all Python computations run in a single subprocess.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, beforeAll } from 'vitest';
 import * as np from '../../../src';
 import {
   ALL_DTYPES,
@@ -120,6 +120,16 @@ describe('DType Sweep: Quantile/percentile', () => {
         );
         if (_r === 'both-reject') return;
       }
+      if (isComplex(dtype)) {
+        const sc = pyScalarCast(dtype);
+        const pyCode = `a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})\nresult = ${sc}(np.quantile(a, 0.5))`;
+        const _r = expectBothReject(
+          'quantile is not supported for complex dtype',
+          () => np.quantile(array(data, dtype), 0.5),
+          pyCode
+        );
+        if (_r === 'both-reject') return;
+      }
       const jsResult = np.quantile(array(data, dtype), 0.5);
       const py = oracle.get(`quantile_${dtype}`)!;
       scalarClose(jsResult, py.value);
@@ -131,6 +141,16 @@ describe('DType Sweep: Quantile/percentile', () => {
         const pyCode = `a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})\nresult = float(np.nanquantile(a, 0.5))`;
         const _r = expectBothReject(
           'nanquantile uses subtract internally, not supported for bool',
+          () => np.nanquantile(array(data, dtype), 0.5),
+          pyCode
+        );
+        if (_r === 'both-reject') return;
+      }
+      if (isComplex(dtype)) {
+        const sc = pyScalarCast(dtype);
+        const pyCode = `a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})\nresult = ${sc}(np.nanquantile(a, 0.5))`;
+        const _r = expectBothReject(
+          'nanquantile is not supported for complex dtype',
           () => np.nanquantile(array(data, dtype), 0.5),
           pyCode
         );
@@ -152,6 +172,16 @@ describe('DType Sweep: Quantile/percentile', () => {
         );
         if (_r === 'both-reject') return;
       }
+      if (isComplex(dtype)) {
+        const sc = pyScalarCast(dtype);
+        const pyCode = `a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})\nresult = ${sc}(np.percentile(a, 50))`;
+        const _r = expectBothReject(
+          'percentile is not supported for complex dtype',
+          () => np.percentile(array(data, dtype), 50),
+          pyCode
+        );
+        if (_r === 'both-reject') return;
+      }
       const jsResult = np.percentile(array(data, dtype), 50);
       const py = oracle.get(`percentile_${dtype}`)!;
       scalarClose(jsResult, py.value);
@@ -163,6 +193,16 @@ describe('DType Sweep: Quantile/percentile', () => {
         const pyCode = `a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})\nresult = float(np.nanpercentile(a, 50))`;
         const _r = expectBothReject(
           'nanpercentile uses subtract internally, not supported for bool',
+          () => np.nanpercentile(array(data, dtype), 50),
+          pyCode
+        );
+        if (_r === 'both-reject') return;
+      }
+      if (isComplex(dtype)) {
+        const sc = pyScalarCast(dtype);
+        const pyCode = `a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})\nresult = ${sc}(np.nanpercentile(a, 50))`;
+        const _r = expectBothReject(
+          'nanpercentile is not supported for complex dtype',
           () => np.nanpercentile(array(data, dtype), 50),
           pyCode
         );

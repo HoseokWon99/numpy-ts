@@ -9,7 +9,37 @@
  */
 
 import { ArrayStorage } from '../storage';
-import { throwIfComplex, isIntegerDType, mathResultDtype } from '../dtype';
+import { throwIfComplex, isComplexDType, isIntegerDType, mathResultDtype } from '../dtype';
+import { Complex } from '../complex';
+
+/**
+ * Apply a rounding function component-wise to a complex array.
+ * NumPy applies rounding to real and imaginary parts independently for rint/around.
+ */
+function complexComponentwise(a: ArrayStorage, fn: (x: number) => number): ArrayStorage {
+  const dtype = a.dtype;
+  const shape = Array.from(a.shape);
+  const size = a.size;
+  const result = ArrayStorage.empty(shape, dtype);
+  const dstData = result.data as Float64Array | Float32Array;
+
+  if (a.isCContiguous) {
+    const srcData = a.data as Float64Array | Float32Array;
+    const off = a.offset;
+    for (let i = 0; i < size; i++) {
+      dstData[i * 2] = fn(srcData[(off + i) * 2]!);
+      dstData[i * 2 + 1] = fn(srcData[(off + i) * 2 + 1]!);
+    }
+  } else {
+    for (let i = 0; i < size; i++) {
+      const val = a.iget(i) as Complex;
+      dstData[i * 2] = fn(val.re);
+      dstData[i * 2 + 1] = fn(val.im);
+    }
+  }
+
+  return result;
+}
 
 /**
  * Round half to even (banker's rounding) - matches NumPy behavior
@@ -29,7 +59,10 @@ function roundHalfToEven(x: number): number {
  * Round an array to the given number of decimals
  */
 export function around(a: ArrayStorage, decimals: number = 0): ArrayStorage {
-  throwIfComplex(a.dtype, 'around', 'Rounding is not defined for complex numbers.');
+  if (isComplexDType(a.dtype)) {
+    const multiplier = Math.pow(10, decimals);
+    return complexComponentwise(a, (x) => roundHalfToEven(x * multiplier) / multiplier);
+  }
   if (isIntegerDType(a.dtype) && decimals >= 0) return a.copy();
   if (a.dtype === 'bool') {
     const dt = mathResultDtype('bool');
@@ -161,7 +194,7 @@ export function floor(a: ArrayStorage): ArrayStorage {
  * Round elements of the array to the nearest integer (banker's rounding)
  */
 export function rint(a: ArrayStorage): ArrayStorage {
-  throwIfComplex(a.dtype, 'rint', 'Rounding is not defined for complex numbers.');
+  if (isComplexDType(a.dtype)) return complexComponentwise(a, roundHalfToEven);
   // NumPy: rint promotes ints/bool via mathResultDtype (values stay the same, just cast)
   if (isIntegerDType(a.dtype) || a.dtype === 'bool') {
     const dt = mathResultDtype(a.dtype);

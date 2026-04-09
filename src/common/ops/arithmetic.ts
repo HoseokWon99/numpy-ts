@@ -100,6 +100,163 @@ function setComplexAt(data: Float64Array | Float32Array, i: number, re: number, 
 }
 
 /**
+ * NumPy lexicographic comparison for complex: compare real parts first,
+ * then imaginary parts as tiebreaker.
+ * Returns true if a > b (for 'max') or a < b (for 'min').
+ */
+function complexGreater(aRe: number, aIm: number, bRe: number, bIm: number): boolean {
+  if (aRe !== bRe) return aRe > bRe;
+  return aIm > bIm;
+}
+
+/**
+ * Complex min/max helper used by maximum, minimum, fmax, fmin.
+ * Uses lexicographic ordering (real first, imaginary as tiebreaker).
+ *
+ * @param x1 - First array
+ * @param x2 - Second array or scalar
+ * @param mode - 'max' or 'min'
+ * @param ignoreNaN - If true, ignore NaN (fmax/fmin behavior)
+ */
+function complexMinMax(
+  x1: ArrayStorage,
+  x2: ArrayStorage | number,
+  mode: 'max' | 'min',
+  ignoreNaN: boolean = false
+): ArrayStorage {
+  const isMax = mode === 'max';
+
+  // Determine result dtype
+  const x2Dtype = typeof x2 === 'number' ? 'float64' : x2.dtype;
+  const resultDtype = promoteDTypes(x1.dtype, x2Dtype);
+  const size = x1.size;
+  const shape = Array.from(x1.shape);
+  const result = ArrayStorage.empty(shape, resultDtype);
+  const resultData = result.data as Float64Array | Float32Array;
+
+  const x1IsComplex = isComplexDType(x1.dtype);
+  const x1Data = x1.data;
+  const x1Off = x1.offset;
+
+  if (typeof x2 === 'number') {
+    // Scalar second operand (real number → im = 0)
+    const bRe = x2;
+    const bIm = 0;
+    const bNaN = isNaN(bRe);
+    for (let i = 0; i < size; i++) {
+      let aRe: number, aIm: number;
+      if (x1IsComplex) {
+        [aRe, aIm] = getComplexAt(x1Data as Float64Array | Float32Array, x1Off + i);
+      } else {
+        aRe = Number(x1Data[x1Off + i]);
+        aIm = 0;
+      }
+      const aNaN = isNaN(aRe) || isNaN(aIm);
+      let pickRe: number, pickIm: number;
+      if (ignoreNaN) {
+        if (aNaN && bNaN) {
+          pickRe = NaN;
+          pickIm = NaN;
+        } else if (aNaN) {
+          pickRe = bRe;
+          pickIm = bIm;
+        } else if (bNaN) {
+          pickRe = aRe;
+          pickIm = aIm;
+        } else {
+          const aWins = complexGreater(aRe, aIm, bRe, bIm);
+          if (isMax ? aWins : !aWins) {
+            pickRe = aRe;
+            pickIm = aIm;
+          } else {
+            pickRe = bRe;
+            pickIm = bIm;
+          }
+        }
+      } else {
+        if (aNaN || bNaN) {
+          pickRe = NaN;
+          pickIm = NaN;
+        } else {
+          const aWins = complexGreater(aRe, aIm, bRe, bIm);
+          if (isMax ? aWins : !aWins) {
+            pickRe = aRe;
+            pickIm = aIm;
+          } else {
+            pickRe = bRe;
+            pickIm = bIm;
+          }
+        }
+      }
+      setComplexAt(resultData, i, pickRe, pickIm);
+    }
+    return result;
+  }
+
+  // Array second operand
+  const x2IsComplex = isComplexDType(x2.dtype);
+  const x2Data = x2.data;
+  const x2Off = x2.offset;
+
+  for (let i = 0; i < size; i++) {
+    let aRe: number, aIm: number;
+    if (x1IsComplex) {
+      [aRe, aIm] = getComplexAt(x1Data as Float64Array | Float32Array, x1Off + i);
+    } else {
+      aRe = Number(x1Data[x1Off + i]);
+      aIm = 0;
+    }
+    let bRe: number, bIm: number;
+    if (x2IsComplex) {
+      [bRe, bIm] = getComplexAt(x2Data as Float64Array | Float32Array, x2Off + i);
+    } else {
+      bRe = Number(x2Data[x2Off + i]);
+      bIm = 0;
+    }
+    const aNaN = isNaN(aRe) || isNaN(aIm);
+    const bNaN = isNaN(bRe) || isNaN(bIm);
+    let pickRe: number, pickIm: number;
+    if (ignoreNaN) {
+      if (aNaN && bNaN) {
+        pickRe = NaN;
+        pickIm = NaN;
+      } else if (aNaN) {
+        pickRe = bRe;
+        pickIm = bIm;
+      } else if (bNaN) {
+        pickRe = aRe;
+        pickIm = aIm;
+      } else {
+        const aWins = complexGreater(aRe, aIm, bRe, bIm);
+        if (isMax ? aWins : !aWins) {
+          pickRe = aRe;
+          pickIm = aIm;
+        } else {
+          pickRe = bRe;
+          pickIm = bIm;
+        }
+      }
+    } else {
+      if (aNaN || bNaN) {
+        pickRe = NaN;
+        pickIm = NaN;
+      } else {
+        const aWins = complexGreater(aRe, aIm, bRe, bIm);
+        if (isMax ? aWins : !aWins) {
+          pickRe = aRe;
+          pickIm = aIm;
+        } else {
+          pickRe = bRe;
+          pickIm = bIm;
+        }
+      }
+    }
+    setComplexAt(resultData, i, pickRe, pickIm);
+  }
+  return result;
+}
+
+/**
  * Add two arrays or array and scalar
  *
  * @param a - First array storage
@@ -1033,7 +1190,42 @@ export function negative(a: ArrayStorage): ArrayStorage {
  * @returns Result storage with signs
  */
 export function sign(a: ArrayStorage): ArrayStorage {
-  throwIfComplex(a.dtype, 'sign', 'Sign is not defined for complex numbers.');
+  if (isComplexDType(a.dtype)) {
+    // NumPy: sign(z) = z / abs(z) if z != 0, else 0
+    const shape = Array.from(a.shape);
+    const size = a.size;
+    const result = ArrayStorage.empty(shape, a.dtype);
+    const dstData = result.data as Float64Array | Float32Array;
+    if (a.isCContiguous) {
+      const srcData = a.data as Float64Array | Float32Array;
+      const off = a.offset;
+      for (let i = 0; i < size; i++) {
+        const re = srcData[(off + i) * 2]!;
+        const im = srcData[(off + i) * 2 + 1]!;
+        const mag = Math.sqrt(re * re + im * im);
+        if (mag === 0) {
+          dstData[i * 2] = 0;
+          dstData[i * 2 + 1] = 0;
+        } else {
+          dstData[i * 2] = re / mag;
+          dstData[i * 2 + 1] = im / mag;
+        }
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        const val = a.iget(i) as Complex;
+        const mag = Math.sqrt(val.re * val.re + val.im * val.im);
+        if (mag === 0) {
+          dstData[i * 2] = 0;
+          dstData[i * 2 + 1] = 0;
+        } else {
+          dstData[i * 2] = val.re / mag;
+          dstData[i * 2 + 1] = val.im / mag;
+        }
+      }
+    }
+    return result;
+  }
   throwIfBool(a.dtype, 'sign', 'Sign is not defined for boolean dtype.');
 
   const wasmResult = wasmSign(a);
@@ -1565,14 +1757,12 @@ export function heaviside(x1: ArrayStorage, x2: ArrayStorage | number): ArraySto
   const size = x1.size;
 
   const resultDtype = mathResultDtype(dtype);
+  // float16 result (int8/uint8): compute in float32, downcast after
+  const wasmDtype = resultDtype === 'float16' ? 'float32' : resultDtype;
 
-  // Promote input to result dtype for WASM and fast paths
+  // Promote input to compute dtype for WASM and fast paths
   const x1Float =
-    x1.dtype === resultDtype
-      ? x1
-      : resultDtype === 'float16'
-        ? x1
-        : convertToFloatDType(x1, resultDtype as 'float32' | 'float64');
+    x1.dtype === wasmDtype ? x1 : convertToFloatDType(x1, wasmDtype as 'float32' | 'float64');
 
   // Extract scalar from size-1 array
   if (typeof x2 !== 'number' && x2.size === 1) {
@@ -1583,12 +1773,16 @@ export function heaviside(x1: ArrayStorage, x2: ArrayStorage | number): ArraySto
   try {
     if (typeof x2 === 'number') {
       // Try WASM scalar path
-      const wasmResult = wasmHeavisideScalar(
-        x1Float,
-        x2,
-        resultDtype as 'float64' | 'float32' | 'float16'
-      );
-      if (wasmResult) return wasmResult;
+      const wasmResult = wasmHeavisideScalar(x1Float, x2, wasmDtype as 'float64' | 'float32');
+      if (wasmResult) {
+        if (resultDtype === 'float16') {
+          const f16 = ArrayStorage.empty(Array.from(wasmResult.shape), 'float16');
+          f16.data.set(wasmResult.data as Float32Array);
+          wasmResult.dispose();
+          return f16;
+        }
+        return wasmResult;
+      }
 
       // Scalar x2 — use direct data access for contiguous
       const result = ArrayStorage.empty(shape, resultDtype);
@@ -1611,22 +1805,22 @@ export function heaviside(x1: ArrayStorage, x2: ArrayStorage | number): ArraySto
       // Array x2 - needs to broadcast
       const x2Shape = x2.shape;
       const x2Float =
-        x2.dtype === resultDtype
-          ? x2
-          : resultDtype === 'float16'
-            ? x2
-            : convertToFloatDType(x2, resultDtype as 'float32' | 'float64');
+        x2.dtype === wasmDtype ? x2 : convertToFloatDType(x2, wasmDtype as 'float32' | 'float64');
 
       try {
         // Simple case: same shape
         if (shape.every((d, i) => d === x2Shape[i])) {
           // Try WASM binary path
-          const wasmResult = wasmHeaviside(
-            x1Float,
-            x2Float,
-            resultDtype as 'float64' | 'float32' | 'float16'
-          );
-          if (wasmResult) return wasmResult;
+          const wasmResult = wasmHeaviside(x1Float, x2Float, wasmDtype as 'float64' | 'float32');
+          if (wasmResult) {
+            if (resultDtype === 'float16') {
+              const f16 = ArrayStorage.empty(Array.from(wasmResult.shape), 'float16');
+              f16.data.set(wasmResult.data as Float32Array);
+              wasmResult.dispose();
+              return f16;
+            }
+            return wasmResult;
+          }
 
           const result = ArrayStorage.empty(shape, resultDtype);
           const resultData = result.data;
@@ -1678,8 +1872,9 @@ export function float_power(x1: ArrayStorage, x2: ArrayStorage | number): ArrayS
   // Complex float_power: z1^z2 = exp(z2 * log(z1))
   if (isComplexDType(dtype1)) {
     const size = x1.size;
-    const result = ArrayStorage.empty(Array.from(x1.shape), dtype1);
-    const resultData = result.data as Float64Array | Float32Array;
+    // float_power always returns complex128 (like NumPy)
+    const result = ArrayStorage.empty(Array.from(x1.shape), 'complex128');
+    const resultData = result.data as Float64Array;
 
     if (typeof x2 === 'number') {
       if (x1.isCContiguous) {
@@ -2206,6 +2401,89 @@ export function modf(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
 }
 
 /**
+ * Clip complex array: compare by real part first, imaginary as tiebreaker (lexicographic).
+ */
+function clipComplex(
+  a: ArrayStorage,
+  a_min: number | ArrayStorage | null,
+  a_max: number | ArrayStorage | null
+): ArrayStorage {
+  const dtype = a.dtype;
+  const size = a.size;
+  const shape = Array.from(a.shape);
+  const result = ArrayStorage.empty(shape, dtype);
+  const resultData = result.data as Float64Array | Float32Array;
+  const aData = a.data as Float64Array | Float32Array;
+  const aOff = a.offset;
+
+  const minIsScalar = a_min === null || typeof a_min === 'number';
+  const maxIsScalar = a_max === null || typeof a_max === 'number';
+  const minIsComplex = !minIsScalar && isComplexDType((a_min as ArrayStorage).dtype);
+  const maxIsComplex = !maxIsScalar && isComplexDType((a_max as ArrayStorage).dtype);
+
+  for (let i = 0; i < size; i++) {
+    let [re, im] = getComplexAt(aData, aOff + i);
+
+    // Get min bound
+    let loRe: number, loIm: number;
+    if (a_min === null) {
+      loRe = -Infinity;
+      loIm = -Infinity;
+    } else if (typeof a_min === 'number') {
+      loRe = a_min;
+      loIm = 0;
+    } else if (minIsComplex) {
+      [loRe, loIm] = getComplexAt(
+        (a_min as ArrayStorage).data as Float64Array | Float32Array,
+        (a_min as ArrayStorage).offset + (i % (a_min as ArrayStorage).size)
+      );
+    } else {
+      loRe = Number(
+        (a_min as ArrayStorage).data[
+          (a_min as ArrayStorage).offset + (i % (a_min as ArrayStorage).size)
+        ]
+      );
+      loIm = 0;
+    }
+
+    // Get max bound
+    let hiRe: number, hiIm: number;
+    if (a_max === null) {
+      hiRe = Infinity;
+      hiIm = Infinity;
+    } else if (typeof a_max === 'number') {
+      hiRe = a_max;
+      hiIm = 0;
+    } else if (maxIsComplex) {
+      [hiRe, hiIm] = getComplexAt(
+        (a_max as ArrayStorage).data as Float64Array | Float32Array,
+        (a_max as ArrayStorage).offset + (i % (a_max as ArrayStorage).size)
+      );
+    } else {
+      hiRe = Number(
+        (a_max as ArrayStorage).data[
+          (a_max as ArrayStorage).offset + (i % (a_max as ArrayStorage).size)
+        ]
+      );
+      hiIm = 0;
+    }
+
+    // Clip: if value < min, use min; if value > max, use max
+    if (complexGreater(loRe, loIm, re, im)) {
+      re = loRe;
+      im = loIm;
+    }
+    if (complexGreater(re, im, hiRe, hiIm)) {
+      re = hiRe;
+      im = hiIm;
+    }
+
+    setComplexAt(resultData, i, re, im);
+  }
+  return result;
+}
+
+/**
  * Clip (limit) the values in an array
  * Given an interval, values outside the interval are clipped to the interval edges.
  *
@@ -2219,7 +2497,10 @@ export function clip(
   a_min: number | ArrayStorage | null,
   a_max: number | ArrayStorage | null
 ): ArrayStorage {
-  throwIfComplex(a.dtype, 'clip', 'clip is not supported for complex numbers.');
+  // Complex clip: compare by real part, then imaginary as tiebreaker
+  if (isComplexDType(a.dtype)) {
+    return clipComplex(a, a_min, a_max);
+  }
 
   // NumPy promotes bool → int64 for clip (Python int bounds are int64)
   if (a.dtype === 'bool') {
@@ -2357,9 +2638,9 @@ export function clip(
  * @returns Element-wise maximum
  */
 export function maximum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
-  throwIfComplex(x1.dtype, 'maximum', 'maximum is not supported for complex numbers.');
-  if (typeof x2 !== 'number') {
-    throwIfComplex(x2.dtype, 'maximum', 'maximum is not supported for complex numbers.');
+  // Complex: lexicographic comparison (real first, imaginary as tiebreaker)
+  if (isComplexDType(x1.dtype) || (typeof x2 !== 'number' && isComplexDType(x2.dtype))) {
+    return complexMinMax(x1, x2, 'max');
   }
 
   // WASM acceleration
@@ -2415,9 +2696,9 @@ export function maximum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStora
  * @returns Element-wise minimum
  */
 export function minimum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
-  throwIfComplex(x1.dtype, 'minimum', 'minimum is not supported for complex numbers.');
-  if (typeof x2 !== 'number') {
-    throwIfComplex(x2.dtype, 'minimum', 'minimum is not supported for complex numbers.');
+  // Complex: lexicographic comparison (real first, imaginary as tiebreaker)
+  if (isComplexDType(x1.dtype) || (typeof x2 !== 'number' && isComplexDType(x2.dtype))) {
+    return complexMinMax(x1, x2, 'min');
   }
 
   // WASM acceleration
@@ -2473,9 +2754,9 @@ export function minimum(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStora
  * @returns Element-wise maximum, NaN-aware
  */
 export function fmax(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
-  throwIfComplex(x1.dtype, 'fmax', 'fmax is not supported for complex numbers.');
-  if (typeof x2 !== 'number') {
-    throwIfComplex(x2.dtype, 'fmax', 'fmax is not supported for complex numbers.');
+  // Complex: lexicographic comparison (real first, imaginary as tiebreaker), NaN-ignoring
+  if (isComplexDType(x1.dtype) || (typeof x2 !== 'number' && isComplexDType(x2.dtype))) {
+    return complexMinMax(x1, x2, 'max', true);
   }
 
   // WASM acceleration (same kernels as maximum — NaN handling differs only for float edge cases)
@@ -2541,9 +2822,9 @@ export function fmax(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage 
  * @returns Element-wise minimum, NaN-aware
  */
 export function fmin(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
-  throwIfComplex(x1.dtype, 'fmin', 'fmin is not supported for complex numbers.');
-  if (typeof x2 !== 'number') {
-    throwIfComplex(x2.dtype, 'fmin', 'fmin is not supported for complex numbers.');
+  // Complex: lexicographic comparison (real first, imaginary as tiebreaker), NaN-ignoring
+  if (isComplexDType(x1.dtype) || (typeof x2 !== 'number' && isComplexDType(x2.dtype))) {
+    return complexMinMax(x1, x2, 'min', true);
   }
 
   // WASM acceleration (same kernels as minimum — NaN handling differs only for float edge cases)
@@ -2616,7 +2897,6 @@ export function nan_to_num(
   posinf?: number,
   neginf?: number
 ): ArrayStorage {
-  throwIfComplex(x.dtype, 'nan_to_num', 'nan_to_num is not supported for complex numbers.');
   const dtype = x.dtype;
   const shape = Array.from(x.shape);
   const size = x.size;
@@ -2624,6 +2904,33 @@ export function nan_to_num(
   // Default to dtype max/min values
   const posinfVal = posinf !== undefined ? posinf : Number.MAX_VALUE;
   const neginfVal = neginf !== undefined ? neginf : -Number.MAX_VALUE;
+
+  if (isComplexDType(dtype)) {
+    // Apply nan_to_num to real and imaginary parts independently
+    const result = ArrayStorage.empty(shape, dtype);
+    const dstData = result.data as Float64Array | Float32Array;
+    const replaceComponent = (v: number): number => {
+      if (isNaN(v)) return nan;
+      if (v === Infinity) return posinfVal;
+      if (v === -Infinity) return neginfVal;
+      return v;
+    };
+    if (x.isCContiguous) {
+      const srcData = x.data as Float64Array | Float32Array;
+      const off = x.offset;
+      for (let i = 0; i < size; i++) {
+        dstData[i * 2] = replaceComponent(srcData[(off + i) * 2]!);
+        dstData[i * 2 + 1] = replaceComponent(srcData[(off + i) * 2 + 1]!);
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        const val = x.iget(i) as Complex;
+        dstData[i * 2] = replaceComponent(val.re);
+        dstData[i * 2 + 1] = replaceComponent(val.im);
+      }
+    }
+    return result;
+  }
 
   const result = ArrayStorage.empty(shape, dtype);
   const resultData = result.data;
@@ -2865,7 +3172,54 @@ export function unwrap(
  * @returns Array of sinc values
  */
 export function sinc(x: ArrayStorage): ArrayStorage {
-  throwIfComplex(x.dtype, 'sinc', 'sinc is not supported for complex numbers.');
+  if (isComplexDType(x.dtype)) {
+    // sinc(z) = sin(pi*z) / (pi*z), component-wise complex arithmetic
+    const shape = Array.from(x.shape);
+    const size = x.size;
+    const result = ArrayStorage.empty(shape, x.dtype);
+    const dstData = result.data as Float64Array | Float32Array;
+
+    if (x.isCContiguous) {
+      const srcData = x.data as Float64Array | Float32Array;
+      const off = x.offset;
+      for (let i = 0; i < size; i++) {
+        const re = srcData[(off + i) * 2]!;
+        const im = srcData[(off + i) * 2 + 1]!;
+        if (re === 0 && im === 0) {
+          dstData[i * 2] = 1;
+          dstData[i * 2 + 1] = 0;
+        } else {
+          // pi*z
+          const pzRe = Math.PI * re;
+          const pzIm = Math.PI * im;
+          // sin(a+bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
+          const sinRe = Math.sin(pzRe) * Math.cosh(pzIm);
+          const sinIm = Math.cos(pzRe) * Math.sinh(pzIm);
+          // divide sin(pi*z) / (pi*z)
+          const denom = pzRe * pzRe + pzIm * pzIm;
+          dstData[i * 2] = (sinRe * pzRe + sinIm * pzIm) / denom;
+          dstData[i * 2 + 1] = (sinIm * pzRe - sinRe * pzIm) / denom;
+        }
+      }
+    } else {
+      for (let i = 0; i < size; i++) {
+        const val = x.iget(i) as Complex;
+        if (val.re === 0 && val.im === 0) {
+          dstData[i * 2] = 1;
+          dstData[i * 2 + 1] = 0;
+        } else {
+          const pzRe = Math.PI * val.re;
+          const pzIm = Math.PI * val.im;
+          const sinRe = Math.sin(pzRe) * Math.cosh(pzIm);
+          const sinIm = Math.cos(pzRe) * Math.sinh(pzIm);
+          const denom = pzRe * pzRe + pzIm * pzIm;
+          dstData[i * 2] = (sinRe * pzRe + sinIm * pzIm) / denom;
+          dstData[i * 2 + 1] = (sinIm * pzRe - sinRe * pzIm) / denom;
+        }
+      }
+    }
+    return result;
+  }
 
   const shape = Array.from(x.shape);
   const size = x.size;

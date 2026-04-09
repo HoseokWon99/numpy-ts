@@ -6,7 +6,7 @@
  */
 
 import { ArrayStorage, computeStrides } from '../storage';
-import { isBigIntDType, type TypedArray } from '../dtype';
+import { isBigIntDType, isComplexDType, type TypedArray } from '../dtype';
 import { computeBroadcastShape, broadcastTo, broadcastShapes } from '../broadcasting';
 import { Complex } from '../complex';
 import { wasmIndices } from '../wasm/indices';
@@ -104,15 +104,21 @@ export function take(storage: ArrayStorage, indices: number[], axis?: number): A
     const result = ArrayStorage.empty([outputSize], dtype);
     const outputData = result.data;
 
+    const isComplex = isComplexDType(dtype);
     for (let i = 0; i < outputSize; i++) {
       let idx = indices[i]!;
       if (idx < 0) idx = flatSize + idx;
-      const value = storage.iget(idx);
 
-      if (isBigIntDType(dtype)) {
-        (outputData as BigInt64Array | BigUint64Array)[i] = value as bigint;
+      if (isComplex) {
+        const value = storage.iget(idx) as Complex;
+        (outputData as Float64Array | Float32Array)[i * 2] = value.re;
+        (outputData as Float64Array | Float32Array)[i * 2 + 1] = value.im;
+      } else if (isBigIntDType(dtype)) {
+        (outputData as BigInt64Array | BigUint64Array)[i] = storage.iget(idx) as bigint;
       } else {
-        (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = value as number;
+        (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = storage.iget(
+          idx
+        ) as number;
       }
     }
 
@@ -164,7 +170,11 @@ export function take(storage: ArrayStorage, indices: number[], axis?: number): A
       outIdx += outputIndices[d]! * outputStrides[d]!;
     }
 
-    if (isBigIntDType(dtype)) {
+    if (isComplexDType(dtype)) {
+      const c = value as Complex;
+      (outputData as Float64Array | Float32Array)[outIdx * 2] = c.re;
+      (outputData as Float64Array | Float32Array)[outIdx * 2 + 1] = c.im;
+    } else if (isBigIntDType(dtype)) {
       (outputData as BigInt64Array | BigUint64Array)[outIdx] = value as bigint;
     } else {
       (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[outIdx] = value as number;
@@ -392,6 +402,7 @@ export function take_along_axis(
 
   // Pre-extract contiguous data for fast paths
   const isBigInt = isBigIntDType(dtype);
+  const isComplex = isComplexDType(dtype);
   const inputContiguous = storage.isCContiguous;
   const indicesContiguous = indices.isCContiguous;
   const inputData = storage.data;
@@ -425,7 +436,22 @@ export function take_along_axis(
       srcLinearIdx += idx * inputStrides[d]!;
     }
 
-    if (inputContiguous) {
+    if (isComplex) {
+      // Complex: copy both re and im components
+      if (inputContiguous) {
+        const physSrc = (inputOff + srcLinearIdx) * 2;
+        (outputData as Float64Array | Float32Array)[outIdx * 2] = (
+          inputData as Float64Array | Float32Array
+        )[physSrc]!;
+        (outputData as Float64Array | Float32Array)[outIdx * 2 + 1] = (
+          inputData as Float64Array | Float32Array
+        )[physSrc + 1]!;
+      } else {
+        const value = storage.iget(srcLinearIdx) as Complex;
+        (outputData as Float64Array | Float32Array)[outIdx * 2] = value.re;
+        (outputData as Float64Array | Float32Array)[outIdx * 2 + 1] = value.im;
+      }
+    } else if (inputContiguous) {
       if (isBigInt) {
         (outputData as BigInt64Array | BigUint64Array)[outIdx] = (
           inputData as BigInt64Array | BigUint64Array

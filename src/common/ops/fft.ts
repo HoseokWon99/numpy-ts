@@ -17,7 +17,7 @@
 
 import { ArrayStorage } from '../storage';
 import { Complex } from '../complex';
-import { isComplexDType, fftResultDtype, type DType } from '../dtype';
+import { isComplexDType, throwIfComplex, fftResultDtype, type DType } from '../dtype';
 import { roll as shapeRoll } from './shape';
 import {
   wasmFft,
@@ -912,6 +912,7 @@ export function rfft(
   axis: number = -1,
   norm: 'backward' | 'ortho' | 'forward' = 'backward'
 ): ArrayStorage {
+  throwIfComplex(a.dtype, 'rfft', 'rfft expects real input.');
   const shape = Array.from(a.shape);
   const ndim = shape.length;
 
@@ -1056,6 +1057,7 @@ export function rfft2(
   axes: [number, number] = [-2, -1],
   norm: 'backward' | 'ortho' | 'forward' = 'backward'
 ): ArrayStorage {
+  throwIfComplex(a.dtype, 'rfft2', 'rfft2 expects real input.');
   const shape = Array.from(a.shape);
   const ndim = shape.length;
 
@@ -1180,6 +1182,7 @@ export function rfftn(
   axes?: number[],
   norm: 'backward' | 'ortho' | 'forward' = 'backward'
 ): ArrayStorage {
+  throwIfComplex(a.dtype, 'rfftn', 'rfftn expects real input.');
   const shape = Array.from(a.shape);
   const ndim = shape.length;
 
@@ -1345,6 +1348,7 @@ export function ihfft(
   axis: number = -1,
   norm: 'backward' | 'ortho' | 'forward' = 'backward'
 ): ArrayStorage {
+  throwIfComplex(a.dtype, 'ihfft', 'ihfft expects real input.');
   const shape = Array.from(a.shape);
   const ndim = shape.length;
   const ax = axis < 0 ? ndim + axis : axis;

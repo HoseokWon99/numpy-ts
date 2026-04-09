@@ -60,6 +60,11 @@ export function scalarClose(js: any, py: any, digits = 4): void {
     const pyIm = py?.im ?? 0;
     expect(js.re).toBeCloseTo(pyRe, digits);
     expect(js.im).toBeCloseTo(pyIm, digits);
+  } else if (py && typeof py === 'object' && 're' in py) {
+    // JS returned a real scalar but oracle returned complex (e.g. any/all/argmax on complex input).
+    // Compare JS result against the real part; imaginary should be zero.
+    expect(py.im).toBeCloseTo(0, digits);
+    expect(Number(js)).toBeCloseTo(py.re, digits);
   } else {
     expect(Number(js)).toBeCloseTo(Number(py), digits);
   }

@@ -627,7 +627,8 @@ export function require(
 // Helper: flatten an NDArrayCore to 1D
 function flattenCore(a: NDArrayCore): NDArrayCore {
   const srcData = a.data;
-  const storage = ArrayStorage.empty([srcData.length], a.dtype as DType);
+  const size = a.size;
+  const storage = ArrayStorage.empty([size], a.dtype as DType);
   const data = storage.data;
   (data as unknown as { set(src: ArrayLike<number | bigint>): void }).set(
     srcData as unknown as ArrayLike<number | bigint>
@@ -646,12 +647,24 @@ export function diag(v: NDArrayCore, k: number = 0): NDArrayCore {
     const n = dim0 + Math.abs(k);
     const result = zeros([n, n], dtype);
     const resultData = result.data;
+    const isComplex = isComplexDType(dtype);
 
     for (let i = 0; i < dim0; i++) {
       const row = k >= 0 ? i : i - k;
       const col = k >= 0 ? i + k : i;
       if (row >= 0 && row < n && col >= 0 && col < n) {
-        (resultData as Float64Array)[row * n + col] = data[i] as number;
+        if (isComplex) {
+          const physSrc = i * 2;
+          const physDst = (row * n + col) * 2;
+          (resultData as Float64Array | Float32Array)[physDst] = (
+            data as Float64Array | Float32Array
+          )[physSrc]!;
+          (resultData as Float64Array | Float32Array)[physDst + 1] = (
+            data as Float64Array | Float32Array
+          )[physSrc + 1]!;
+        } else {
+          (resultData as Float64Array)[row * n + col] = data[i] as number;
+        }
       }
     }
     return result;
@@ -666,6 +679,22 @@ export function diag(v: NDArrayCore, k: number = 0): NDArrayCore {
 
     if (diagLen <= 0) {
       return array([], dtype);
+    }
+
+    const isComplex = isComplexDType(dtype);
+    if (isComplex) {
+      const resultStorage = ArrayStorage.empty([diagLen], dtype);
+      const resultData = resultStorage.data as Float64Array | Float32Array;
+      for (let i = 0; i < diagLen; i++) {
+        const row = k >= 0 ? i : i - k;
+        const col = k >= 0 ? i + k : i;
+        if (row >= 0 && row < rows && col >= 0 && col < cols) {
+          const physSrc = (row * cols + col) * 2;
+          resultData[i * 2] = (data as Float64Array | Float32Array)[physSrc]!;
+          resultData[i * 2 + 1] = (data as Float64Array | Float32Array)[physSrc + 1]!;
+        }
+      }
+      return new NDArrayCore(resultStorage);
     }
 
     const resultArr: number[] = [];

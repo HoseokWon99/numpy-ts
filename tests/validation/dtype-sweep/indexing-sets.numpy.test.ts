@@ -10,7 +10,6 @@ import {
   runNumPyBatch,
   checkNumPyAvailable,
   npDtype,
-  isComplex,
   pyArrayCast,
   expectMatchPre,
 } from './_helpers';

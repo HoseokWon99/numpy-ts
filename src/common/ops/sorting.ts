@@ -579,6 +579,50 @@ function quickselectNumbers(arr: number[], kth: number): void {
 }
 
 /**
+ * Quickselect algorithm helper for complex arrays
+ * Partitions parallel re/im arrays so element at kth position is in sorted position
+ * Uses lexicographic comparison (real first, then imaginary)
+ */
+function quickselectComplex(re: number[], im: number[], kth: number): void {
+  let left = 0;
+  let right = re.length - 1;
+
+  while (left < right) {
+    const mid = Math.floor((left + right) / 2);
+    // Median-of-three pivot selection using complexCompare
+    const cmpLM = complexCompare(re[left]!, im[left]!, re[mid]!, im[mid]!);
+    const cmpLR = complexCompare(re[left]!, im[left]!, re[right]!, im[right]!);
+    const cmpMR = complexCompare(re[mid]!, im[mid]!, re[right]!, im[right]!);
+
+    let pivotIdx: number;
+    if ((cmpLM <= 0 && cmpMR <= 0) || (cmpMR >= 0 && cmpLM >= 0)) pivotIdx = mid;
+    else if ((cmpLM >= 0 && cmpLR <= 0) || (cmpLR >= 0 && cmpLM <= 0)) pivotIdx = left;
+    else pivotIdx = right;
+
+    const pivotRe = re[pivotIdx]!;
+    const pivotIm = im[pivotIdx]!;
+    // Move pivot to end
+    [re[pivotIdx], re[right]] = [re[right]!, re[pivotIdx]!];
+    [im[pivotIdx], im[right]] = [im[right]!, im[pivotIdx]!];
+
+    let i = left;
+    for (let j = left; j < right; j++) {
+      if (complexCompare(re[j]!, im[j]!, pivotRe, pivotIm) <= 0) {
+        [re[i], re[j]] = [re[j]!, re[i]!];
+        [im[i], im[j]] = [im[j]!, im[i]!];
+        i++;
+      }
+    }
+    [re[i], re[right]] = [re[right]!, re[i]!];
+    [im[i], im[right]] = [im[right]!, im[i]!];
+
+    if (i === kth) return;
+    else if (i < kth) left = i + 1;
+    else right = i - 1;
+  }
+}
+
+/**
  * Quickselect algorithm helper for bigint arrays
  * Partitions array so element at kth position is in sorted position
  */
@@ -821,6 +865,30 @@ export function partition(storage: ArrayStorage, kth: number, axis: number = -1)
       outIdx = outBaseOffsets[outerIdx]!;
       for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
         resultTyped[outIdx] = values[axisIdx]!;
+        outIdx += outAxisStride;
+      }
+    }
+  } else if (isComplexDType(dtype)) {
+    const typedData = resultData as Float64Array | Float32Array;
+    for (let outerIdx = 0; outerIdx < outerSize; outerIdx++) {
+      // Collect complex values along axis as [re, im] pairs
+      const reArr = new Array<number>(axisSize);
+      const imArr = new Array<number>(axisSize);
+      let outIdx = outBaseOffsets[outerIdx]!;
+      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+        reArr[axisIdx] = typedData[outIdx * 2]!;
+        imArr[axisIdx] = typedData[outIdx * 2 + 1]!;
+        outIdx += outAxisStride;
+      }
+
+      // Partition using quickselect with complex comparison
+      quickselectComplex(reArr, imArr, normalizedKth);
+
+      // Write partitioned values back
+      outIdx = outBaseOffsets[outerIdx]!;
+      for (let axisIdx = 0; axisIdx < axisSize; axisIdx++) {
+        typedData[outIdx * 2] = reArr[axisIdx]!;
+        typedData[outIdx * 2 + 1] = imArr[axisIdx]!;
         outIdx += outAxisStride;
       }
     }

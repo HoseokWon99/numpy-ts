@@ -13,7 +13,6 @@ import {
   arraysClose,
   checkNumPyAvailable,
   npDtype,
-  isComplex,
   pyScalarCast,
   pyArrayCast,
   toComparable,

@@ -1464,13 +1464,19 @@ export function roll(
       return rollResult;
     }
 
+    const isComplex = isComplexDType(dtype);
     for (let i = 0; i < size; i++) {
       const sourceIdx = (((i - flatShift) % size) + size) % size;
-      const value = flatStorage.iget(sourceIdx);
-      if (isBigInt) {
-        (outputData as BigInt64Array | BigUint64Array)[i] = value as bigint;
+      if (isComplex) {
+        const value = flatStorage.iget(sourceIdx) as Complex;
+        (outputData as Float64Array | Float32Array)[i * 2] = value.re;
+        (outputData as Float64Array | Float32Array)[i * 2 + 1] = value.im;
+      } else if (isBigInt) {
+        (outputData as BigInt64Array | BigUint64Array)[i] = flatStorage.iget(sourceIdx) as bigint;
       } else {
-        (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = value as number;
+        (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = flatStorage.iget(
+          sourceIdx
+        ) as number;
       }
     }
 
@@ -1537,6 +1543,7 @@ export function roll(
     return axisRollResult;
   }
 
+  const isComplex = isComplexDType(dtype);
   for (let i = 0; i < size; i++) {
     // Compute source indices by rolling back
     const sourceIndices = [...outputIndices];
@@ -1552,13 +1559,22 @@ export function roll(
     for (let d = 0; d < ndim; d++) {
       sourceOffset += sourceIndices[d]! * storage.strides[d]!;
     }
-    const value = storage.data[sourceOffset];
 
     // Write to output
-    if (isBigInt) {
-      (outputData as BigInt64Array | BigUint64Array)[i] = value as bigint;
+    if (isComplex) {
+      const physSrc = sourceOffset * 2;
+      (outputData as Float64Array | Float32Array)[i * 2] = (
+        storage.data as Float64Array | Float32Array
+      )[physSrc]!;
+      (outputData as Float64Array | Float32Array)[i * 2 + 1] = (
+        storage.data as Float64Array | Float32Array
+      )[physSrc + 1]!;
+    } else if (isBigInt) {
+      (outputData as BigInt64Array | BigUint64Array)[i] = storage.data[sourceOffset] as bigint;
     } else {
-      (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = value as number;
+      (outputData as Exclude<TypedArray, BigInt64Array | BigUint64Array>)[i] = storage.data[
+        sourceOffset
+      ] as number;
     }
 
     // Increment output indices

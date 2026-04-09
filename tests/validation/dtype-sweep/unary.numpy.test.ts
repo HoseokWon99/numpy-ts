@@ -10,6 +10,7 @@ import {
   checkNumPyAvailable,
   npDtype,
   isInt,
+  isComplex,
   runNumPyBatch,
   expectBothReject,
   expectMatchPre,
@@ -179,9 +180,39 @@ result = _result_orig.astype(${ac})`;
             );
             if (_r === 'both-reject') return;
           }
+          // Functions that NumPy rejects for complex dtypes
+          const COMPLEX_REJECTED = [
+            'cbrt',
+            'fabs',
+            'signbit',
+            'i0',
+            'spacing',
+            'ceil',
+            'floor',
+            'trunc',
+            'fix',
+            'degrees',
+            'radians',
+            'deg2rad',
+            'rad2deg',
+          ];
+          if (isComplex(dtype) && COMPLEX_REJECTED.includes(name)) {
+            const ac = pyArrayCast(dtype);
+            const pyCode = `
+a = np.array(${JSON.stringify(data)}, dtype=${npDtype(dtype)})
+_result_orig = np.${name}(a)
+result = _result_orig.astype(${ac})`;
+            const _r = expectBothReject(
+              `${name} is not supported for complex dtype`,
+              () => fn(a),
+              pyCode
+            );
+            if (_r === 'both-reject') return;
+          }
           const jsResult = fn(a);
-          const rtol = dtype === 'float32' ? 1e-2 : 1e-3;
-          const atol = dtype === 'float32' ? 1e-5 : 1e-8;
+          const isLowPrecision = dtype === 'float32' || dtype === 'complex64';
+          const rtol = isLowPrecision ? 1e-2 : 1e-3;
+          const atol = isLowPrecision ? 1e-5 : 1e-8;
           expectMatchPre(jsResult, oracle.get(`${name}_${dtype}`)!, { rtol, atol });
         });
       }
