@@ -227,7 +227,7 @@ jobs:
           // Load baseline from main
           let baseline;
           try {
-            const raw = execSync('git show main:benchmarks/results/latest-full.json', { encoding: 'utf8' });
+            const raw = execSync('git show origin/main:benchmarks/results/latest-full.json', { encoding: 'utf8' });
             baseline = JSON.parse(raw);
           } catch {
             console.log('No baseline on main — skipping');
