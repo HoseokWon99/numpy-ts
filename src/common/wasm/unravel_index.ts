@@ -61,7 +61,14 @@ export function wasmUnravelIndex(indices: ArrayStorage, shape: number[]): ArrayS
   if (dtype === 'int64' || dtype === 'uint64') {
     // i64 kernel: native BigInt input, f64 output
     const bpe64 = 8;
-    const indicesPtr = resolveInputPtr(idxData, indices.isWasmBacked, indices.wasmPtr, idxOff, N, bpe64);
+    const indicesPtr = resolveInputPtr(
+      idxData,
+      indices.isWasmBacked,
+      indices.wasmPtr,
+      idxOff,
+      N,
+      bpe64
+    );
 
     const strides64 = new BigInt64Array(ndim);
     let stride64 = 1n;
@@ -77,7 +84,14 @@ export function wasmUnravelIndex(indices: ArrayStorage, shape: number[]): ArrayS
   } else if (dtype === 'int32' || dtype === 'uint32') {
     // i32 kernel: native int input, f64 output
     const bpe32 = 4;
-    const indicesPtr = resolveInputPtr(idxData, indices.isWasmBacked, indices.wasmPtr, idxOff, N, bpe32);
+    const indicesPtr = resolveInputPtr(
+      idxData,
+      indices.isWasmBacked,
+      indices.wasmPtr,
+      idxOff,
+      N,
+      bpe32
+    );
 
     const strides = new Int32Array(ndim);
     let stride = 1;
@@ -94,7 +108,14 @@ export function wasmUnravelIndex(indices: ArrayStorage, shape: number[]): ArrayS
     // f64 fallback: convert input to f64 if needed
     let indicesPtr: number;
     if (dtype === 'float64') {
-      indicesPtr = resolveInputPtr(idxData, indices.isWasmBacked, indices.wasmPtr, idxOff, N, f64Bpe);
+      indicesPtr = resolveInputPtr(
+        idxData,
+        indices.isWasmBacked,
+        indices.wasmPtr,
+        idxOff,
+        N,
+        f64Bpe
+      );
     } else {
       const f64 = new Float64Array(N);
       for (let i = 0; i < N; i++) f64[i] = Number(idxData[idxOff + i]);

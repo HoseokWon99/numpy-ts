@@ -1545,22 +1545,25 @@ export function inner(a: ArrayStorage, b: ArrayStorage): ArrayStorage | number |
             }
             const resultIdx = aOuterSize === 1 ? j : i * bOuterSize + j;
             result.data[resultIdx] = innerAcc[0]!;
+          } else if (isBigIntDType(resultDtype)) {
+            let sum = 0n;
+            for (let k = 0; k < contractionDim; k++) {
+              const aFlatIdx = aDim === 1 ? k : i * contractionDim + k;
+              const bFlatIdx = bDim === 1 ? k : j * contractionDim + k;
+              sum += BigInt(a.iget(aFlatIdx) as bigint) * BigInt(b.iget(bFlatIdx) as bigint);
+            }
+            if (resultShape.length === 0) {
+              return sum;
+            }
+            const resultIdx = aOuterSize === 1 ? j : i * bOuterSize + j;
+            (result.data as BigInt64Array | BigUint64Array)[resultIdx] = sum;
           } else {
             let sum = 0;
             for (let k = 0; k < contractionDim; k++) {
               const aFlatIdx = aDim === 1 ? k : i * contractionDim + k;
               const bFlatIdx = bDim === 1 ? k : j * contractionDim + k;
-              const aVal = a.iget(aFlatIdx);
-              const bVal = b.iget(bFlatIdx);
-
-              if (typeof aVal === 'bigint' && typeof bVal === 'bigint') {
-                sum = Number(sum) + Number(aVal * bVal);
-              } else {
-                sum += Number(aVal) * Number(bVal);
-              }
+              sum += Number(a.iget(aFlatIdx)) * Number(b.iget(bFlatIdx));
             }
-
-            // Set result
             if (resultShape.length === 0) {
               return sum;
             }
