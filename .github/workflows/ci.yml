@@ -55,6 +55,12 @@ jobs:
       - name: Run all tests
         run: npm test
 
+      - name: DType sweep (JS backend)
+        run: npm run test:dtypes:js
+
+      - name: DType sweep (WASM backend)
+        run: npm run test:dtypes:wasm
+
       - name: Generate test summary
         if: always()
         run: |
@@ -204,6 +210,9 @@ jobs:
 
       - name: Zig export fn test coverage (≥95%)
         run: npm run report:zig-coverage
+
+      - name: DType coverage report
+        run: npm run report:dtype-coverage
 
       # - name: Upload coverage reports
       #   uses: codecov/codecov-action@v4

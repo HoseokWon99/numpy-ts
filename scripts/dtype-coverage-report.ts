@@ -625,7 +625,10 @@ function parseOpsPattern(filePath: string): CoverageEntry[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!.trim();
     // Detect start of ops array with { name: '...' } objects
-    if (line.match(/const\s+\w+\s*:\s*\{/) && line.includes('name:')) {
+    // The type annotation may span multiple lines, so check nearby lines for 'name:'
+    const isOpsArrayStart = line.match(/const\s+\w+\s*:\s*\{/) &&
+      (line.includes('name:') || lines.slice(i, Math.min(i + 8, lines.length)).some(l => l.includes('name:')));
+    if (isOpsArrayStart) {
       const names: string[] = [];
       const startLine = i;
       for (let j = i; j < lines.length; j++) {
@@ -916,26 +919,31 @@ if (!showMissing) {
 }
 
 // Missing details
-if (missingByFn.size > 0 && (showMissing || !showSummary)) {
-  console.log(`\nMissing coverage by function (${missingByFn.size}):`);
-  const sorted = [...missingByFn.entries()].sort((a, b) => b[1].length - a[1].length);
-  for (const [fn, dtypes] of sorted.slice(0, 50)) {
-    const count = dtypes.length === 13 ? 'ALL' : `${dtypes.length}/13`;
-    console.log(`  ${fn} (${count}): ${dtypes.join(', ')}`);
-  }
-  if (sorted.length > 50) console.log(`  ... and ${sorted.length - 50} more functions`);
+// Functions never tested (no coverage at all)
+const untested = new Set(fns.filter((f) => !coverageMap.has(f)));
+if (untested.size > 0) {
+  console.log(`\nFunctions NEVER tested (${untested.size}):`);
+  console.log(`  ${[...untested].join(', ')}`);
 }
 
-// Functions never tested
-const untested = fns.filter((f) => !coverageMap.has(f));
-if (untested.length > 0) {
-  console.log(`\nFunctions NEVER tested (${untested.length}):`);
-  console.log(`  ${untested.join(', ')}`);
+// Partial missing coverage (exclude functions with zero coverage — already shown above)
+if (missingByFn.size > 0 && (showMissing || !showSummary)) {
+  const sorted = [...missingByFn.entries()]
+    .filter(([fn]) => !untested.has(fn))
+    .sort((a, b) => b[1].length - a[1].length);
+  if (sorted.length > 0) {
+    console.log(`\nMissing coverage by function (${sorted.length}):`);
+    for (const [fn, dtypes] of sorted.slice(0, 50)) {
+      const count = dtypes.length === ALL_DTYPES.length ? 'ALL' : `${dtypes.length}/${ALL_DTYPES.length}`;
+      console.log(`  ${fn} (${count}): ${dtypes.join(', ')}`);
+    }
+    if (sorted.length > 50) console.log(`  ... and ${sorted.length - 50} more functions`);
+  }
 }
 
 // Functions in tests but not in expected (extra coverage)
-const unmatched = [...coverageMap.keys()].filter((f) => !EXPECTED[f]).sort();
-if (unmatched.length > 0) {
-  console.log(`\nFunctions tested but NOT in core/index.ts exports (${unmatched.length}):`);
-  console.log(`  ${unmatched.join(', ')}`);
-}
+// const unmatched = [...coverageMap.keys()].filter((f) => !EXPECTED[f]).sort();
+// if (unmatched.length > 0) {
+//   console.log(`\nFunctions tested but NOT in core/index.ts exports (${unmatched.length}):`);
+//   console.log(`  ${unmatched.join(', ')}`);
+// }
