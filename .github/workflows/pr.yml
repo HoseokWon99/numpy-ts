@@ -229,8 +229,8 @@ jobs:
           try {
             const raw = execSync('git show origin/main:benchmarks/results/latest-full.json', { encoding: 'utf8' });
             baseline = JSON.parse(raw);
-          } catch {
-            console.log('No baseline on main — skipping');
+          } catch (e) {
+            console.log('No baseline on main — skipping:', e.message);
             fs.writeFileSync('bench-comment.md', '## Benchmark Regression Check\n\nNo baseline found on main.\n');
             process.exit(0);
           }
