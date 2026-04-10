@@ -626,8 +626,10 @@ function parseOpsPattern(filePath: string): CoverageEntry[] {
     const line = lines[i]!.trim();
     // Detect start of ops array with { name: '...' } objects
     // The type annotation may span multiple lines, so check nearby lines for 'name:'
-    const isOpsArrayStart = line.match(/const\s+\w+\s*:\s*\{/) &&
-      (line.includes('name:') || lines.slice(i, Math.min(i + 8, lines.length)).some(l => l.includes('name:')));
+    const isOpsArrayStart =
+      line.match(/const\s+\w+\s*:\s*\{/) &&
+      (line.includes('name:') ||
+        lines.slice(i, Math.min(i + 8, lines.length)).some((l) => l.includes('name:')));
     if (isOpsArrayStart) {
       const names: string[] = [];
       const startLine = i;
@@ -934,7 +936,8 @@ if (missingByFn.size > 0 && (showMissing || !showSummary)) {
   if (sorted.length > 0) {
     console.log(`\nMissing coverage by function (${sorted.length}):`);
     for (const [fn, dtypes] of sorted.slice(0, 50)) {
-      const count = dtypes.length === ALL_DTYPES.length ? 'ALL' : `${dtypes.length}/${ALL_DTYPES.length}`;
+      const count =
+        dtypes.length === ALL_DTYPES.length ? 'ALL' : `${dtypes.length}/${ALL_DTYPES.length}`;
       console.log(`  ${fn} (${count}): ${dtypes.join(', ')}`);
     }
     if (sorted.length > 50) console.log(`  ... and ${sorted.length - 50} more functions`);

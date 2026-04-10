@@ -261,7 +261,8 @@ async function generateSpeedupChart(entries: H2HEntry[]): Promise<void> {
         },
         subtitle: {
           display: true,
-          text: 'Green ≥20x · Teal ≥5x · Yellow <5x | Generated: ' + new Date().toLocaleDateString(),
+          text:
+            'Green ≥20x · Teal ≥5x · Yellow <5x | Generated: ' + new Date().toLocaleDateString(),
           font: { size: 12 },
           padding: { bottom: 10 },
         },
@@ -369,17 +370,9 @@ function generateHTML(entries: H2HEntry[]): void {
               const speedClass =
                 e.speedup >= 20 ? 'great' : e.speedup >= 5 ? 'good' : e.speedup >= 2 ? 'ok' : 'meh';
               const jsRatioClass =
-                e.numpy_ratio_js >= 0.5
-                  ? 'good'
-                  : e.numpy_ratio_js >= 0.2
-                    ? 'ok'
-                    : 'bad';
+                e.numpy_ratio_js >= 0.5 ? 'good' : e.numpy_ratio_js >= 0.2 ? 'ok' : 'bad';
               const wasmRatioClass =
-                e.numpy_ratio_wasm >= 0.5
-                  ? 'good'
-                  : e.numpy_ratio_wasm >= 0.2
-                    ? 'ok'
-                    : 'bad';
+                e.numpy_ratio_wasm >= 0.5 ? 'good' : e.numpy_ratio_wasm >= 0.2 ? 'ok' : 'bad';
               return `
           <tr>
             <td>${e.name}</td>

@@ -3187,7 +3187,7 @@ export function qr(
   const k = Math.min(m!, n!);
 
   // Copy input to working array (float64)
-  // For complex input, extract real parts (complex Householder QR not yet implemented)
+  // TODO: implement complex Householder QR; currently extracts real parts only
   const R = ArrayStorage.zeros([m!, n!], 'float64');
   for (let i = 0; i < m!; i++) {
     for (let j = 0; j < n!; j++) {
@@ -3994,6 +3994,7 @@ function luDecomposition(a: ArrayStorage): { lu: ArrayStorage; piv: number[]; si
 /**
  * Complex LU decomposition with partial pivoting.
  * Works with interleaved re/im data in the underlying Float64Array.
+ * TODO: move this to WASM
  */
 function luDecompositionComplex(
   a: ArrayStorage,
@@ -4226,6 +4227,7 @@ export function inv(a: ArrayStorage): ArrayStorage {
 /**
  * Complex matrix inverse via LU decomposition.
  * Forward/back substitution using interleaved complex data.
+ * TODO: move this to WASM
  */
 function invComplex(a: ArrayStorage, size: number): ArrayStorage {
   const { lu, piv } = luDecomposition(a);
@@ -4777,7 +4779,7 @@ export function matrix_power(a: ArrayStorage, n: number): ArrayStorage {
     throw new Error('matrix_power: exponent must be an integer');
   }
 
-  // Determine output dtype
+  // Preserve complex/bigint/float32 dtypes; all other integer types upcast to float64
   const isComplex = isComplexDType(a.dtype);
   const isBigInt = isBigIntDType(a.dtype);
   const outDtype = isComplex
@@ -5181,7 +5183,7 @@ export function eigh(a: ArrayStorage, UPLO: 'L' | 'U' = 'L'): { w: ArrayStorage;
   const size = m!;
 
   // Symmetrize the matrix using specified triangle
-  // For complex input, extract real parts (complex Hermitian eigendecomp not yet implemented)
+  // TODO: complex Hermitian eigendecomp (Lanczos/complex Jacobi); currently extracts real parts only
   const sym = ArrayStorage.zeros([size, size], 'float64');
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {

@@ -582,6 +582,7 @@ function quickselectNumbers(arr: number[], kth: number): void {
  * Quickselect algorithm helper for complex arrays
  * Partitions parallel re/im arrays so element at kth position is in sorted position
  * Uses lexicographic comparison (real first, then imaginary)
+ * TODO: move to WASM
  */
 function quickselectComplex(re: number[], im: number[], kth: number): void {
   let left = 0;

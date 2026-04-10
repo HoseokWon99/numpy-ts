@@ -760,6 +760,7 @@ export function correlate(
     }
 
     // Pack into interleaved format and return based on mode
+    // Promote complex64+complex64 → complex64, mixed → complex128 (matches NumPy)
     const outComplexDtype = promoteDTypes(a.dtype as DType, v.dtype as DType);
     const packResult = (re: Float64Array, im: Float64Array, len: number, start: number = 0) => {
       const storage = ArrayStorage.empty([len], outComplexDtype);
@@ -1449,7 +1450,7 @@ export function histogram_bin_edges(
   // Ensure at least 1 bin
   numBins = Math.max(1, Math.round(numBins));
 
-  // Compute bin edges — preserve float dtype
+  // Preserve float32/float16 precision; all other types (int, bool, float64) use float64 edges
   const edgeDtype =
     a.dtype === 'float32' ? 'float32' : a.dtype === 'float16' ? 'float16' : 'float64';
   const edgeStorage = ArrayStorage.empty([numBins + 1], edgeDtype);

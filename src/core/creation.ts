@@ -86,6 +86,7 @@ export function full(
     } else if (typeof fill_value === 'boolean') {
       actualDtype = 'bool';
     } else if (Number.isInteger(fill_value)) {
+      // Integers outside int32 range default to float64 (matches NumPy)
       actualDtype = fill_value >= -2147483648 && fill_value <= 2147483647 ? 'int32' : 'float64';
     } else {
       actualDtype = DEFAULT_DTYPE;
@@ -102,6 +103,7 @@ export function full(
   } else if (actualDtype === 'bool') {
     (data as Uint8Array).fill(fill_value ? 1 : 0);
   } else if (isComplexDType(actualDtype)) {
+    // Complex storage is interleaved [re, im, re, im, ...]; fill imaginary part with 0
     const v = Number(fill_value);
     for (let i = 0; i < data.length; i += 2) {
       (data as Float64Array)[i] = v;
@@ -294,6 +296,7 @@ export function arange(start: number, stop?: number, step: number = 1, dtype?: D
     lastVal <= INT32_MAX;
   const actualDtype = dtype ?? (allInt && fitsInt32 ? 'int32' : DEFAULT_DTYPE);
 
+  // bool arange only valid for length ≤ 2: [False] or [False, True]
   if (actualDtype === 'bool' && length > 2) {
     throw new TypeError(
       'arange() is only supported for booleans when the result has at most length 2.'

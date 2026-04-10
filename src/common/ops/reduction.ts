@@ -2856,6 +2856,7 @@ export function ptp(
 ): ArrayStorage | number | Complex {
   const dtype = storage.dtype;
 
+  // NumPy rejects bool ptp: subtract is not defined for booleans
   if (dtype === 'bool') {
     throw new TypeError(
       `ufunc 'subtract' not supported for boolean dtype. The '-' operator is not supported for booleans, use 'bitwise_xor' instead.`
@@ -2940,6 +2941,7 @@ export function ptp(
 /**
  * Complex median helper: sorts complex values lexicographically (real first,
  * then imaginary), takes the middle element(s) and averages if even count.
+ * TODO: move this to WASM
  */
 function _complexMedian(
   storage: ArrayStorage,
@@ -2999,6 +3001,7 @@ function _complexMedian(
 
   const outputShape = Array.from(shape).filter((_, i) => i !== normalizedAxis);
   if (outputShape.length === 0) {
+    // 1D input reduced to scalar — recurse with axis=undefined to use the flat path
     const scalar = _complexMedian(storage, undefined, false, dropNaN);
     if (!keepdims) return scalar;
     return wrapScalarKeepdims(scalar as number, ndim, dtype);
@@ -3110,6 +3113,7 @@ export function quantile(
   keepdims: boolean = false
 ): ArrayStorage | number {
   throwIfComplex(storage.dtype, 'quantile', 'Complex numbers are not orderable.');
+  // NumPy rejects bool quantile: linear interpolation requires subtract, unsupported for bool
   if (storage.dtype === 'bool') {
     throw new TypeError(
       `ufunc 'subtract' not supported for boolean dtype. The '-' operator is not supported for booleans, use 'bitwise_xor' instead.`

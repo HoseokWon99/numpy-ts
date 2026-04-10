@@ -42,6 +42,7 @@ import { wasmLdexpScalar } from '../wasm/ldexp';
 import { wasmFrexp } from '../wasm/frexp';
 import { wasmGcdScalar, wasmGcd } from '../wasm/gcd';
 import { wasmDivmodScalar } from '../wasm/divmod';
+import { getComplexAt, setComplexAt, complexGreater, clipComplex } from './complex';
 
 /**
  * Helper: Check if two arrays can use the fast path
@@ -85,31 +86,6 @@ function boolToMathFloat(a: ArrayStorage): ArrayStorage {
 // ============================================================
 // Complex arithmetic helpers
 // ============================================================
-
-/**
- * Get real and imaginary parts from a complex array at index
- */
-function getComplexAt(data: Float64Array | Float32Array, i: number): [number, number] {
-  return [data[i * 2]!, data[i * 2 + 1]!];
-}
-
-/**
- * Set real and imaginary parts in a complex array at index
- */
-function setComplexAt(data: Float64Array | Float32Array, i: number, re: number, im: number): void {
-  data[i * 2] = re;
-  data[i * 2 + 1] = im;
-}
-
-/**
- * NumPy lexicographic comparison for complex: compare real parts first,
- * then imaginary parts as tiebreaker.
- * Returns true if a > b (for 'max') or a < b (for 'min').
- */
-function complexGreater(aRe: number, aIm: number, bRe: number, bIm: number): boolean {
-  if (aRe !== bRe) return aRe > bRe;
-  return aIm > bIm;
-}
 
 /**
  * Complex min/max helper used by maximum, minimum, fmax, fmin.
@@ -1542,6 +1518,7 @@ export function reciprocal(a: ArrayStorage): ArrayStorage {
       const rd = resultData as BigInt64Array | BigUint64Array;
       for (let i = 0; i < size; i++) {
         const val = contiguous ? (data[off + i] as bigint) : (a.iget(i) as bigint);
+        // BigInt reciprocal: 1n/0n is undefined — NumPy int64 returns -1 for division by zero
         rd[i] = val !== 0n ? 1n / val : -1n;
       }
     } else {
@@ -2019,6 +1996,7 @@ export function float_power(x1: ArrayStorage, x2: ArrayStorage | number): ArrayS
   const result = ArrayStorage.empty(Array.from(x1.shape), 'float64');
   const resultData = result.data as Float64Array;
   const size = x1.size;
+  // Fast contiguous path — avoids iget() overhead for the common case
   if (x1.isCContiguous && x2.isCContiguous) {
     const x1Data = x1.data;
     const x1Off = x1.offset;
@@ -2215,6 +2193,7 @@ export function gcd(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   const size = x1.size;
 
   if (isBigIntDType(outDtype)) {
+    // Euclidean GCD for BigInt — can't reuse gcdSingle (Number-only, closure-scoped above)
     const gcdBig = (a: bigint, b: bigint): bigint => {
       a = a < 0n ? -a : a;
       b = b < 0n ? -b : b;
@@ -2327,6 +2306,7 @@ export function lcm(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage {
   const size = x1.size;
 
   if (isBigIntDType(outDtype)) {
+    // Duplicated from gcd() — both are closure-scoped to avoid Number/BigInt mixing
     const gcdBig = (a: bigint, b: bigint): bigint => {
       a = a < 0n ? -a : a;
       b = b < 0n ? -b : b;
@@ -2396,7 +2376,9 @@ export function ldexp(x1: ArrayStorage, x2: ArrayStorage | number): ArrayStorage
     }
   }
   if (typeof x2 === 'number') {
+    // ldexp result dtype follows x1 only — x2 is always an integer exponent, not promoted
     const resultDtype = mathResultDtype(x1.dtype);
+    // float16 is handled natively by the kernel, so skip conversion
     const x1Float =
       x1.dtype === resultDtype
         ? x1
@@ -2475,89 +2457,6 @@ export function modf(x: ArrayStorage): [ArrayStorage, ArrayStorage] {
   }
 
   return [fractional, integral];
-}
-
-/**
- * Clip complex array: compare by real part first, imaginary as tiebreaker (lexicographic).
- */
-function clipComplex(
-  a: ArrayStorage,
-  a_min: number | ArrayStorage | null,
-  a_max: number | ArrayStorage | null
-): ArrayStorage {
-  const dtype = a.dtype;
-  const size = a.size;
-  const shape = Array.from(a.shape);
-  const result = ArrayStorage.empty(shape, dtype);
-  const resultData = result.data as Float64Array | Float32Array;
-  const aData = a.data as Float64Array | Float32Array;
-  const aOff = a.offset;
-
-  const minIsScalar = a_min === null || typeof a_min === 'number';
-  const maxIsScalar = a_max === null || typeof a_max === 'number';
-  const minIsComplex = !minIsScalar && isComplexDType((a_min as ArrayStorage).dtype);
-  const maxIsComplex = !maxIsScalar && isComplexDType((a_max as ArrayStorage).dtype);
-
-  for (let i = 0; i < size; i++) {
-    let [re, im] = getComplexAt(aData, aOff + i);
-
-    // Get min bound
-    let loRe: number, loIm: number;
-    if (a_min === null) {
-      loRe = -Infinity;
-      loIm = -Infinity;
-    } else if (typeof a_min === 'number') {
-      loRe = a_min;
-      loIm = 0;
-    } else if (minIsComplex) {
-      [loRe, loIm] = getComplexAt(
-        (a_min as ArrayStorage).data as Float64Array | Float32Array,
-        (a_min as ArrayStorage).offset + (i % (a_min as ArrayStorage).size)
-      );
-    } else {
-      loRe = Number(
-        (a_min as ArrayStorage).data[
-          (a_min as ArrayStorage).offset + (i % (a_min as ArrayStorage).size)
-        ]
-      );
-      loIm = 0;
-    }
-
-    // Get max bound
-    let hiRe: number, hiIm: number;
-    if (a_max === null) {
-      hiRe = Infinity;
-      hiIm = Infinity;
-    } else if (typeof a_max === 'number') {
-      hiRe = a_max;
-      hiIm = 0;
-    } else if (maxIsComplex) {
-      [hiRe, hiIm] = getComplexAt(
-        (a_max as ArrayStorage).data as Float64Array | Float32Array,
-        (a_max as ArrayStorage).offset + (i % (a_max as ArrayStorage).size)
-      );
-    } else {
-      hiRe = Number(
-        (a_max as ArrayStorage).data[
-          (a_max as ArrayStorage).offset + (i % (a_max as ArrayStorage).size)
-        ]
-      );
-      hiIm = 0;
-    }
-
-    // Clip: if value < min, use min; if value > max, use max
-    if (complexGreater(loRe, loIm, re, im)) {
-      re = loRe;
-      im = loIm;
-    }
-    if (complexGreater(re, im, hiRe, hiIm)) {
-      re = hiRe;
-      im = hiIm;
-    }
-
-    setComplexAt(resultData, i, re, im);
-  }
-  return result;
 }
 
 /**
