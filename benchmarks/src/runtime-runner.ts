@@ -26,6 +26,14 @@ if (WASM_RELAXED === '0' || WASM_RELAXED === 'false') {
   wasmConfig.useRelaxedSimd = true;
 }
 
+// FORCE_BACKEND=js → all JS (no WASM); FORCE_BACKEND=wasm → force WASM for all sizes
+const FORCE_BACKEND = process.env['FORCE_BACKEND'];
+if (FORCE_BACKEND === 'js') {
+  wasmConfig.thresholdMultiplier = Infinity;
+} else if (FORCE_BACKEND === 'wasm') {
+  wasmConfig.thresholdMultiplier = 0;
+}
+
 console.error(
   `Relaxed SIMD: supported=${supportsRelaxedSimd()}, config=${wasmConfig.useRelaxedSimd}, using=${useRelaxedKernels()}`
 );
