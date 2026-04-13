@@ -172,31 +172,47 @@ export const RuntimesReport = ({ data, detailUrl }) => {
 
   const colors = THEME_COLORS[isDarkMode ? 'dark' : 'light'];
 
-  // HoverBar must have a stable component identity across parent re-renders;
-  // otherwise React remounts every bar on each parent render and the active
-  // tooltip's `show` state is lost mid-display. useMemo with [] deps gives us
-  // one stable function. isDarkMode is passed as a prop (not closed over) so
-  // appearance still updates correctly.
+  // HoverBar tooltip uses position: fixed with computed viewport coords so it
+  // escapes every ancestor stacking context (Mintlify's layout has parents
+  // with their own contexts that otherwise win over our z-index after a beat).
+  // The brightness `filter` lives on an inner bar div — applying it to the
+  // outer element would create a containing block for fixed descendants and
+  // re-trap the tooltip. useMemo with [] deps keeps the component identity
+  // stable across parent re-renders.
   const HoverBar = useMemo(() => function HoverBar({ tip, width, color, rounded, isDarkMode }) {
     const [show, setShow] = useState(false);
+    const [pos, setPos] = useState(null);
     const ref = useRef(null);
     const lastPointerType = useRef('mouse');
     useEffect(() => {
-      if (!show) return;
+      if (!show) { setPos(null); return; }
+      const updatePos = () => {
+        if (!ref.current) return;
+        const r = ref.current.getBoundingClientRect();
+        setPos({ top: r.top, left: r.left + r.width / 2 });
+      };
+      updatePos();
       const onDocPointerDown = (e) => {
         if (ref.current && !ref.current.contains(e.target)) setShow(false);
       };
       document.addEventListener('pointerdown', onDocPointerDown);
-      return () => document.removeEventListener('pointerdown', onDocPointerDown);
+      window.addEventListener('scroll', updatePos, true);
+      window.addEventListener('resize', updatePos);
+      return () => {
+        document.removeEventListener('pointerdown', onDocPointerDown);
+        window.removeEventListener('scroll', updatePos, true);
+        window.removeEventListener('resize', updatePos);
+      };
     }, [show]);
     return (
-      <div ref={ref} style={{ height: '100%', width, background: color, borderRadius: rounded ? 7 : 0, position: 'relative', zIndex: show ? 10 : 'auto', filter: show ? 'brightness(1.3)' : 'none', transition: 'filter 0.15s', cursor: 'default' }}
+      <div ref={ref} style={{ height: '100%', width, position: 'relative', cursor: 'default' }}
         onPointerEnter={(e) => { if (e.pointerType === 'mouse') setShow(true); }}
         onPointerLeave={(e) => { if (e.pointerType === 'mouse') setShow(false); }}
         onPointerDown={(e) => { lastPointerType.current = e.pointerType; }}
         onClick={() => { if (lastPointerType.current !== 'mouse') setShow((s) => !s); }}>
-        {tip && (
-          <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)', padding: '4px 8px', borderRadius: 6, background: isDarkMode ? '#2a2a2a' : '#111', color: '#fff', fontSize: 11, whiteSpace: 'nowrap', zIndex: 100, pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', opacity: show ? 1 : 0, transition: 'opacity 0.15s' }}>
+        <div style={{ height: '100%', width: '100%', background: color, borderRadius: rounded ? 7 : 0, filter: show ? 'brightness(1.3)' : 'none', transition: 'filter 0.15s' }} />
+        {tip && show && pos && (
+          <div style={{ position: 'fixed', top: pos.top - 6, left: pos.left, transform: 'translate(-50%, -100%)', padding: '4px 8px', borderRadius: 6, background: isDarkMode ? '#2a2a2a' : '#111', color: '#fff', fontSize: 11, whiteSpace: 'nowrap', zIndex: 2147483647, pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
             {tip}
           </div>
         )}
