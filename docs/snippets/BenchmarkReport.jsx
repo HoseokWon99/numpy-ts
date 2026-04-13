@@ -83,8 +83,10 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 900);
 
   // Detail benchmarks: prefetched in the background after first paint so opening
-  // a drawer is instant. Browser HTTP cache handles cross-page-load reuse.
-  const [detailData, setDetailData] = useState(null);
+  // a drawer is instant. The worker fetches, parses, AND indexes the JSON into a
+  // { categoryName: benchmarks[] } map so the main thread does no prep work.
+  // Browser HTTP cache handles cross-page-load reuse.
+  const [detailMap, setDetailMap] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const detailFetched = useRef(false);
 
@@ -93,27 +95,33 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
     detailFetched.current = true;
     setDetailLoading(true);
     const absUrl = new URL(detailUrl, window.location.href).href;
+    const buildMap = (d) => {
+      const cats = (d && d.categories) || [];
+      const m = {};
+      for (const c of cats) m[c.name] = c.benchmarks || [];
+      return m;
+    };
     const fallback = () => {
       fetch(absUrl)
         .then((r) => r.json())
-        .then((d) => setDetailData(d))
+        .then((d) => setDetailMap(buildMap(d)))
         .catch(() => { detailFetched.current = false; })
         .finally(() => setDetailLoading(false));
     };
     try {
       if (typeof Worker === 'undefined' || typeof Blob === 'undefined') return fallback();
-      const code = "self.onmessage=async e=>{try{const r=await fetch(e.data);const d=await r.json();self.postMessage({ok:true,data:d});}catch(err){self.postMessage({ok:false});}}";
+      const code = "self.onmessage=async e=>{try{const{url,key}=e.data;const r=await fetch(url);const d=await r.json();const cats=(d&&d[key])||[];const m={};for(const c of cats)m[c.name]=c.benchmarks||[];self.postMessage({ok:true,map:m});}catch(err){self.postMessage({ok:false});}}";
       const blobUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
       const worker = new Worker(blobUrl);
       const cleanup = () => { worker.terminate(); URL.revokeObjectURL(blobUrl); };
       worker.onmessage = (e) => {
-        if (e.data && e.data.ok) setDetailData(e.data.data);
+        if (e.data && e.data.ok) setDetailMap(e.data.map);
         else detailFetched.current = false;
         setDetailLoading(false);
         cleanup();
       };
       worker.onerror = () => { detailFetched.current = false; setDetailLoading(false); cleanup(); };
-      worker.postMessage(absUrl);
+      worker.postMessage({ url: absUrl, key: 'categories' });
     } catch { fallback(); }
   };
 
@@ -380,9 +388,10 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
       </p>
 
       {categories.map((category) => {
-        const detailCat = detailData?.categories?.find((c) => c.name === category.name);
-        const benchmarks = Array.isArray(category.benchmarks) ? category.benchmarks : (detailCat?.benchmarks || []);
         const isOpen = !!openCategories[String(category.name)];
+        const benchmarks = isOpen
+          ? (Array.isArray(category.benchmarks) ? category.benchmarks : (detailMap?.[category.name] || []))
+          : null;
         return (
           <div key={String(category.name)} id={`cat-${String(category.name).replace(/\s+/g, '-').toLowerCase()}`} style={{ marginTop: 18, border: `1px solid ${colors.border}`, borderRadius: 10, background: colors.cardBg, overflow: 'hidden', scrollMarginTop: 80 }}>
             <button
@@ -392,7 +401,7 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
               <span style={{ fontSize: 10, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
               {String(category.name)} ({category.count} benchmarks, speedup {(Number(category.avgSpeedup) || 0).toFixed(2)}x)
             </button>
-            <div style={{ maxHeight: isOpen ? 10000 : 0, overflow: 'hidden', transition: isOpen ? 'max-height 0.5s ease-in' : 'max-height 0.3s ease-out' }}>
+            {isOpen && (
               <div style={{ padding: '0 14px 14px' }}>
                 <div style={{ fontSize: 13, color: colors.mutedText, marginBottom: 8 }}>
                   Slower than NumPy: {category.slowerCount} | Faster than NumPy: {category.fasterCount}
@@ -428,7 +437,7 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
                   )}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         );
       })}

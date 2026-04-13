@@ -82,7 +82,11 @@ export const SizeScalingReport = ({ data, detailUrl }) => {
   const [metaOpen, setMetaOpen] = useState(false);
 
   // Lazy-loaded detail benchmarks
-  const [detailData, setDetailData] = useState(null);
+  // Detail benchmarks: prefetched in the background after first paint so opening
+  // a drawer is instant. The worker fetches, parses, AND indexes the JSON into a
+  // { categoryName: benchmarks[] } map so the main thread does no prep work.
+  // Note: this report's detail JSON uses `benchmarks` as the array of categories.
+  const [detailMap, setDetailMap] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const detailFetched = useRef(false);
 
@@ -91,27 +95,33 @@ export const SizeScalingReport = ({ data, detailUrl }) => {
     detailFetched.current = true;
     setDetailLoading(true);
     const absUrl = new URL(detailUrl, window.location.href).href;
+    const buildMap = (d) => {
+      const cats = (d && d.benchmarks) || [];
+      const m = {};
+      for (const c of cats) m[c.name] = c.benchmarks || [];
+      return m;
+    };
     const fallback = () => {
       fetch(absUrl)
         .then((r) => r.json())
-        .then((d) => setDetailData(d))
+        .then((d) => setDetailMap(buildMap(d)))
         .catch(() => { detailFetched.current = false; })
         .finally(() => setDetailLoading(false));
     };
     try {
       if (typeof Worker === 'undefined' || typeof Blob === 'undefined') return fallback();
-      const code = "self.onmessage=async e=>{try{const r=await fetch(e.data);const d=await r.json();self.postMessage({ok:true,data:d});}catch(err){self.postMessage({ok:false});}}";
+      const code = "self.onmessage=async e=>{try{const{url,key}=e.data;const r=await fetch(url);const d=await r.json();const cats=(d&&d[key])||[];const m={};for(const c of cats)m[c.name]=c.benchmarks||[];self.postMessage({ok:true,map:m});}catch(err){self.postMessage({ok:false});}}";
       const blobUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
       const worker = new Worker(blobUrl);
       const cleanup = () => { worker.terminate(); URL.revokeObjectURL(blobUrl); };
       worker.onmessage = (e) => {
-        if (e.data && e.data.ok) setDetailData(e.data.data);
+        if (e.data && e.data.ok) setDetailMap(e.data.map);
         else detailFetched.current = false;
         setDetailLoading(false);
         cleanup();
       };
       worker.onerror = () => { detailFetched.current = false; setDetailLoading(false); cleanup(); };
-      worker.postMessage(absUrl);
+      worker.postMessage({ url: absUrl, key: 'benchmarks' });
     } catch { fallback(); }
   };
 
@@ -443,8 +453,9 @@ export const SizeScalingReport = ({ data, detailUrl }) => {
       {crossCategories.map((crossCat) => {
         const catName = crossCat.name;
         const isOpen = !!openCategories[catName];
-        const detailCat = detailData?.benchmarks?.find((c) => c.name === catName);
-        const benchmarks = Array.isArray(crossCat.benchmarks) ? crossCat.benchmarks : (detailCat?.benchmarks || []);
+        const benchmarks = isOpen
+          ? (Array.isArray(crossCat.benchmarks) ? crossCat.benchmarks : (detailMap?.[catName] || []))
+          : null;
         const catSummaries = sizes.map((size, sIdx) => {
           const cat = (size.categories || []).find((c) => c.name === catName);
           return cat ? `${size.label}: ${formatRatio(cat.avgSpeedup)}` : null;
@@ -459,7 +470,7 @@ export const SizeScalingReport = ({ data, detailUrl }) => {
               <span style={{ fontSize: 10, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>&#9654;</span>
               {catName} ({catSummaries})
             </button>
-            <div style={{ maxHeight: isOpen ? 10000 : 0, overflow: 'hidden', transition: isOpen ? 'max-height 0.5s ease-in' : 'max-height 0.3s ease-out' }}>
+            {isOpen && (
               <div style={{ padding: '0 14px 14px' }}>
                 <div style={{ overflowX: 'auto' }}>
                   {benchmarks.length === 0 && detailLoading ? (
@@ -504,7 +515,7 @@ export const SizeScalingReport = ({ data, detailUrl }) => {
                   )}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         );
       })}
