@@ -23,11 +23,11 @@ All benchmark specifications are defined in [`benchmarks/src/specs.ts`](https://
 
 ## How timing works
 
-Both sides use high-resolution timers: `performance.now()` in JavaScript and `time.perf_counter()` in Python. The benchmark measures **computation time only**, from the JS side for numpy-ts and from the Python side for NumPy. This gives an apples-to-apples comparison of the numerical computation itself, without being skewed by JS↔Python interop overhead.
+Both sides use high-resolution timers: [`performance.now()`](https://github.com/dupontcyborg/numpy-js/blob/main/benchmarks/src/runtime-runner.ts#L131-L135) in the [JS runner](https://github.com/dupontcyborg/numpy-js/blob/main/benchmarks/src/runtime-runner.ts) and [`time.perf_counter()`](https://github.com/dupontcyborg/numpy-js/blob/main/benchmarks/scripts/numpy_benchmark.py#L971-L978) in the [Python runner](https://github.com/dupontcyborg/numpy-js/blob/main/benchmarks/scripts/numpy_benchmark.py). The benchmark measures **computation time only**, from the JS side for numpy-ts and from the Python side for NumPy. This gives an apples-to-apples comparison of the numerical computation itself, without being skewed by JS↔Python interop overhead.
 
 ### Auto-calibration
 
-Each benchmark automatically calibrates how many operations to run per sample, targeting a minimum sample time of **100ms**. This eliminates timer resolution noise — if an operation takes 0.001ms, the runner batches 100,000 of them into a single sample rather than measuring one at a time.
+Each benchmark automatically calibrates how many operations to run per sample, targeting a minimum sample time of **100ms**. This eliminates timer resolution noise: if an operation takes 0.001ms, the runner batches 100,000 of them into a single sample rather than measuring one at a time.
 
 The calibration uses exponential scaling (×10 → ×2 → exact) to converge quickly, with a cap of 10 calibration rounds.
 

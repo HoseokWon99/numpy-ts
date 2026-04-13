@@ -82,7 +82,8 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 900);
 
-  // Lazy-loaded detail benchmarks (fetched on first category expand)
+  // Detail benchmarks: prefetched in the background after first paint so opening
+  // a drawer is instant. Browser HTTP cache handles cross-page-load reuse.
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const detailFetched = useRef(false);
@@ -97,6 +98,17 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
       .catch(() => {})
       .finally(() => setDetailLoading(false));
   };
+
+  useEffect(() => {
+    if (!detailUrl) return;
+    const ric = window.requestIdleCallback;
+    if (ric) {
+      const id = ric(() => fetchDetail(), { timeout: 2000 });
+      return () => window.cancelIdleCallback && window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(fetchDetail, 200);
+    return () => clearTimeout(id);
+  }, []);
 
   const toggleCategory = (name) => {
     fetchDetail();
@@ -158,10 +170,20 @@ export const BenchmarkReport = ({ data, detailUrl }) => {
 
   const HoverBar = ({ tip, width, color, rounded }) => {
     const [show, setShow] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+      if (!show) return;
+      const onDocPointerDown = (e) => {
+        if (ref.current && !ref.current.contains(e.target)) setShow(false);
+      };
+      document.addEventListener('pointerdown', onDocPointerDown);
+      return () => document.removeEventListener('pointerdown', onDocPointerDown);
+    }, [show]);
     return (
-      <div style={{ height: '100%', width, background: color, borderRadius: rounded ? 7 : 0, position: 'relative', zIndex: show ? 10 : 'auto', transition: 'filter 0.15s', cursor: 'default' }}
-        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.3)'; setShow(true) }}
-        onMouseLeave={(e) => { e.currentTarget.style.filter = ''; setShow(false) }}>
+      <div ref={ref} style={{ height: '100%', width, background: color, borderRadius: rounded ? 7 : 0, position: 'relative', zIndex: show ? 10 : 'auto', filter: show ? 'brightness(1.3)' : 'none', transition: 'filter 0.15s', cursor: 'default' }}
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') setShow(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') setShow(false); }}
+        onPointerDown={(e) => { if (e.pointerType !== 'mouse') setShow((s) => !s); }}>
         {tip && (
           <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)', padding: '4px 8px', borderRadius: 6, background: isDarkMode ? '#2a2a2a' : '#111', color: '#fff', fontSize: 11, whiteSpace: 'nowrap', zIndex: 100, pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', opacity: show ? 1 : 0, transition: 'opacity 0.15s' }}>
             {tip}
