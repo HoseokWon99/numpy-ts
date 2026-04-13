@@ -39,6 +39,8 @@ export default defineConfig({
           include: ['tests/unit/**'],
           exclude: ['**/node_modules/**'],
           environment: 'node',
+          // Inject __VERSION_PLACEHOLDER__ for source-imported __version__.
+          setupFiles: ['tests/setup-version.ts'],
         },
       }),
       // Validation tests (requires Python + NumPy)
@@ -48,6 +50,7 @@ export default defineConfig({
           include: ['tests/validation/**'],
           exclude: ['**/node_modules/**', '**/*.md', '**/numpy-oracle.ts', '**/_helpers.ts', '**/_dtype-matrix.ts', '**/_*.ts'],
           environment: 'node',
+          setupFiles: ['tests/setup-version.ts'],
         },
       }),
       // Runtime file IO tests (runs under Node, Bun, and Deno)
@@ -57,6 +60,7 @@ export default defineConfig({
           include: ['tests/runtime/**/*.test.ts'],
           exclude: ['**/node_modules/**'],
           environment: 'node',
+          setupFiles: ['tests/setup-version.ts'],
         },
       }),
       // ESM bundle smoke test (tests dist/esm/ with file IO)
@@ -99,6 +103,7 @@ export default defineConfig({
           name: 'browser-unit',
           include: ['tests/unit/**'],
           exclude: ['**/node_modules/**', '**/__screenshots__/**'],
+          setupFiles: ['tests/setup-version.ts'],
           browser: {
             enabled: true,
             headless: true,
@@ -124,6 +129,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**'],
           environment: 'node',
           testTimeout: 60000,
+          setupFiles: ['tests/setup-version.ts'],
         },
       }),
       // WASM memory leak tests (validates operations don't leak WASM heap)
@@ -134,6 +140,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**'],
           environment: 'node',
           testTimeout: 300000, // 5 minutes — runs many specs
+          setupFiles: ['tests/setup-version.ts'],
         },
       }),
       // Tree-shaking tests (tests with multiple bundlers)
