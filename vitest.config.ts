@@ -60,11 +60,15 @@ export default defineConfig({
         },
       }),
       // ESM bundle smoke test (tests dist/esm/ with file IO)
+      // Runs in groupOrder: 1 so the multi-file ESM dynamic import isn't
+      // starved by the parallel browser-unit projects (3 engines × all unit
+      // tests) — on CI, that contention pushed the import past 30s.
       defineProject({
         test: {
           name: 'bundle-esm',
           include: ['tests/bundles/node.test.ts'],
           environment: 'node',
+          sequence: { groupOrder: 1 },
         },
       }),
       // Browser ESM bundle test (runs in real browser — all major engines)
