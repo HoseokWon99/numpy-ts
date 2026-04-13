@@ -98,11 +98,29 @@ export const RuntimesReport = ({ data, detailUrl }) => {
     if (detailFetched.current || !detailUrl) return;
     detailFetched.current = true;
     setDetailLoading(true);
-    fetch(detailUrl)
-      .then((r) => r.json())
-      .then((d) => setDetailData(d))
-      .catch(() => { detailFetched.current = false; })
-      .finally(() => setDetailLoading(false));
+    const absUrl = new URL(detailUrl, window.location.href).href;
+    const fallback = () => {
+      fetch(absUrl)
+        .then((r) => r.json())
+        .then((d) => setDetailData(d))
+        .catch(() => { detailFetched.current = false; })
+        .finally(() => setDetailLoading(false));
+    };
+    try {
+      if (typeof Worker === 'undefined' || typeof Blob === 'undefined') return fallback();
+      const code = "self.onmessage=async e=>{try{const r=await fetch(e.data);const d=await r.json();self.postMessage({ok:true,data:d});}catch(err){self.postMessage({ok:false});}}";
+      const blobUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+      const worker = new Worker(blobUrl);
+      const cleanup = () => { worker.terminate(); URL.revokeObjectURL(blobUrl); };
+      worker.onmessage = (e) => {
+        if (e.data && e.data.ok) setDetailData(e.data.data);
+        else detailFetched.current = false;
+        setDetailLoading(false);
+        cleanup();
+      };
+      worker.onerror = () => { detailFetched.current = false; setDetailLoading(false); cleanup(); };
+      worker.postMessage(absUrl);
+    } catch { fallback(); }
   };
 
   useEffect(() => {
