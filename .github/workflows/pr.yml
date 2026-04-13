@@ -155,11 +155,13 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Comment PR with coverage
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const comment = `${{ steps.coverage.outputs.comment }}`;
+            const fs = require('fs');
+            const comment = fs.readFileSync('coverage-comment.txt', 'utf8').trim();
 
             // Find existing coverage comment
             const { data: comments } = await github.rest.issues.listComments({
@@ -275,6 +277,7 @@ jobs:
 
       - name: Comment PR
         if: always() && hashFiles('bench-comment.md') != ''
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

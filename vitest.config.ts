@@ -60,14 +60,18 @@ export default defineConfig({
         },
       }),
       // ESM bundle smoke test (tests dist/esm/ with file IO)
+      // Runs in groupOrder: 1 so the multi-file ESM dynamic import isn't
+      // starved by the parallel browser-unit projects (3 engines × all unit
+      // tests) — on CI, that contention pushed the import past 30s.
       defineProject({
         test: {
           name: 'bundle-esm',
           include: ['tests/bundles/node.test.ts'],
           environment: 'node',
+          sequence: { groupOrder: 1 },
         },
       }),
-      // Browser IIFE bundle test (runs in real browser)
+      // Browser ESM bundle test (runs in real browser — all major engines)
       defineProject({
         test: {
           name: 'bundle-browser',
@@ -80,11 +84,15 @@ export default defineConfig({
                 headless: true,
               },
             }),
-            instances: [{ browser: 'chromium' }],
+            instances: [
+              { browser: 'chromium' },
+              { browser: 'firefox' },
+              { browser: 'webkit' },
+            ],
           },
         },
       }),
-      // Full unit test suite in the browser (Playwright + Chromium)
+      // Full unit test suite in the browser (Playwright — all major engines)
       // Validates that all array operations work in a real browser environment
       defineProject({
         test: {
@@ -100,7 +108,11 @@ export default defineConfig({
                 headless: true,
               },
             }),
-            instances: [{ browser: 'chromium' }],
+            instances: [
+              { browser: 'chromium' },
+              { browser: 'firefox' },
+              { browser: 'webkit' },
+            ],
           },
         },
       }),
@@ -125,9 +137,10 @@ export default defineConfig({
         },
       }),
       // Tree-shaking tests (tests with multiple bundlers)
-      // Runs after all other projects (groupOrder: 1) so the setupFile can
-      // rebuild with production (ReleaseFast) WASM without clobbering dist/
-      // while bundle tests are still reading from it.
+      // Runs last (groupOrder: 2) so the setupFile can rebuild with production
+      // (ReleaseFast) WASM without clobbering dist/ while bundle tests
+      // (bundle-esm at groupOrder: 1, bundle-browser at 0) are still reading
+      // from it.
       // Uses setupFiles (not globalSetup) so the build respects project ordering.
       defineProject({
         test: {
@@ -136,7 +149,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**', '**/fixtures/**'],
           environment: 'node',
           testTimeout: 300000, // 5 minutes - bundling can take time
-          sequence: { groupOrder: 1 },
+          sequence: { groupOrder: 2 },
           setupFiles: ['tests/tree-shaking/setup.ts'],
         },
       }),
