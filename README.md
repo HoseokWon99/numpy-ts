@@ -23,7 +23,7 @@ Complete NumPy implementation for TypeScript and JavaScript.
 - **✅ NumPy-validated** — 20,000+ tests compared against Python NumPy
 - **🔒 Type-safe** — Full TypeScript type definitions
 - **🌳 Tree-shakeable** — Import only what you use (`np.add()` -> ~10kB bundle)
-- **🌐 Universal** — Works in Node.js, Deno, Bun and browsers
+- **🌐 Universal** — Zero dependencies, works in Node.js, Deno, Bun and browsers
 
 [Docs](https://numpyts.dev) • [Playground](https://numpyts.dev/playground) • [Examples](https://numpyts.dev/examples) • [Coverage](https://numpyts.dev/coverage) • [Benchmarks](https://numpyts.dev/performance)
 
