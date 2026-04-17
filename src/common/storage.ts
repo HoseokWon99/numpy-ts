@@ -23,6 +23,12 @@ import {
   unregisterCleanup,
 } from './wasm/runtime';
 
+// Polyfill Symbol.dispose for runtimes that don't define it natively (e.g. Safari).
+// Uses the same Symbol.for key that TypeScript, esbuild, Babel, and SWC emit in
+// their downlevel helpers, so `using` works correctly through any transpiler.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Symbol.dispose is readonly in TS lib
+(Symbol as any).dispose ??= Symbol.for('Symbol.dispose');
+
 /**
  * Maximum number of dimensions an array can have (matches NumPy's limit).
  */
@@ -33,8 +39,9 @@ export const MAX_NDIM = 64;
  * Manages the underlying TypedArray and metadata
  */
 export class ArrayStorage {
-  // Symbol.dispose for `using` keyword support (conditionally defined below class)
-  [Symbol.dispose]?: () => void;
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 
   // Underlying TypedArray data buffer
   private _data: TypedArray;
@@ -134,10 +141,9 @@ export class ArrayStorage {
    * when you know this storage will not be used again — useful in tight loops,
    * benchmarks, or resource-sensitive contexts.
    *
-   * Also available as `[Symbol.dispose]` on runtimes that support it (Node 18+,
-   * Chrome 134+, Firefox 132+), enabling the `using` keyword for automatic
-   * scope-based cleanup. Safari does not yet support `Symbol.dispose`, so use
-   * this method directly for cross-browser compatibility.
+   * Also available as `[Symbol.dispose]`, enabling the `using` keyword for
+   * automatic scope-based cleanup (requires native `using` support or a
+   * transpiler such as TypeScript, esbuild, Babel, or SWC).
    */
   dispose(): void {
     if (this._wasmRegion) {
@@ -643,13 +649,6 @@ export class ArrayStorage {
     }
     return strides;
   }
-}
-
-// Symbol.dispose support for the `using` keyword (automatic scope-based cleanup).
-// Safari does not yet support Symbol.dispose, so we define it conditionally.
-// Users on Safari can call .dispose() directly instead.
-if (typeof Symbol.dispose !== 'undefined') {
-  ArrayStorage.prototype[Symbol.dispose] = ArrayStorage.prototype.dispose;
 }
 
 /**

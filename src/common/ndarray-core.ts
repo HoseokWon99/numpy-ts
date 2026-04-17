@@ -608,16 +608,15 @@ export class NDArrayCore {
    * garbage collected. Call dispose() to free immediately in tight loops,
    * benchmarks, or resource-sensitive contexts.
    *
-   * Also available as `[Symbol.dispose]` on supported runtimes, enabling
-   * the `using` keyword for automatic scope-based cleanup:
+   * Also available as `[Symbol.dispose]`, enabling the `using` keyword for
+   * automatic scope-based cleanup (requires native `using` support or a
+   * transpiler such as TypeScript, esbuild, Babel, or SWC):
    * ```ts
    * {
    *   using result = np.add(a, b);
    *   // use result...
    * } // automatically freed here
    * ```
-   * Safari does not yet support `Symbol.dispose` — use `.dispose()` directly
-   * for cross-browser compatibility.
    */
   dispose(): void {
     this._storage.dispose();
@@ -642,15 +641,9 @@ export class NDArrayCore {
     }
     return this.get(args);
   }
-  // Symbol.dispose declaration for TypeScript (conditionally defined below)
-  [Symbol.dispose]?: () => void;
-}
-
-// Symbol.dispose support for the `using` keyword (automatic scope-based cleanup).
-// Safari does not yet support Symbol.dispose, so we define it conditionally.
-// Users on Safari can call .dispose() directly instead.
-if (typeof Symbol.dispose !== 'undefined') {
-  NDArrayCore.prototype[Symbol.dispose] = NDArrayCore.prototype.dispose;
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 }
 
 // Re-export types
