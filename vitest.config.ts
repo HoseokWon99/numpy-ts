@@ -102,7 +102,9 @@ export default defineConfig({
         test: {
           name: 'browser-unit',
           include: ['tests/unit/**'],
-          exclude: ['**/node_modules/**', '**/__screenshots__/**'],
+          // Exclude dispose-wasm-lifecycle — it uses `using` syntax which WebKit can't parse.
+          // That file is covered by browser-dispose-vanilla (Chromium+Firefox only).
+          exclude: ['**/node_modules/**', '**/__screenshots__/**', '**/dispose-wasm-lifecycle*'],
           setupFiles: ['tests/setup-version.ts'],
           browser: {
             enabled: true,
@@ -158,6 +160,47 @@ export default defineConfig({
           testTimeout: 300000, // 5 minutes - bundling can take time
           sequence: { groupOrder: 2 },
           setupFiles: ['tests/tree-shaking/setup.ts'],
+        },
+      }),
+      // Browser dispose tests — bundled path (esbuild/rollup/webpack × all engines)
+      // Runs at groupOrder 3 so the tree-shaking project (groupOrder 2) has
+      // already built the browser bundles in .output/dispose/browser/.
+      // The test file contains NO `using` syntax — safe for WebKit.
+      defineProject({
+        test: {
+          name: 'browser-dispose',
+          include: ['tests/bundles/browser-dispose-bundled.test.ts'],
+          testTimeout: 60000,
+          sequence: { groupOrder: 3 },
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({ launchOptions: { headless: true } }),
+            instances: [
+              { browser: 'chromium' },
+              { browser: 'firefox' },
+              { browser: 'webkit' },
+            ],
+          },
+        },
+      }),
+      // Browser dispose tests — vanilla path (native `using`, no transpiler)
+      // Chromium and Firefox only — WebKit cannot parse `using` syntax.
+      defineProject({
+        test: {
+          name: 'browser-dispose-vanilla',
+          include: ['tests/bundles/browser-dispose.test.ts'],
+          testTimeout: 60000,
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({ launchOptions: { headless: true } }),
+            instances: [
+              { browser: 'chromium' },
+              { browser: 'firefox' },
+              // NO webkit — cannot parse `using` syntax
+            ],
+          },
         },
       }),
     ],

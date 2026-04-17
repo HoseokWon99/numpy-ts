@@ -26,6 +26,7 @@ import {
 // Polyfill Symbol.dispose for runtimes that don't define it natively (e.g. Safari).
 // Uses the same Symbol.for key that TypeScript, esbuild, Babel, and SWC emit in
 // their downlevel helpers, so `using` works correctly through any transpiler.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Symbol.dispose is readonly in TS lib
 (Symbol as any).dispose ??= Symbol.for('Symbol.dispose');
 
 /**
@@ -649,7 +650,6 @@ export class ArrayStorage {
     return strides;
   }
 }
-
 
 /**
  * Compute strides for a given shape (row-major order)
